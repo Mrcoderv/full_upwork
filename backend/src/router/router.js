@@ -19,6 +19,7 @@ import actionPlanRoutes from "./actionPlanRoutes.js";
 import courseMatchingRoutes from "./courseMatchingRoutes.js";
 import studentDetailsRoutes from "./studentDetailsRoutes.js";
 import gradeReportRoutes from "./gradeReportRoutes.js";
+import analyticsRoutes from "./analyticsRoutes.js";
 
 const router = Router();
 
@@ -45,5 +46,6 @@ router.use("/api", actionPlanRoutes);
 router.use("/api", courseMatchingRoutes);
 router.use("/api", studentDetailsRoutes);
 router.use("/api", gradeReportRoutes);
+router.use("/api/analytics", analyticsRoutes);
 
 export default router;

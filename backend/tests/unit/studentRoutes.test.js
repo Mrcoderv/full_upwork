@@ -1147,7 +1147,7 @@ describe("DELETE /student/:id", () => {
     it("returns 404 if student not found", async () => {
         const handler = findRouteHandler("/student/:id", "DELETE");
         Student.findByIdAndDelete.mockResolvedValue(null);
-        const req = { params: { id: "delete-1" } };
+        const req = { params: { id: "delete-1" }, user: { role: "admin" } };
         const res = createRes();
 
         await handler(req, res);
@@ -1159,7 +1159,7 @@ describe("DELETE /student/:id", () => {
     it("deletes student successfully", async () => {
         const handler = findRouteHandler("/student/:id", "DELETE");
         Student.findByIdAndDelete.mockResolvedValue({ _id: "delete-2" });
-        const req = { params: { id: "delete-2" } };
+        const req = { params: { id: "delete-2" }, user: { role: "admin" } };
         const res = createRes();
 
         await handler(req, res);
@@ -1173,7 +1173,7 @@ describe("DELETE /student/:id", () => {
     it("returns 500 when deletion fails unexpectedly", async () => {
         const handler = findRouteHandler("/student/:id", "DELETE");
         Student.findByIdAndDelete.mockRejectedValueOnce(new Error("boom delete"));
-        const req = { params: { id: "delete-3" } };
+        const req = { params: { id: "delete-3" }, user: { role: "admin" } };
         const res = createRes();
 
         await handler(req, res);
@@ -1191,7 +1191,7 @@ describe("DELETE /students", () => {
         });
         const res = createRes();
 
-        await handler({ params: {} }, res);
+        await handler({ params: {}, user: { role: "admin" } }, res);
 
         expect(Student.deleteMany).toHaveBeenCalled();
         expect(res.json).toHaveBeenCalledWith({
@@ -1204,7 +1204,7 @@ describe("DELETE /students", () => {
         Student.deleteMany.mockRejectedValueOnce(new Error("boom all"));
         const res = createRes();
 
-        await handler({ params: {} }, res);
+        await handler({ params: {}, user: { role: "admin" } }, res);
 
         expect(res.status).toHaveBeenCalledWith(500);
         expect(res.json).toHaveBeenCalledWith({

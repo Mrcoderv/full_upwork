@@ -17,6 +17,7 @@ const roles = {
         "teachers:update",
         "teachers:delete",
         "teachers:unassign",
+        "analytics:read",
     ],
     systemadmin: [
         "users:create",
@@ -34,6 +35,7 @@ const roles = {
         "assignments:grade",
         "students:view_list:assigned",
         "students:view_grades:assigned",
+        "analytics:read",
     ],
     // ... other roles
 };

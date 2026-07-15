@@ -2,9 +2,10 @@ import { Router } from "express";
 import ActionPlan from "../models/ActionPlan.js";
 import Notification from "../models/Notification.js";
 import FormQuestions from "../models/ActionPlanQuestions.js"
+import { isAuthenticated } from "../middleware/auth.js";
 const router = Router();
 
-router.post("/form-questions", async (req, res) => {
+router.post("/form-questions", isAuthenticated, async (req, res) => {
     try {
 
         const { type, questions} = req.body
@@ -27,7 +28,7 @@ router.post("/form-questions", async (req, res) => {
     }
 })
 
-router.get('/form-questions/:type', async (req, res) => {
+router.get('/form-questions/:type', isAuthenticated, async (req, res) => {
     try {
       const formConfig = await FormQuestions.findOne({ type: req.params.type })
       
@@ -152,7 +153,7 @@ router.get('/form-questions/:type', async (req, res) => {
     }
   })
   
-  router.put('/form-questions/:type', async (req, res) => {
+  router.put('/form-questions/:type', isAuthenticated, async (req, res) => {
     try {
       if (req.user.role !== 'systemadmin') {
         return res.status(403).json({ message: 'Ej behörig' })
@@ -176,7 +177,7 @@ router.get('/form-questions/:type', async (req, res) => {
     }
   })
 
-router.post("/save-actionplan", async (req, res) => {
+router.post("/save-actionplan", isAuthenticated, async (req, res) => {
   const plan = req.body;
   await ActionPlan.create(plan);
   // Markera notification för eleven/kursen som klar
@@ -190,7 +191,7 @@ router.post("/save-actionplan", async (req, res) => {
 
 
 
-router.post('/update-actionplan', async (req, res) => {
+router.post('/update-actionplan', isAuthenticated, async (req, res) => {
     const {
       teacherName,
       date,

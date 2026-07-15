@@ -20,7 +20,7 @@ const api = axios.create({
   withCredentials: true, // ✅ Ensures cookies are included in requests
 })
 
-export default createStore({
+const store = createStore({
   state: {
     user: null,
     tasks: [],
@@ -211,5 +211,27 @@ export default createStore({
     },
   },
 })
+// Global response interceptor: any 401 from the API means the session has
+// expired or was never valid, so proactively log the user out and send them
+// to the login page instead of leaving stale/broken state around.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      store.commit('LOGOUT')
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname !== '/login' &&
+        (typeof process === 'undefined' || process.env.NODE_ENV !== 'test')
+      ) {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
+export default store
+
 // add this to bottom of store.js
 export { api }

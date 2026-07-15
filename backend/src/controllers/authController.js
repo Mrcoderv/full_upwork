@@ -130,6 +130,10 @@ export const login = async (req, res) => {
  * @param {Function} next - Express next middleware function
  */
 export const authenticateUser = (req, res, next) => {
+    if (req.user) {
+        req.userId = req.userId || req.user.userId || req.user._id || req.user.id;
+        return next();
+    }
     let token = req.cookies?.token;
 
     if (!token) {

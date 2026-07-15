@@ -80,6 +80,7 @@ describe("Action Plan Routes", () => {
 
         const response = await request(app)
             .post("/api/form-questions")
+            .set("x-test-user-role", "systemadmin")
             .send(payload)
             .expect(201);
 
@@ -97,6 +98,7 @@ describe("Action Plan Routes", () => {
     it("returns 500 when saving form questions fails", async () => {
         const response = await request(app)
             .post("/api/form-questions")
+            .set("x-test-user-role", "systemadmin")
             .send({ type: "INVALID", questions: [] })
             .expect(500);
 
@@ -106,6 +108,7 @@ describe("Action Plan Routes", () => {
     it("returns default form questions when none exist", async () => {
         const response = await request(app)
             .get("/api/form-questions/ACTION_PLAN")
+            .set("x-test-user-role", "teacher")
             .expect(200);
 
         expect(response.body.type).toBe("ACTION_PLAN");
@@ -133,6 +136,7 @@ describe("Action Plan Routes", () => {
 
         const response = await request(app)
             .get("/api/form-questions/ACTION_PLAN")
+            .set("x-test-user-role", "teacher")
             .expect(200);
 
         expect(response.body.questions).toHaveLength(1);
@@ -146,6 +150,7 @@ describe("Action Plan Routes", () => {
 
         const response = await request(app)
             .get("/api/form-questions/ACTION_PLAN")
+            .set("x-test-user-role", "teacher")
             .expect(500);
 
         expect(response.body).toEqual({
@@ -216,6 +221,7 @@ describe("Action Plan Routes", () => {
 
         const response = await request(app)
             .post("/api/save-actionplan")
+            .set("x-test-user-role", "teacher")
             .send({
                 studentId,
                 educationId: "EDU-1",
@@ -247,6 +253,7 @@ describe("Action Plan Routes", () => {
             .mockResolvedValueOnce({ acknowledged: true, modifiedCount: 1 });
         const response = await request(app)
             .post("/api/update-actionplan")
+            .set("x-test-user-role", "teacher")
             .send({
                 teacherName: "Teacher",
                 date: "2024-05-01",
@@ -283,6 +290,7 @@ describe("Action Plan Routes", () => {
 
         const response = await request(app)
             .post("/api/update-actionplan")
+            .set("x-test-user-role", "teacher")
             .send({
                 teacherName: "Teacher",
                 date: "2024-05-01",

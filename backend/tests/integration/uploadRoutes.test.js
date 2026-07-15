@@ -172,13 +172,7 @@ describe("Upload Routes", () => {
             appWithoutUser
         );
 
-        expect(response.status).toBe(200);
-        expect(response.body.file.metadata).toMatchObject({
-            studentId,
-            role: "unknown",
-            email: "unknown",
-        });
-        expect(response.body.file.metadata.userId).toBeNull();
+        expect(response.status).toBe(401);
     });
 
     it("uses mime lookup when mimetype is missing", async () => {
@@ -469,15 +463,13 @@ describe("Upload Routes", () => {
             studentId,
             "delete-unknown.txt",
             "delete content",
-            appWithoutUser
+            app
         );
         const fileId = uploadResponse.body.file._id;
 
         const response = await request(appWithoutUser)
             .delete(`/api/uploads/${fileId}`)
-            .expect(200);
-
-        expect(response.body).toEqual({ message: "File deleted successfully" });
+            .expect(401);
     });
 
     it("returns 500 when delete fails", async () => {

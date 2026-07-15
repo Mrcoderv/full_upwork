@@ -63,7 +63,7 @@ export default {
     const store = useStore();
     const documents = ref([]);
     const selectedFile = ref(null);
-    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
     // Determine if this is a student
     const isStudent = computed(() => {
