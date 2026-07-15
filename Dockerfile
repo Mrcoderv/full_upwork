@@ -25,7 +25,7 @@ WORKDIR $APP_HOME
 COPY --from=deps $APP_HOME ./
 COPY package*.json ./
 COPY Makefile ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 
 
 # ----------------------------

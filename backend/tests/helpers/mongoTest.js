@@ -1,25 +1,17 @@
 import mongoose from "mongoose";
+import { MongoMemoryServer } from "mongodb-memory-server";
 
-const buildMongoUri = () => {
-    const baseUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017";
-    const dbName =
-        process.env.MONGO_TEST_DB ||
-        `mindful_test_${process.pid}_${Math.random().toString(16).slice(2)}`;
-
-    const url = new URL(baseUri);
-    url.pathname = `/${dbName}`;
-    return url.toString();
-};
-
-export const getTestMongoUri = () => buildMongoUri();
+let mongoServer;
+let testUri = "";
 
 export const connectTestDatabase = async () => {
     if (mongoose.connection.readyState !== 0) {
         await mongoose.disconnect();
     }
-    const uri = buildMongoUri();
-    await mongoose.connect(uri);
-    return uri;
+    mongoServer = await MongoMemoryServer.create();
+    testUri = mongoServer.getUri();
+    await mongoose.connect(testUri);
+    return testUri;
 };
 
 export const disconnectTestDatabase = async () => {
@@ -27,4 +19,13 @@ export const disconnectTestDatabase = async () => {
         await mongoose.connection.dropDatabase();
         await mongoose.disconnect();
     }
+    if (mongoServer) {
+        await mongoServer.stop();
+        mongoServer = null;
+    }
+    testUri = "";
+};
+
+export const getTestMongoUri = () => {
+    return testUri;
 };
