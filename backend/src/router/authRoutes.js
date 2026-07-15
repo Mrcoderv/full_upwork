@@ -7,21 +7,26 @@ import {
     login,
     logout as controllerLogout,
 } from "../controllers/authController.js";
-// Rate limiting disabled
-// import { authRateLimiter } from "../middleware/security.js";
+import { authRateLimiter } from "../middleware/security.js";
+import { validate } from "../middleware/validation.js";
 
 const router = express.Router();
 
+const registerSchema = {
+    username: { type: "string", required: true, min: 2, max: 50, sanitize: true },
+    email: { type: "string", required: true, email: true },
+    password: { type: "string", required: true, password: true },
+};
+
+const loginSchema = {
+    email: { type: "string", required: true, email: true },
+    password: { type: "string", required: true },
+};
+
 // Register User
-router.post("/auth/register", async (req, res) => {
+router.post("/auth/register", authRateLimiter, validate(registerSchema), async (req, res) => {
     try {
         const { email, password, username } = req.body;
-
-        if (!email || !password || !username) {
-            return res
-                .status(400)
-                .json({ message: "Alla fält är obligatoriska!" });
-        }
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -44,8 +49,7 @@ router.post("/auth/register", async (req, res) => {
 });
 
 // ✅ Login User (delegate to controller for consistent behavior)
-// Rate limiting disabled
-router.post("/auth/login", login);
+router.post("/auth/login", authRateLimiter, validate(loginSchema), login);
 
 // ✅ Logout (controller)
 router.post("/auth/logout", controllerLogout);

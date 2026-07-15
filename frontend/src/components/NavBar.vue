@@ -728,6 +728,7 @@
       ]
       const menuItems = [
         { name: 'Betygsrapporter', link: '/admin/betygsrapporter', role: ['admin', 'systemadmin'] },
+        { name: 'Rapporter & Analys', link: '/admin/analytics', role: ['admin', 'systemadmin'] },
         { name: 'APL', link: '/apl', role: ['admin', 'teacher', 'coordinator'] },
         {
           name: 'Kalender',

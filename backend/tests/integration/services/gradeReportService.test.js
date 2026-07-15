@@ -28,8 +28,8 @@ describe('generateGradeReport', () => {
     await clearDatabase();
     
     // Create test data
-    const student1 = await Student.create({ name: 'Alice A', personalNumber: '111', email: 'a@a.com', municipality: 'Stockholm' });
-    const student2 = await Student.create({ name: 'Bob B', personalNumber: '222', email: 'b@b.com', municipality: 'Gothenburg' });
+    const student1 = await Student.create({ name: 'Alice A', personalNumber: '111', email: 'a@a.com', municipality: { type: 'Stockholm' } });
+    const student2 = await Student.create({ name: 'Bob B', personalNumber: '222', email: 'b@b.com', municipality: { type: 'Göteborg' } });
 
     const course1 = await Course.create({ courseName: 'Math', courseCode: 'MAT101' });
     const course2 = await Course.create({ courseName: 'History', courseCode: 'HIS101' });

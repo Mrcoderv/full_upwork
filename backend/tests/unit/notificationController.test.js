@@ -512,7 +512,7 @@ describe("notificationController", () => {
 
             expect(notification).not.toBeNull();
             expect(notification?.message).toBe(
-                `Ny studieplan skapad för ${student.name} i kursen undefined.`
+                `Ny studieplan skapad för ${student.name} i kursen Matematik.`
             );
             expect(notification?.resolved).toBe(false);
             expect(notification?.teacher?.toString()).toBe(
@@ -554,7 +554,7 @@ describe("notificationController", () => {
 
             expect(notification).not.toBeNull();
             expect(notification?.message).toBe(
-                `Studieplan borttagen för ${student.name} i kursen undefined.`
+                `Studieplan borttagen för ${student.name} i kursen Svenska.`
             );
             expect(notification?.resolved).toBe(false);
         });

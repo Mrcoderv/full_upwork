@@ -221,7 +221,7 @@ router.get("/exams", isAuthenticated, async (req, res) => {
     }
 });
 
-router.post("/calendar-events", async (req, res) => {
+router.post("/calendar-events", isAuthenticated, async (req, res) => {
     try {
         const event = new CalendarEvent(req.body);
         await event.save();
@@ -721,7 +721,7 @@ router.put(
     }
 );
 
-router.put("/calendar-events/:id", async (req, res) => {
+router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
     try {
         const { id } = req.params;
         const updateFields = req.body;
@@ -2143,7 +2143,7 @@ router.delete("/calendar-events/cleanup-slutprov", isAuthenticated, async (req, 
 });
 
 // GET specific calendar event by ID
-router.get("/calendar-events/:id", async (req, res) => {
+router.get("/calendar-events/:id", isAuthenticated, async (req, res) => {
     try {
         const { id } = req.params;
         const event = await CalendarEvent.findById(id);
@@ -2160,7 +2160,7 @@ router.get("/calendar-events/:id", async (req, res) => {
 });
 
 // GET attendance data for a specific event (date + teacher)
-router.get("/calendar-events/attendance/:date/:teacherId", async (req, res) => {
+router.get("/calendar-events/attendance/:date/:teacherId", isAuthenticated, async (req, res) => {
     try {
         const { date, teacherId } = req.params;
 
@@ -2200,7 +2200,7 @@ router.get("/calendar-events/attendance/:date/:teacherId", async (req, res) => {
     }
 });
 
-router.put("/update-exam/:id", async (req, res) => {
+router.put("/update-exam/:id", isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const { examTime, examMunicipality, examLocation } = req.body;
 
@@ -2228,7 +2228,7 @@ router.put("/update-exam/:id", async (req, res) => {
     }
 });
 
-router.put("/mark-attendance/:personalNumber", async (req, res) => {
+router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res) => {
     console.log("📌 API /mark-attendance anropad! Data mottagen:", req.body);
     try {
         const { personalNumber } = req.params;
@@ -2255,7 +2255,7 @@ router.put("/mark-attendance/:personalNumber", async (req, res) => {
     }
 });
 
-router.post("/examtime-location", async (req, res) => {
+router.post("/examtime-location", isAuthenticated, async (req, res) => {
     const { studentIds, examTime, examMunicipality, examLocation } = req.body;
 
     if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
@@ -2286,7 +2286,7 @@ router.post("/examtime-location", async (req, res) => {
 });
 
 // Get attendance statistics for a student
-router.get("/attendance-stats/:studentId", async (req, res) => {
+router.get("/attendance-stats/:studentId", isAuthenticated, async (req, res) => {
     try {
         const { studentId } = req.params;
         const { default: ExamAttendance } = await import(
@@ -2356,7 +2356,7 @@ router.delete("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), 
 });
 
 // PATCH: Batch update attendance for a specific event (date + teacher)
-router.post("/calendar-events/mark-attendance", async (req, res) => {
+router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res) => {
     console.log("🚀 mark-attendance endpoint called!");
     console.log("📥 Request body:", req.body);
     console.log("📥 Request method:", req.method);
@@ -2592,7 +2592,7 @@ router.post("/calendar-events/mark-attendance", async (req, res) => {
     }
 });
 
-router.put("/exams/:id/decision", async (req, res) => {
+router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmin']), async (req, res) => {
     try {
         const { decision, comment } = req.body;
         const examId = req.params.id;
@@ -2653,7 +2653,7 @@ export default router;
 
 // --- Student exam instances listing ---
 // List all exam instances (manual + course-linked) recorded for a student
-router.get("/exams/student/:studentId", async (req, res) => {
+router.get("/exams/student/:studentId", isAuthenticated, async (req, res) => {
     try {
         const { studentId } = req.params;
         const { default: ExamAttendance } = await import(

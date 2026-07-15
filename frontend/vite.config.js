@@ -25,7 +25,7 @@ export default defineConfig({
         sourcemapIgnoreList: (path) => path.includes('node_modules'),
         proxy: {
             '/api': {
-                target: 'http://localhost:5001',
+                target: 'http://localhost:5010',
                 changeOrigin: true,
                 secure: false,
             },

@@ -75,6 +75,8 @@ function generateStrongPassword(length = 12) {
 // DEBUG: Testa populering av userId för alla lärare
 router.get(
   "/debug-teachers",
+  isAuthenticated,
+  can("teachers:read"),
   async (req, res) => {
     try {
       const teachers = await Teacher.find().populate("userId", "username email roles");
@@ -239,7 +241,7 @@ router.post(
 );
 
 // POST /teacher - Create a user + teacher profile (kept for backward compatibility)
-router.post("/teacher", async (req, res) => {
+router.post("/teacher", isAuthenticated, can("teachers:create"), async (req, res) => {
     console.log("📨 Incoming teacher POST:", req.body);
 
     try {

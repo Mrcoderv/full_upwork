@@ -21,7 +21,7 @@ import { sendDropoutNotification } from "../controllers/notificationController.j
 
 const router = Router();
 
-router.get("/students/by-teacher/:teacherId", async (req, res) => {
+router.get("/students/by-teacher/:teacherId", authenticateUser, async (req, res) => {
     try {
         const students = await Student.find({
             teacherId: req.params.teacherId,
@@ -50,6 +50,7 @@ router.get("/students/by-teacher/:teacherId", async (req, res) => {
  */
 router.put(
     "/students/:studentId/education/:educationId/status",
+    authenticateUser,
     async (req, res) => {
         const { studentId, educationId } = req.params;
         const { status } = req.body;
@@ -305,7 +306,7 @@ router.get("/students", authenticateUser, async (req, res) => {
  * @desc    Adds a new student to the database and creates enrollments for grading.
  * @access  Public
  */
-router.post("/student", async (req, res) => {
+router.post("/student", authenticateUser, async (req, res) => {
     try {
         console.log(
             "📥 Creating student with payload:",
@@ -388,7 +389,7 @@ router.post("/student", async (req, res) => {
  * @desc    Adds a course to a student's education array.
  * @access  Public
  */
-router.post("/student/:studentId/addcourse", async (req, res) => {
+router.post("/student/:studentId/addcourse", authenticateUser, async (req, res) => {
     const { studentId } = req.params;
     const { courseId } = req.body;
 
@@ -439,7 +440,7 @@ router.post("/student/:studentId/addcourse", async (req, res) => {
  * @desc    Assigns a program to a student.
  * @access  Public
  */
-router.post("/student/:studentId/setprogram", async (req, res) => {
+router.post("/student/:studentId/setprogram", authenticateUser, async (req, res) => {
     const { studentId } = req.params;
     const { programId } = req.body;
 
@@ -463,7 +464,7 @@ router.post("/student/:studentId/setprogram", async (req, res) => {
  * @desc    Adds a course package to a student.
  * @access  Public
  */
-router.post("/student/:studentId/addcoursepackage", async (req, res) => {
+router.post("/student/:studentId/addcoursepackage", authenticateUser, async (req, res) => {
     const { studentId } = req.params;
     const { coursePackageId } = req.body;
 
@@ -488,7 +489,7 @@ router.post("/student/:studentId/addcoursepackage", async (req, res) => {
  * @desc    Removes a course from a student's courses array.
  * @access  Public
  */
-router.delete("/student/:id/courses/:courseId", async (req, res) => {
+router.delete("/student/:id/courses/:courseId", authenticateUser, async (req, res) => {
     try {
         const student = await Student.findById(req.params.id);
         if (!student)
@@ -511,7 +512,7 @@ router.delete("/student/:id/courses/:courseId", async (req, res) => {
  * @desc    Fetches a single student with populated fields.
  * @access  Public
  */
-router.get("/student/:id", async (req, res) => {
+router.get("/student/:id", authenticateUser, async (req, res) => {
     try {
         const student = await Student.findById(req.params.id)
             .select("+commentHistory.seenBy")
@@ -532,7 +533,7 @@ router.get("/student/:id", async (req, res) => {
  * @desc    Fetches a single student with only basic fields (no populate).
  * @access  Public
  */
-router.get("/student/:id/basic", async (req, res) => {
+router.get("/student/:id/basic", authenticateUser, async (req, res) => {
     try {
         const student = await Student.findById(req.params.id)
             .select(
@@ -597,8 +598,11 @@ async function deleteStudentFiles(studentId) {
  * @desc    Deletes a specific student and all associated files.
  * @access  Public
  */
-router.delete("/student/:id", async (req, res) => {
+router.delete("/student/:id", authenticateUser, async (req, res) => {
     try {
+        if (!["admin", "systemadmin"].includes(req.user?.role)) {
+            return res.status(403).json({ error: "Insufficient permissions to delete a student." });
+        }
         const studentId = req.params.id;
         
         // First, delete all files associated with this student
@@ -626,8 +630,11 @@ router.delete("/student/:id", async (req, res) => {
  * @desc    Deletes all student records and their associated files.
  * @access  Public
  */
-router.delete("/students", async (req, res) => {
+router.delete("/students", authenticateUser, async (req, res) => {
     try {
+        if (!["admin", "systemadmin"].includes(req.user?.role)) {
+            return res.status(403).json({ error: "Insufficient permissions to delete all students." });
+        }
         // Get all student IDs before deletion
         const allStudents = await Student.find({}, { _id: 1 }).lean();
         const studentIds = allStudents.map(s => s._id.toString());
@@ -778,7 +785,7 @@ router.delete("/students/:id/comment", authenticateUser, async (req, res) => {
  * @desc    Updates full student object (excluding Mongo ID).
  * @access  Public
  */
-router.put("/student/:id", async (req, res) => {
+router.put("/student/:id", authenticateUser, async (req, res) => {
     console.log("📥 Received payload:", req.body);
 
     const allowedFields = [
@@ -1072,6 +1079,7 @@ router.post(
  */
 router.patch(
     "/student/:studentId/education/:educationId/grade",
+    authenticateUser,
     async (req, res) => {
         const { studentId, educationId } = req.params;
         const { grade } = req.body;
@@ -1151,7 +1159,7 @@ router.get("/all-courses", async (req, res) => {
  * @desc    Updates the grade of a course in the student's education array.
  * @access  Public
  */
-router.put("/student/:id/education/:courseId/grade", async (req, res) => {
+router.put("/student/:id/education/:courseId/grade", authenticateUser, async (req, res) => {
     const { id, courseId } = req.params;
     const { grade } = req.body;
 
@@ -1191,7 +1199,7 @@ router.put("/student/:id/education/:courseId/grade", async (req, res) => {
  * @desc    Returns students with non-null education grades (for analytics).
  * @access  Public
  */
-router.get("/students/earnings", async (req, res) => {
+router.get("/students/earnings", authenticateUser, async (req, res) => {
     try {
         const students = await Student.find(
             { "education.grade": { $ne: null } }, // only students with grades

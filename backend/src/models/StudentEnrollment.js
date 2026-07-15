@@ -283,6 +283,13 @@ studentEnrollmentSchema.methods.isCurrentlyActive = function () {
     );
 };
 
+studentEnrollmentSchema.index({ studentId: 1 });
+studentEnrollmentSchema.index({ mainCourseId: 1 });
+studentEnrollmentSchema.index({ teacherId: 1 });
+studentEnrollmentSchema.index({ status: 1 });
+studentEnrollmentSchema.index({ gradeDate: 1 });
+studentEnrollmentSchema.index({ endDate: 1 });
+
 export default mongoose.model(
     "StudentEnrollment",
     studentEnrollmentSchema,

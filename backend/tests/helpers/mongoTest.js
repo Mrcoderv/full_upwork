@@ -14,6 +14,9 @@ const buildMongoUri = () => {
 export const getTestMongoUri = () => buildMongoUri();
 
 export const connectTestDatabase = async () => {
+    if (mongoose.connection.readyState !== 0) {
+        await mongoose.disconnect();
+    }
     const uri = buildMongoUri();
     await mongoose.connect(uri);
     return uri;

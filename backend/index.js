@@ -27,9 +27,10 @@ import {
     corsConfig,
     requestLogger,
     securityAudit,
-    // Rate limiting disabled
-    // rateLimiter,
-    // apiRateLimiter,
+    mongoSanitize,
+    rateLimiter,
+    apiRateLimiter,
+    requestTimeout,
 } from "./src/middleware/security.js";
 
 import {
@@ -43,18 +44,21 @@ import { dbOptimizer, requestOptimizer } from "./src/utils/performance.js";
 // Apply security headers
 app.use(securityHeaders);
 
+// Apply request timeout (30 seconds)
+app.use(requestTimeout(30));
+
 // Apply CORS with enhanced configuration
 import cors from "cors";
 app.use(cors(corsConfig));
 
-// Rate limiting disabled
-// if (process.env.NODE_ENV !== "test") {
-//     app.use(rateLimiter);
-//     app.use("/api/", apiRateLimiter);
-// } else {
-//     // In tests, only rate limit the students endpoint to validate rate limiting behavior
-//     app.use("/api/students", apiRateLimiter);
-// }
+// Rate limiting
+if (process.env.NODE_ENV !== "test") {
+    app.use(rateLimiter);
+    app.use("/api/", apiRateLimiter);
+} else {
+    // In tests, only rate limit the students endpoint to validate rate limiting behavior
+    app.use("/api/students", apiRateLimiter);
+}
 
 // Apply performance monitoring
 app.use(performanceMonitor);
@@ -64,9 +68,6 @@ app.use(requestLogger);
 
 // Apply security audit
 app.use(securityAudit);
-
-// Apply query optimization
-app.use(requestOptimizer.optimizeQuery);
 
 import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
@@ -83,6 +84,13 @@ app.use(
         limit: process.env.MAX_FILE_SIZE || "10mb",
     })
 );
+
+// Strip Mongo operator keys ($gt, $where, etc.) from body/query/params to
+// prevent NoSQL injection
+app.use(mongoSanitize);
+
+// Apply query optimization
+app.use(requestOptimizer.optimizeQuery);
 
 // Enhanced request logging
 app.use((req, res, next) => {
@@ -139,9 +147,17 @@ app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 // Configure database connection with optimization
 dbOptimizer.configurePool();
 
-// Provide sensible defaults for test environment
+// JWT_SECRET must be a real secret in dev/production. Only tests get an
+// insecure fallback so the suite can run without requiring one.
 if (!process.env.JWT_SECRET) {
-    process.env.JWT_SECRET = "test-secret";
+    if (process.env.NODE_ENV === "test") {
+        process.env.JWT_SECRET = "test-secret";
+    } else {
+        console.error(
+            "💥 JWT_SECRET is not set. Refusing to start with an insecure default — set JWT_SECRET in the environment."
+        );
+        process.exit(1);
+    }
 }
 
 // MongoDB Connection with enhanced error handling (skip during tests)
