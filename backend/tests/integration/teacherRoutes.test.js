@@ -113,6 +113,7 @@ describe("Teacher Routes", () => {
 
             const response = await request(app)
                 .get("/api/debug-teachers")
+                .set(buildAuthHeader("admin"))
                 .expect(200);
 
             expect(response.body.success).toBe(true);
@@ -140,6 +141,7 @@ describe("Teacher Routes", () => {
 
             const response = await request(app)
                 .get("/api/debug-teachers")
+                .set(buildAuthHeader("admin"))
                 .expect(200);
 
             expect(response.body.count).toBe(1);
@@ -153,6 +155,7 @@ describe("Teacher Routes", () => {
 
             const response = await request(app)
                 .get("/api/debug-teachers")
+                .set(buildAuthHeader("admin"))
                 .expect(500);
 
             expect(response.body).toEqual({ error: "Debug route failed." });
@@ -297,6 +300,7 @@ describe("Teacher Routes", () => {
         it("returns 400 when required fields are missing", async () => {
             const response = await request(app)
                 .post("/api/teacher")
+                .set(buildAuthHeader("admin"))
                 .send({ username: "Missing" })
                 .expect(400);
 
@@ -311,6 +315,7 @@ describe("Teacher Routes", () => {
 
             const response = await request(app)
                 .post("/api/teacher")
+                .set(buildAuthHeader("admin"))
                 .send({ username: "Dup", email })
                 .expect(409);
 
@@ -336,6 +341,7 @@ describe("Teacher Routes", () => {
 
             const response = await request(app)
                 .post("/api/teacher")
+                .set(buildAuthHeader("admin"))
                 .send({
                     username: "Legacy",
                     email: "legacy@example.com",
@@ -368,6 +374,7 @@ describe("Teacher Routes", () => {
 
             await request(app)
                 .post("/api/teacher")
+                .set(buildAuthHeader("admin"))
                 .send({
                     username: "Fallback",
                     email: "fallback@example.com",
@@ -388,6 +395,7 @@ describe("Teacher Routes", () => {
 
             const response = await request(app)
                 .post("/api/teacher")
+                .set(buildAuthHeader("admin"))
                 .send({ username: "Error", email: "err@example.com" })
                 .expect(500);
 

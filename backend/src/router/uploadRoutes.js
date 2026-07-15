@@ -5,21 +5,51 @@ import multer from 'multer'
 import { GridFSBucket } from 'mongodb'
 import { Readable } from 'stream'
 import mime from 'mime-types'
+import path from 'path'
 import { uploadXlsx } from '../controllers/studentController.js'
 import { authenticateUser } from '../controllers/authController.js'
 
 dotenv.config()
 const router = Router()
 
-// Multer setup for in-memory storage
-const memupload = multer({ storage: multer.memoryStorage() })
-const upload = multer() // defaults to memory storage
+// File security configuration
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const DANGEROUS_EXTENSIONS = [
+  '.exe', '.dll', '.bat', '.sh', '.js', '.py', '.html', '.htm', '.xhtml', '.php',
+  '.jsp', '.asp', '.aspx', '.vbs', '.cmd', '.pl', '.cgi', '.msi', '.jar', '.scr'
+];
+
+const sanitizeFilename = (filename) => {
+  const ext = path.extname(filename).toLowerCase();
+  const base = path.basename(filename, ext);
+  const cleanBase = base.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 100);
+  return `${cleanBase}${ext}`;
+};
+
+// Multer setup with in-memory storage and limits
+const memupload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE }
+})
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE }
+})
 
 // XLSX upload route (memory storage)
-router.post('/upload/xlsxupload', memupload.single('file'), uploadXlsx)
+router.post('/upload/xlsxupload', authenticateUser, memupload.single('file'), (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' })
+  }
+  const fileExt = path.extname(req.file.originalname).toLowerCase();
+  if (fileExt !== '.xlsx' && fileExt !== '.xls') {
+    return res.status(400).json({ error: 'Endast Excel-filer (.xlsx, .xls) är tillåtna.' });
+  }
+  next();
+}, uploadXlsx)
 
 // Upload file to GridFS with metadata and MIME detection
-router.post('/:studentId', upload.single('file'), async (req, res) => {
+router.post('/:studentId', authenticateUser, upload.single('file'), async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
@@ -30,11 +60,23 @@ router.post('/:studentId', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' })
     }
 
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
     const contentType =
       req.file.mimetype || mime.lookup(req.file.originalname) || 'application/octet-stream'
+
+    // Validate MIME type and file extension against dangerous list
+    if (
+      DANGEROUS_EXTENSIONS.includes(fileExt) ||
+      contentType.startsWith('text/html') ||
+      contentType.startsWith('application/x-msdownload')
+    ) {
+      return res.status(400).json({ error: 'Ogiltigt filformat. Denna filtyp är inte tillåten av säkerhetsskäl.' })
+    }
+
+    const sanitizedFilename = sanitizeFilename(req.file.originalname);
     const stream = Readable.from(req.file.buffer)
 
-    const uploadStream = bucket.openUploadStream(req.file.originalname, {
+    const uploadStream = bucket.openUploadStream(sanitizedFilename, {
       contentType,
       metadata: {
         studentId,
@@ -69,7 +111,7 @@ router.post('/:studentId', upload.single('file'), async (req, res) => {
 })
 
 // List all files for a student
-router.get('/:studentId', async (req, res) => {
+router.get('/:studentId', authenticateUser, async (req, res) => {
   try {
     const files = await mongoose.connection.db
       .collection('fs.files')
@@ -84,7 +126,7 @@ router.get('/:studentId', async (req, res) => {
 })
 
 // Download file by ID with proper headers
-router.get('/download/:fileId', async (req, res) => {
+router.get('/download/:fileId', authenticateUser, async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
@@ -110,7 +152,7 @@ router.get('/download/:fileId', async (req, res) => {
 })
 
 // Delete file by ID with audit logging
-router.delete('/:fileId', async (req, res) => {
+router.delete('/:fileId', authenticateUser, async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
@@ -131,7 +173,7 @@ router.delete('/:fileId', async (req, res) => {
 })
 
 // List all files for all students (for APL contract archive)
-router.get('/all/apl', async (req, res) => {
+router.get('/all/apl', authenticateUser, async (req, res) => {
   try {
     const db = mongoose.connection.db
 

@@ -212,6 +212,12 @@ const routes = [
     component: () => import('@/views/Admin/Betygsrapporter.vue'),
     meta: { title: 'Betygsrapporter', role: ['admin', 'systemadmin'] },
   },
+  {
+    path: '/admin/analytics',
+    name: 'AnalyticsDashboard',
+    component: () => import('@/views/Admin/AnalyticsDashboard.vue'),
+    meta: { title: 'Rapporter & Analys', role: ['admin', 'systemadmin'] },
+  },
 
   {
     path: '/provningar',
@@ -294,7 +300,13 @@ router.beforeEach((to, from, next) => {
   const isAuthenticated = store.getters.isLoggedIn
   const hasPermission = store.getters.hasPermission
 
-  if (to.meta.requiresAuth && !isAuthenticated) {
+  // Any route that restricts by role implicitly requires being logged in —
+  // an anonymous "guest" role should never satisfy a role check, but we
+  // enforce it explicitly here too so a route can't be reached just because
+  // someone forgot to also set meta.requiresAuth.
+  const needsAuth = to.meta.requiresAuth || !!to.meta.role
+
+  if (needsAuth && !isAuthenticated) {
     next('/login') // Redirect unauthenticated users
   } else if (to.meta.role && !hasPermission(to.meta.role)) {
     next('/unauthorized') // Redirect if role is insufficient

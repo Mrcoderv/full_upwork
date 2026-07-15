@@ -800,6 +800,7 @@ describe("examRoutes", () => {
     Exam.findByIdAndUpdate.mockResolvedValue({ ...examDoc, status: "scheduled" });
     const res = await request(app)
       .put("/api/exams/decision-exam/decision")
+      .set("x-user-role", "admin")
       .send({ decision: "accept", comment: "Go" });
     expect(res.status).toBe(200);
     expect(Student.findOneAndUpdate).toHaveBeenCalled();
@@ -1433,12 +1434,14 @@ describe("examRoutes", () => {
     });
     const denyRes = await request(app)
       .put("/api/exams/decision-2/decision")
+      .set("x-user-role", "admin")
       .send({ decision: "deny", comment: "Nope" });
     expect(denyRes.status).toBe(200);
 
     Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
     const invalidRes = await request(app)
       .put("/api/exams/decision-2/decision")
+      .set("x-user-role", "admin")
       .send({ decision: "unknown" });
     expect(invalidRes.status).toBe(400);
   });
@@ -1452,6 +1455,7 @@ describe("examRoutes", () => {
     Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
     const res = await request(app)
       .put("/api/exams/decision-invalid/decision")
+      .set("x-user-role", "admin")
       .send({ decision: "accept", comment: "Invalid" });
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "Ogiltigt datum för accept" });
@@ -1461,6 +1465,7 @@ describe("examRoutes", () => {
     Exam.findById.mockRejectedValueOnce(new Error("boom"));
     const res = await request(app)
       .put("/api/exams/decision-error/decision")
+      .set("x-user-role", "admin")
       .send({ decision: "accept", comment: "Crash" });
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: "Kunde inte spara beslut." });
@@ -1470,6 +1475,7 @@ describe("examRoutes", () => {
     Exam.findById.mockReturnValueOnce(createQueryChain(null));
     const res = await request(app)
       .put("/api/exams/not-found/decision")
+      .set("x-user-role", "admin")
       .send({ decision: "accept", comment: "None" });
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Prövning hittades inte." });

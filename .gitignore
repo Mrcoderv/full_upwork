@@ -27,3 +27,8 @@ llm
 # Test coverage
 frontend/coverage/
 backend/coverage/
+
+# Environment variables
+.env*
+
+

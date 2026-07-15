@@ -52,6 +52,8 @@ const securityMocks = {
   securityAudit: vi.fn(),
   rateLimiter: vi.fn(),
   apiRateLimiter: vi.fn(),
+  mongoSanitize: vi.fn((req, res, next) => next()),
+  requestTimeout: vi.fn(() => (req, res, next) => next()),
 };
 vi.mock("../../src/middleware/security.js", () => ({
   __esModule: true,

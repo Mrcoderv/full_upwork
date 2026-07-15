@@ -1,5 +1,5 @@
 # ----------------------------
-# deps
+# deps (backend only — enough for dev target)
 # ----------------------------
 FROM node:25-alpine AS deps
 ENV APP_HOME=/app NODE_ENV=test
@@ -7,13 +7,10 @@ WORKDIR $APP_HOME
 
 COPY package*.json ./
 COPY backend/package*.json backend/
+RUN npm ci --prefix backend --no-audit --no-fund
+
 COPY frontend/package*.json frontend/
-RUN --mount=type=cache,id=npm-root-cache,target=/root/.npm \
-    --mount=type=cache,id=npm-backend-cache,target=/root/.npm-backend \
-    --mount=type=cache,id=npm-frontend-cache,target=/root/.npm-frontend \
-    NPM_CONFIG_CACHE=/root/.npm npm ci --prefer-offline --no-audit --no-fund; \
-    NPM_CONFIG_CACHE=/root/.npm-backend npm ci --prefix backend --prefer-offline --no-audit --no-fund \
-    NPM_CONFIG_CACHE=/root/.npm-frontend npm ci --prefix frontend --prefer-offline --no-audit --no-fund
+RUN cd frontend && npm ci --no-audit --no-fund
 
 
 # ----------------------------
@@ -21,11 +18,14 @@ RUN --mount=type=cache,id=npm-root-cache,target=/root/.npm \
 # ----------------------------
 FROM node:25-alpine AS test-base
 RUN apk add --no-cache make
+RUN npm install -g npm@10
 ENV APP_HOME=/app NODE_ENV=test
 WORKDIR $APP_HOME
 
 COPY --from=deps $APP_HOME ./
+COPY package*.json ./
 COPY Makefile ./
+RUN npm ci --no-audit --no-fund
 
 
 # ----------------------------
@@ -45,9 +45,10 @@ CMD ["make", "test"]
 
 
 # ----------------------------
-# devleopment backend server
+# development backend server
 # ----------------------------
 FROM node:25-alpine AS dev
+RUN npm install -g npm@10
 ENV APP_HOME=/app NODE_ENV=test
 WORKDIR $APP_HOME
 

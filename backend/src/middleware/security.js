@@ -519,6 +519,48 @@ export const corsConfig = {
     exposedHeaders: ["Content-Length", "X-Total-Count"],
 };
 
+// NoSQL injection protection: strips any object key that starts with "$"
+// or contains "." from req.body/query/params, recursively. This blocks the
+// classic Mongo operator-injection payloads (e.g. { "email": { "$gt": "" } })
+// without depending on a third-party package.
+const sanitizeValue = (value) => {
+    if (Array.isArray(value)) {
+        return value.map(sanitizeValue);
+    }
+    if (value && typeof value === "object" && !(value instanceof Date)) {
+        const clean = {};
+        for (const [key, val] of Object.entries(value)) {
+            if (key.startsWith("$") || key.includes(".")) {
+                continue; // drop dangerous keys entirely
+            }
+            clean[key] = sanitizeValue(val);
+        }
+        return clean;
+    }
+    return value;
+};
+
+export const mongoSanitize = (req, res, next) => {
+    if (req.body && typeof req.body === "object") {
+        req.body = sanitizeValue(req.body);
+    }
+    if (req.query && typeof req.query === "object") {
+        const sanitized = sanitizeValue(req.query);
+        for (const key of Object.keys(req.query)) {
+            delete req.query[key];
+        }
+        Object.assign(req.query, sanitized);
+    }
+    if (req.params && typeof req.params === "object") {
+        const sanitized = sanitizeValue(req.params);
+        for (const key of Object.keys(req.params)) {
+            delete req.params[key];
+        }
+        Object.assign(req.params, sanitized);
+    }
+    next();
+};
+
 // Security audit middleware
 export const securityAudit = (req, res, next) => {
     const auditData = {
@@ -563,6 +605,26 @@ export const securityAudit = (req, res, next) => {
     next();
 };
 
+// Request timeout middleware to mitigate Slowloris / hung connection DoS
+export const requestTimeout = (seconds = 30) => {
+    return (req, res, next) => {
+        const timer = setTimeout(() => {
+            if (!res.headersSent) {
+                logger.error(`🚨 Request timeout exceeded for ${req.method} ${req.url}`);
+                res.status(503).json({
+                    success: false,
+                    error: "Request Timeout",
+                    message: `Request processing exceeded the limit of ${seconds} seconds.`,
+                });
+            }
+        }, seconds * 1000);
+
+        res.on("finish", () => clearTimeout(timer));
+        res.on("close", () => clearTimeout(timer));
+        next();
+    };
+};
+
 // Export all security utilities
 export default {
     enhancedRBAC,
@@ -577,4 +639,6 @@ export default {
     requestLogger,
     corsConfig,
     securityAudit,
+    mongoSanitize,
+    requestTimeout,
 };
