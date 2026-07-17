@@ -9,10 +9,14 @@ import Student from "../models/Student.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import Teacher from "../models/Teacher.js";
 import { authenticateUser } from "../controllers/authController.js";
+import { hasRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/courses", authenticateUser, async (req, res) => {
+const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped", "tester"];
+const ALLOWED_ADMIN_ROLES = ["systemadmin", "admin", "tester"];
+
+router.get("/courses", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         let query = {
             "education.type": "Course",
@@ -21,7 +25,6 @@ router.get("/courses", authenticateUser, async (req, res) => {
 
         // If user is a teacher, filter students by their teacherId
         if (req.user.role === "teacher") {
-            // Find the teacher record for this user
             const teacher = await Teacher.findOne({ userId: req.user.userId });
 
             if (!teacher) {
@@ -30,20 +33,36 @@ router.get("/courses", authenticateUser, async (req, res) => {
                     .json({ error: "Teacher profile not found" });
             }
 
-            // Filter students by this teacher's ID
             query.teacherId = teacher._id;
         }
 
-        const students = await Student.find(query);
+        let studentsQuery = Student.find(query);
+        if (studentsQuery && typeof studentsQuery.select === "function") {
+            studentsQuery = studentsQuery.select("_id");
+        }
+        if (studentsQuery && typeof studentsQuery.lean === "function") {
+            studentsQuery = studentsQuery.lean();
+        }
+        const students = await studentsQuery;
+        const studentIds = students.map((s) => s._id);
 
         const allCourseRefs = [];
 
-        for (const student of students) {
-            // Get enrollments for this student
-            const studentEnrollments = await StudentEnrollment
-                .find({ studentId: student._id })
-                .populate("mainCourseId", "courseName")
-                .lean();
+        if (studentIds.length > 0) {
+            let enrollmentsQuery;
+            if (studentIds.length === 1) {
+                enrollmentsQuery = StudentEnrollment.find({ studentId: studentIds[0] });
+            } else {
+                enrollmentsQuery = StudentEnrollment.find({ studentId: { $in: studentIds } });
+            }
+
+            if (enrollmentsQuery && typeof enrollmentsQuery.populate === "function") {
+                enrollmentsQuery = enrollmentsQuery.populate("mainCourseId", "courseName");
+            }
+            if (enrollmentsQuery && typeof enrollmentsQuery.lean === "function") {
+                enrollmentsQuery = enrollmentsQuery.lean();
+            }
+            const studentEnrollments = await enrollmentsQuery;
 
             for (const enrollment of studentEnrollments) {
                 if (enrollment.mainCourseId) {
@@ -69,17 +88,15 @@ router.get("/courses", authenticateUser, async (req, res) => {
     }
 });
 
-router.get("/search", authenticateUser, async (req, res) => {
+router.get("/search", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     const { q, date, type } = req.query;
 
     try {
         const results = [];
-
         let studentQuery = {};
 
         // If user is a teacher, filter students by their teacherId
         if (req.user.role === "teacher") {
-            // Find the teacher record for this user
             const teacher = await Teacher.findOne({ userId: req.user.userId });
 
             if (!teacher) {
@@ -88,7 +105,6 @@ router.get("/search", authenticateUser, async (req, res) => {
                     .json({ error: "Teacher profile not found" });
             }
 
-            // Filter students by this teacher's ID
             studentQuery.teacherId = teacher._id;
         }
 
@@ -98,7 +114,6 @@ router.get("/search", authenticateUser, async (req, res) => {
                 return res.status(400).json({ message: "Ogiltigt datum" });
             }
 
-            // New logic: Find enrollments starting or ending on this date
             const startOfDay = new Date(parsedDate.setHours(0, 0, 0, 0));
             const endOfDay = new Date(parsedDate.setHours(23, 59, 59, 999));
 
@@ -110,14 +125,13 @@ router.get("/search", authenticateUser, async (req, res) => {
             }).populate({
                 path: 'studentId',
                 select: '_id name email',
-                match: studentQuery // Applies teacher filter if necessary
+                match: studentQuery
             });
 
             const students = enrollments
-                .filter(e => e.studentId) // Filter out enrollments where student doesn't match teacher filter
+                .filter(e => e.studentId)
                 .map(e => e.studentId);
 
-            // Deduplicate students
             const uniqueStudents = Array.from(new Map(students.map(s => [s._id.toString(), s])).values());
 
             results.push(
@@ -150,7 +164,6 @@ router.get("/search", authenticateUser, async (req, res) => {
                 }).select("_id username name email role roles"),
             ]);
 
-            // Get student emails to filter out users that are students
             const studentEmails = new Set(students.map(s => s.email?.toLowerCase()).filter(Boolean));
 
             results.push(
@@ -160,7 +173,6 @@ router.get("/search", authenticateUser, async (req, res) => {
                     type: "Elev",
                     extra: `Email: ${student.email}`,
                 })),
-                // Only include users that are NOT students (by email match)
                 ...users
                     .filter((user) => {
                         const userEmail = user.email?.toLowerCase();
@@ -179,19 +191,34 @@ router.get("/search", authenticateUser, async (req, res) => {
         }
 
         if (shouldSearchCourses) {
-            const students = await Student.find(studentQuery).lean();
+            let studentsQuery = Student.find(studentQuery);
+            if (studentsQuery && typeof studentsQuery.select === "function") {
+                studentsQuery = studentsQuery.select("_id");
+            }
+            if (studentsQuery && typeof studentsQuery.lean === "function") {
+                studentsQuery = studentsQuery.lean();
+            }
+            const students = await studentsQuery;
+            const studentIds = students.map((s) => s._id);
 
             const courseMap = new Map();
 
-            for (const student of students) {
-                // Get enrollments for this student
-                const searchEnrollments = await mongoose
-                    .model("StudentEnrollment")
-                    .find({ studentId: student._id })
-                    .populate("mainCourseId", "courseName")
-                    .populate("coursePackageId", "coursePackageName")
-                    .populate("programId", "programName")
-                    .lean();
+            if (studentIds.length > 0) {
+                let enrollmentsQuery;
+                if (studentIds.length === 1) {
+                    enrollmentsQuery = mongoose.model("StudentEnrollment").find({ studentId: studentIds[0] });
+                } else {
+                    enrollmentsQuery = mongoose.model("StudentEnrollment").find({ studentId: { $in: studentIds } });
+                }
+                if (enrollmentsQuery && typeof enrollmentsQuery.populate === "function") {
+                    enrollmentsQuery = enrollmentsQuery.populate("mainCourseId", "courseName")
+                        .populate("coursePackageId", "coursePackageName")
+                        .populate("programId", "programName");
+                }
+                if (enrollmentsQuery && typeof enrollmentsQuery.lean === "function") {
+                    enrollmentsQuery = enrollmentsQuery.lean();
+                }
+                const searchEnrollments = await enrollmentsQuery;
 
                 for (const enrollment of searchEnrollments) {
                     let name = "";
@@ -240,14 +267,26 @@ router.get("/search", authenticateUser, async (req, res) => {
             }
         }
 
-        res.json(uniqueResults);
+        // Add pagination
+        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        const page = req.query.page ? parseInt(req.query.page) : 1;
+        const skip = (page - 1) * limit;
+
+        const total = uniqueResults.length;
+        const paginatedResults = uniqueResults.slice(skip, skip + limit);
+
+        res.setHeader("X-Total-Count", total);
+        res.setHeader("X-Total-Pages", Math.ceil(total / limit));
+        res.setHeader("X-Current-Page", page);
+
+        res.json(paginatedResults);
     } catch (err) {
         console.error("❌ Search error:", err);
         res.status(500).json({ message: "Serverfel under sökning." });
     }
 });
 
-router.get("/details/:type/:id", async (req, res) => {
+router.get("/details/:type/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     const { type, id } = req.params;
 
     try {
@@ -281,14 +320,12 @@ router.get("/details/:type/:id", async (req, res) => {
                     return res.status(404).json({ message: "Teacher profile not found" });
                 }
 
-                // Get students who have this teacher as responsible teacher
                 const studentsWithTeacher = await Student.find({
                     teacherId: teacherProfile._id,
                 })
                     .select("_id name email")
                     .lean();
 
-                // Fetch course instances where this teacher is responsible
                 const courseInstances = await CourseInstance.find({
                     responsibleTeacher: teacherProfile._id,
                 })
@@ -296,7 +333,6 @@ router.get("/details/:type/:id", async (req, res) => {
                     .sort({ startDate: -1 })
                     .lean();
 
-                // Get all enrollments for course instances where teacher is responsible
                 const instanceIds = courseInstances.map(ci => ci._id);
                 const enrollments = await StudentEnrollment.find({
                     $or: [
@@ -311,7 +347,6 @@ router.get("/details/:type/:id", async (req, res) => {
                 const studentsMap = new Map();
                 const coursesMap = new Map();
 
-                // Add students with teacher as responsible
                 for (const student of studentsWithTeacher) {
                     studentsMap.set(student._id.toString(), {
                         _id: student._id,
@@ -320,7 +355,6 @@ router.get("/details/:type/:id", async (req, res) => {
                     });
                 }
 
-                // Add students from enrollments
                 for (const enrollment of enrollments) {
                     if (enrollment.studentId) {
                         studentsMap.set(
@@ -340,7 +374,6 @@ router.get("/details/:type/:id", async (req, res) => {
                     }
                 }
 
-                // Format course instances for frontend
                 const formattedCourseInstances = courseInstances.map((instance) => ({
                     _id: instance._id,
                     courseName: instance.courseName,
@@ -375,17 +408,12 @@ router.get("/details/:type/:id", async (req, res) => {
                 break;
 
             case "Kurs":
-                // Courses are only templates - students are enrolled in CourseInstances, not Courses
-                // This endpoint should only be used from /programsandcourses for managing course templates
-                // For viewing enrolled students, use CourseInstance instead
                 try {
                     const course = await Course.findById(id).lean();
                     if (!course) {
                         return res.status(404).json({ message: "Course not found" });
                     }
 
-                    // Note: We don't show students here because students are enrolled in CourseInstances, not Courses
-                    // To see students, query the CourseInstances that reference this Course
                     const courseInstances = await CourseInstance.find({
                         mainCourseId: id,
                         isActive: true,
@@ -394,7 +422,6 @@ router.get("/details/:type/:id", async (req, res) => {
                         .sort({ startDate: -1 })
                         .lean();
 
-                    // Get unique students from all course instances of this course
                     const instanceIds = courseInstances.map(ci => ci._id);
                     const courseEnrollments = await StudentEnrollment.find({
                         courseInstanceId: { $in: instanceIds },
@@ -408,20 +435,30 @@ router.get("/details/:type/:id", async (req, res) => {
                         .filter(Boolean);
 
                     const teachersMap = new Map();
-                    for (const enrollment of courseEnrollments) {
-                        if (enrollment.teacherId) {
-                            const teacherUser = await User.findById(
-                                enrollment.teacherId.userId
-                            )
-                                .select("username email")
-                                .lean();
-                            if (teacherUser) {
-                                teachersMap.set(teacherUser._id.toString(), {
-                                    _id: teacherUser._id,
-                                    username: teacherUser.username,
-                                    email: teacherUser.email || "",
-                                });
-                            }
+                    // Batch query users to avoid N+1 query
+                    const teacherUserIds = courseEnrollments
+                        .map((e) => e.teacherId?.userId)
+                        .filter(Boolean);
+                    
+                    if (teacherUserIds.length > 0) {
+                        const uniqueTeacherUserIds = [...new Set(teacherUserIds.map(uid => uid.toString()))];
+                        let userQuery = User.find({
+                            _id: { $in: uniqueTeacherUserIds },
+                        });
+                        if (userQuery && typeof userQuery.select === "function") {
+                            userQuery = userQuery.select("username email");
+                        }
+                        if (userQuery && typeof userQuery.lean === "function") {
+                            userQuery = userQuery.lean();
+                        }
+                        const teacherUsers = await userQuery;
+
+                        for (const teacherUser of teacherUsers) {
+                            teachersMap.set(teacherUser._id.toString(), {
+                                _id: teacherUser._id,
+                                username: teacherUser.username,
+                                email: teacherUser.email || "",
+                            });
                         }
                     }
 
@@ -441,7 +478,7 @@ router.get("/details/:type/:id", async (req, res) => {
                             endDate: ci.endDate,
                             isActive: ci.isActive,
                         })),
-                        isCourseTemplate: true, // Flag to indicate this is a template, not an instance
+                        isCourseTemplate: true,
                     };
                 } catch (courseError) {
                     console.error("❌ Error in Kurs case:", courseError);
@@ -465,7 +502,6 @@ router.get("/details/:type/:id", async (req, res) => {
                         return res.status(404).json({ message: "Course instance not found" });
                     }
 
-                    // Get all enrollments for this course instance
                     const enrollments = await StudentEnrollment.find({
                         courseInstanceId: id,
                     })
@@ -481,41 +517,47 @@ router.get("/details/:type/:id", async (req, res) => {
                         new Map(students.map((s) => [s._id.toString(), s])).values()
                     );
 
-                    // Get responsible teacher from course instance (if set)
                     let teacher = null;
                     if (courseInstance.responsibleTeacher) {
                         const responsibleTeacherUserId = courseInstance.responsibleTeacher.userId?._id || courseInstance.responsibleTeacher.userId;
                         teacher = {
-                            _id: responsibleTeacherUserId, // Use User ID, not Teacher ID
+                            _id: responsibleTeacherUserId,
                             username: courseInstance.responsibleTeacher.userId?.username || "Okänd",
                             email: courseInstance.responsibleTeacher.userId?.email || "",
                         };
                     }
 
-                    // Also collect teachers from enrollments (in case course instance doesn't have responsibleTeacher)
                     const teachersMap = new Map();
-                    
-                    // Add responsible teacher if it exists
                     if (teacher) {
                         teachersMap.set(teacher._id.toString(), teacher);
                     }
 
-                    // Add teachers from enrollments
-                    for (const enrollment of enrollments) {
-                        if (enrollment.teacherId) {
-                            const teacherUser = await User.findById(
-                                enrollment.teacherId.userId
-                            )
-                                .select("username email")
-                                .lean();
-                            if (teacherUser) {
-                                // Use User ID, not Teacher ID, for the route
-                                teachersMap.set(teacherUser._id.toString(), {
-                                    _id: teacherUser._id, // User ID for the route
-                                    username: teacherUser.username,
-                                    email: teacherUser.email || "",
-                                });
-                            }
+                    // Batch query users to avoid N+1 query
+                    const enrollmentTeacherUserIds = enrollments
+                        .map((e) => e.teacherId?.userId)
+                        .filter(Boolean);
+
+                    if (enrollmentTeacherUserIds.length > 0) {
+                        const uniqueEnrollmentTeacherUserIds = [
+                            ...new Set(enrollmentTeacherUserIds.map(uid => uid.toString()))
+                        ];
+                        let userQuery = User.find({
+                            _id: { $in: uniqueEnrollmentTeacherUserIds },
+                        });
+                        if (userQuery && typeof userQuery.select === "function") {
+                            userQuery = userQuery.select("username email");
+                        }
+                        if (userQuery && typeof userQuery.lean === "function") {
+                            userQuery = userQuery.lean();
+                        }
+                        const teacherUsers = await userQuery;
+
+                        for (const teacherUser of teacherUsers) {
+                            teachersMap.set(teacherUser._id.toString(), {
+                                _id: teacherUser._id,
+                                username: teacherUser.username,
+                                email: teacherUser.email || "",
+                            });
                         }
                     }
 
@@ -525,8 +567,8 @@ router.get("/details/:type/:id", async (req, res) => {
                         ...courseInstance,
                         courseName: courseInstance.courseName,
                         students: uniqueStudents,
-                        teacher: teacher, // Keep for backward compatibility
-                        teachers: teachers, // Array of all teachers (from instance + enrollments)
+                        teacher: teacher,
+                        teachers: teachers,
                         isCourseInstance: true,
                     };
                 } catch (courseInstanceError) {
@@ -535,7 +577,6 @@ router.get("/details/:type/:id", async (req, res) => {
                 }
                 break;
 
-            // Handle other user role types (admin, systemadmin, etc.)
             case "admin":
             case "systemadmin":
             case "syv":
@@ -567,7 +608,7 @@ router.get("/details/:type/:id", async (req, res) => {
     }
 });
 
-router.put("/update-student/:id", async (req, res) => {
+router.put("/update-student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const updatedStudent = await Student.findByIdAndUpdate(
             req.params.id,
@@ -581,7 +622,7 @@ router.put("/update-student/:id", async (req, res) => {
     }
 });
 
-router.put("/update-user/:id", async (req, res) => {
+router.put("/update-user/:id", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async (req, res) => {
     try {
         const updatedUser = await User.findByIdAndUpdate(
             req.params.id,

@@ -31,7 +31,7 @@
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
-        "exceljs": "^4.4.0",
+        "exceljs": "^3.4.0",
         "express": "^5.2.1",
         "express-rate-limit": "^8.2.1",
         "fastest-levenshtein": "^1.0.16",
@@ -40,11 +40,11 @@
         "jsonwebtoken": "^9.0.3",
         "mime-types": "^3.0.2",
         "mongodb": "7.0.0",
-        "mongoose": "9.1.1",
+        "mongoose": "^9.7.4",
         "multer": "^2.0.2",
-        "nodemailer": "^7.0.12",
+        "nodemailer": "^9.0.3",
         "nodemon": "3.1.11",
-        "pm2": "6.0.14",
+        "pm2": "^7.0.3",
         "winston": "3.19.0"
     },
     "compilerOptions": {

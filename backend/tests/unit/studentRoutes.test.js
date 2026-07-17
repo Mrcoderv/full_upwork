@@ -26,6 +26,7 @@ vi.mock("../../src/models/Student.js", () => {
         findByIdAndUpdate: vi.fn(),
         findByIdAndDelete: vi.fn(),
         deleteMany: vi.fn(),
+        countDocuments: vi.fn(),
     });
 
     return {
@@ -203,6 +204,8 @@ beforeEach(() => {
     Student.findByIdAndUpdate.mockReset();
     Student.findByIdAndDelete.mockReset();
     Student.deleteMany.mockReset();
+    Student.countDocuments.mockReset();
+    Student.countDocuments.mockResolvedValue(0);
     sendDropoutNotification.mockReset();
     CourseMatchingServiceMock.default.processStudentEducation.mockReset();
     calendarEventSyncMock.syncCalendarEventsForStudent.mockReset();

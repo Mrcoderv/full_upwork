@@ -315,7 +315,7 @@ describe("API Integration Tests", () => {
                     .send(invalidStudent)
                     .expect(400);
 
-                expect(response.body).toHaveProperty("error");
+                expect(response.body).toHaveProperty("message");
             });
         });
 
@@ -549,7 +549,7 @@ describe("API Integration Tests", () => {
                 .send({})
                 .expect(400);
 
-            expect(response.body).toHaveProperty("error");
+            expect(response.body).toHaveProperty("message");
         });
     });
 

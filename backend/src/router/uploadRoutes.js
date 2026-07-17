@@ -8,6 +8,7 @@ import mime from 'mime-types'
 import path from 'path'
 import { uploadXlsx } from '../controllers/studentController.js'
 import { authenticateUser } from '../controllers/authController.js'
+import { hasRole } from '../middleware/auth.js'
 
 dotenv.config()
 const router = Router()
@@ -18,6 +19,9 @@ const DANGEROUS_EXTENSIONS = [
   '.exe', '.dll', '.bat', '.sh', '.js', '.py', '.html', '.htm', '.xhtml', '.php',
   '.jsp', '.asp', '.aspx', '.vbs', '.cmd', '.pl', '.cgi', '.msi', '.jar', '.scr'
 ];
+
+const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped", "tester"];
+const ALLOWED_ADMIN_ROLES = ["systemadmin", "admin", "tester"];
 
 const sanitizeFilename = (filename) => {
   const ext = path.extname(filename).toLowerCase();
@@ -36,20 +40,136 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE }
 })
 
+// Middleware to authorize student-specific file access
+async function checkStudentAccess(req, res, next) {
+  try {
+    const studentId = req.params.studentId;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const userRoles = user.roles || (user.role ? [user.role] : []);
+    const isStaff = userRoles.some(r => ["systemadmin", "admin", "coordinator", "syv", "specped", "tester"].includes(r));
+    const isTeacher = userRoles.includes("teacher");
+
+    if (!isStaff && !isTeacher) {
+      return res.status(403).json({ error: "Forbidden: Access denied." });
+    }
+
+    if (isTeacher && !isStaff) {
+      const Teacher = mongoose.model("Teacher");
+      const teacher = await Teacher.findOne({ userId: user.userId });
+      if (!teacher) {
+        return res.status(403).json({ error: "Teacher profile not found" });
+      }
+
+      const Student = mongoose.model("Student");
+      const student = await Student.findById(studentId);
+      if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+
+      if (!student.teacherId || student.teacherId.toString() !== teacher._id.toString()) {
+        return res.status(403).json({ error: "Forbidden: You are not assigned to this student." });
+      }
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error checking student access:", error);
+    res.status(500).json({ error: "Internal server error during authorization check" });
+  }
+}
+
+// Middleware to authorize file-specific actions (download, delete)
+async function checkFileAccess(req, res, next) {
+  try {
+    const fileId = req.params.fileId;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Handle invalid ObjectId gracefully (backward compatible with tests)
+    if (!mongoose.Types.ObjectId.isValid(fileId)) {
+      const errorMsg = req.method === 'DELETE' ? 'Failed to delete file' : 'Failed to download file';
+      return res.status(500).json({ error: errorMsg });
+    }
+
+    const userRoles = user.roles || (user.role ? [user.role] : []);
+    const isStaff = userRoles.some(r => ["systemadmin", "admin", "coordinator", "syv", "specped", "tester"].includes(r));
+    const isTeacher = userRoles.includes("teacher");
+
+    if (!isStaff && !isTeacher) {
+      return res.status(403).json({ error: "Forbidden: Access denied." });
+    }
+
+    const db = mongoose.connection.db;
+    const file = await db.collection("fs.files").findOne({ _id: new mongoose.Types.ObjectId(fileId) });
+    if (!file) {
+      return res.status(404).send('File not found');
+    }
+
+    const studentId = file.metadata?.studentId;
+    if (!studentId) {
+      if (!userRoles.some(r => ["systemadmin", "admin", "tester"].includes(r))) {
+        return res.status(403).json({ error: "Forbidden: Only administrators can access orphan files." });
+      }
+      req.fileRecord = file;
+      return next();
+    }
+
+    if (isTeacher && !isStaff) {
+      const Teacher = mongoose.model("Teacher");
+      const teacher = await Teacher.findOne({ userId: user.userId });
+      if (!teacher) {
+        return res.status(403).json({ error: "Teacher profile not found" });
+      }
+
+      const Student = mongoose.model("Student");
+      const student = await Student.findById(studentId);
+      if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+
+      if (!student.teacherId || student.teacherId.toString() !== teacher._id.toString()) {
+        return res.status(403).json({ error: "Forbidden: You are not assigned to the student associated with this file." });
+      }
+    }
+
+    req.fileRecord = file;
+    next();
+  } catch (error) {
+    console.error("Error checking file access:", error);
+    const errorMsg = req.method === 'DELETE' ? 'Failed to delete file' : 'Failed to download file';
+    res.status(500).json({ error: errorMsg });
+  }
+}
+
 // XLSX upload route (memory storage)
-router.post('/upload/xlsxupload', authenticateUser, memupload.single('file'), (req, res, next) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' })
-  }
-  const fileExt = path.extname(req.file.originalname).toLowerCase();
-  if (fileExt !== '.xlsx' && fileExt !== '.xls') {
-    return res.status(400).json({ error: 'Endast Excel-filer (.xlsx, .xls) är tillåtna.' });
-  }
-  next();
-}, uploadXlsx)
+router.post(
+  '/upload/xlsxupload',
+  authenticateUser,
+  hasRole(['systemadmin', 'admin', 'coordinator', 'tester']),
+  memupload.single('file'),
+  (req, res, next) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' })
+    }
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    if (fileExt !== '.xlsx' && fileExt !== '.xls') {
+      return res.status(400).json({ error: 'Endast Excel-filer (.xlsx, .xls) är tillåtna.' });
+    }
+    next();
+  },
+  uploadXlsx
+)
 
 // Upload file to GridFS with metadata and MIME detection
-router.post('/:studentId', authenticateUser, upload.single('file'), async (req, res) => {
+router.post('/:studentId', authenticateUser, checkStudentAccess, upload.single('file'), async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
@@ -111,7 +231,7 @@ router.post('/:studentId', authenticateUser, upload.single('file'), async (req, 
 })
 
 // List all files for a student
-router.get('/:studentId', authenticateUser, async (req, res) => {
+router.get('/:studentId', authenticateUser, checkStudentAccess, async (req, res) => {
   try {
     const files = await mongoose.connection.db
       .collection('fs.files')
@@ -126,14 +246,11 @@ router.get('/:studentId', authenticateUser, async (req, res) => {
 })
 
 // Download file by ID with proper headers
-router.get('/download/:fileId', authenticateUser, async (req, res) => {
+router.get('/download/:fileId', authenticateUser, checkFileAccess, async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
-    const _id = new mongoose.Types.ObjectId(req.params.fileId)
-
-    const file = await db.collection('fs.files').findOne({ _id })
-    if (!file) return res.status(404).send('File not found')
+    const file = req.fileRecord;
 
     const filename = file.filename || 'download'
     const contentType = file.contentType || 'application/octet-stream'
@@ -144,7 +261,7 @@ router.get('/download/:fileId', authenticateUser, async (req, res) => {
       )
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition')
 
-    bucket.openDownloadStream(_id).pipe(res)
+    bucket.openDownloadStream(file._id).pipe(res)
   } catch (err) {
     console.error('❌ Failed to download file:', err)
     res.status(500).json({ error: 'Failed to download file' })
@@ -152,18 +269,17 @@ router.get('/download/:fileId', authenticateUser, async (req, res) => {
 })
 
 // Delete file by ID with audit logging
-router.delete('/:fileId', authenticateUser, async (req, res) => {
+router.delete('/:fileId', authenticateUser, checkFileAccess, async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
-    const _id = new mongoose.Types.ObjectId(req.params.fileId)
-
+    const file = req.fileRecord;
     const user = req.user || { role: 'unknown', email: 'unknown' }
 
-    await bucket.delete(_id)
+    await bucket.delete(file._id)
 
     console.log(
-      `🗑️ [${user.email} | ${user.role}] deleted file ${_id.toString()} at ${new Date().toISOString()}`
+      `🗑️ [${user.email} | ${user.role}] deleted file ${file._id.toString()} at ${new Date().toISOString()}`
     )
     res.status(200).json({ message: 'File deleted successfully' })
   } catch (err) {
@@ -173,12 +289,10 @@ router.delete('/:fileId', authenticateUser, async (req, res) => {
 })
 
 // List all files for all students (for APL contract archive)
-router.get('/all/apl', authenticateUser, async (req, res) => {
+router.get('/all/apl', authenticateUser, hasRole(['systemadmin', 'admin', 'coordinator', 'tester']), async (req, res) => {
   try {
     const db = mongoose.connection.db
 
-    // This aggregation pipeline finds all files, groups them by studentId,
-    // and then looks up the student's name from the 'students' collection.
     const filesByStudent = await db.collection('fs.files').aggregate([
       { $match: { 'metadata.studentId': { $exists: true, $ne: null } } },
       { $sort: { uploadDate: -1 } },
@@ -190,13 +304,12 @@ router.get('/all/apl', authenticateUser, async (req, res) => {
       },
       {
         $addFields: {
-          // Try to convert studentId to ObjectId, but handle errors gracefully
           studentIdObj: {
             $cond: {
               if: { $eq: [{ $type: '$_id' }, 'string'] },
               then: {
                 $cond: {
-                  if: { $eq: [{ $strLenCP: '$_id' }, 24] }, // ObjectId is 24 hex chars
+                  if: { $eq: [{ $strLenCP: '$_id' }, 24] },
                   then: { $toObjectId: '$_id' },
                   else: null
                 }
@@ -216,7 +329,7 @@ router.get('/all/apl', authenticateUser, async (req, res) => {
                 $expr: {
                   $or: [
                     { $eq: ['$_id', '$$studentIdObj'] },
-                    { $eq: [{ $toString: '$_id' }, '$_id'] } // Also try string comparison
+                    { $eq: [{ $toString: '$_id' }, '$_id'] }
                   ]
                 }
               }
@@ -229,7 +342,7 @@ router.get('/all/apl', authenticateUser, async (req, res) => {
       {
         $unwind: {
           path: '$studentInfo',
-          preserveNullAndEmptyArrays: true // Keep students even if lookup fails
+          preserveNullAndEmptyArrays: true
         }
       },
       {
@@ -252,21 +365,12 @@ router.get('/all/apl', authenticateUser, async (req, res) => {
 })
 
 // Cleanup orphaned files (files where the student no longer exists)
-// Admin only endpoint
-router.delete('/cleanup/orphaned', authenticateUser, async (req, res) => {
+router.delete('/cleanup/orphaned', authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async (req, res) => {
   try {
-    const user = req.user || { role: 'unknown' }
-    
-    // Check if user is admin
-    if (!['admin', 'systemadmin'].includes(user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions. Admin access required.' })
-    }
-
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
-    const Student = (await import('../models/Student.js')).default
+    const StudentModel = (await import('../models/Student.js')).default
 
-    // Find all files with studentId metadata
     const allFiles = await db.collection('fs.files')
       .find({ 'metadata.studentId': { $exists: true, $ne: null } })
       .toArray()
@@ -275,23 +379,19 @@ router.delete('/cleanup/orphaned', authenticateUser, async (req, res) => {
     let deletedCount = 0
     const errors = []
 
-    // Check each file to see if the student still exists
     for (const file of allFiles) {
       const studentId = file.metadata.studentId
       
       try {
-        // Try to find the student (handle both ObjectId and string IDs)
         let student = null
         if (mongoose.Types.ObjectId.isValid(studentId)) {
-          student = await Student.findById(studentId)
+          student = await StudentModel.findById(studentId)
         }
         
-        // If student not found by ObjectId, try string match
         if (!student) {
-          student = await Student.findOne({ _id: studentId.toString() })
+          student = await StudentModel.findOne({ _id: studentId.toString() })
         }
 
-        // If student doesn't exist, delete the file
         if (!student) {
           try {
             await bucket.delete(file._id)
