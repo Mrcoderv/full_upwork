@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import jwtLib from "jsonwebtoken";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -142,7 +143,18 @@ console.log("Router successfully mounted!");
 // Ensure preflight (OPTIONS) requests are handled
 app.options(/.*/, cors());
 
-app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
+app.use("/uploads", (req, res, next) => {
+    const token = req.cookies?.token;
+    if (!token) {
+        return res.status(401).json({ error: "Authentication required" });
+    }
+    try {
+        jwtLib.verify(token, process.env.JWT_SECRET);
+        next();
+    } catch {
+        return res.status(401).json({ error: "Invalid or expired token" });
+    }
+}, express.static(path.join(__dirname, "public/uploads")));
 
 // Configure database connection with optimization
 dbOptimizer.configurePool();

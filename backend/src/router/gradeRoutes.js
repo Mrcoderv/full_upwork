@@ -20,7 +20,14 @@ import {
   checkPendingGradesAndNotify,
 } from "../controllers/notificationController.js";
 
-router.get("/students/ungraded", async (req, res) => {
+const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped", "tester"];
+const ALLOWED_ADMIN_ROLES = ["systemadmin", "admin"];
+const ALLOWED_GRADING_ROLES = ["systemadmin", "admin", "teacher"];
+
+router.get("/students/ungraded", authenticateUser, async (req, res) => {
+  if (!ALLOWED_GRADING_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     await evaluateGradingStatusAndNotify();
 
@@ -435,6 +442,9 @@ router.get('/students-to-grade', authenticateUser, async (req, res) => {
 });
 
 router.post("/teacher/save-grade", authenticateUser, async (req, res) => {
+  if (!ALLOWED_GRADING_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   const { studentId, courseId, grade, reason, comments, npScore, type } =
     req.body;
 
@@ -516,37 +526,12 @@ router.post("/teacher/lock-grade", authenticateUser, async (req, res) => {
   }
 });
 
-router.put("/admin/unlock-grade", authenticateUser, async (req, res) => {
-  const { studentId, courseId } = req.body;
-
-  try {
-    const result = await Student.updateOne(
-      {
-        _id: studentId,
-        "education.refId": courseId,
-        "education.type": "Course",
-        "education.removedAt": null,
-      },
-      {
-        $set: {
-          "education.$.locked": false,
-        },
-      }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).send("Kurs hittades inte");
-    }
-
-    res.send("Betyg upplåst");
-  } catch (err) {
-    console.error("Upplåsning misslyckades:", err);
-    res.status(500).send("Internt serverfel");
-  }
-});
 
 // Delete an enrollment by ID
-router.delete('/enrollments/:id', async (req, res) => {
+router.delete('/enrollments/:id', authenticateUser, async (req, res) => {
+  if (!ALLOWED_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Only administrators can delete enrollments" });
+  }
   try {
     const { id } = req.params;
     const enrollment = await StudentEnrollment.findByIdAndDelete(id);
@@ -564,6 +549,9 @@ router.delete('/enrollments/:id', async (req, res) => {
 
 // Debug endpoint to check what students-to-grade endpoint returns
 router.get('/debug/students-to-grade', authenticateUser, async (req, res) => {
+  if (!ALLOWED_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const now = new Date();
 
@@ -639,6 +627,9 @@ router.get('/debug/students-to-grade', authenticateUser, async (req, res) => {
 
 // Debug endpoint to check what students exist
 router.get('/debug/students-past-end-date', authenticateUser, async (req, res) => {
+  if (!ALLOWED_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const now = new Date();
     
@@ -737,6 +728,9 @@ router.get('/locked-grades', authenticateUser, async (req, res) => {
 
 // Get grades for a specific student
 router.get('/student/:studentId/grades', authenticateUser, async (req, res) => {
+  if (!ALLOWED_STAFF_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const { studentId } = req.params;
     
@@ -764,6 +758,9 @@ router.get('/student/:studentId/grades', authenticateUser, async (req, res) => {
 
 // Get grades for a specific course instance
 router.get('/course-instance/:courseInstanceId/grades', authenticateUser, async (req, res) => {
+  if (!ALLOWED_STAFF_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const { courseInstanceId } = req.params;
     
@@ -792,6 +789,9 @@ router.get('/course-instance/:courseInstanceId/grades', authenticateUser, async 
 
 // Update grade (if not locked)
 router.put('/update-grade/:enrollmentId', authenticateUser, async (req, res) => {
+  if (!ALLOWED_GRADING_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const { enrollmentId } = req.params;
     const { grade, motivation, comments, nationalTestPoints } = req.body;

@@ -41,6 +41,14 @@ const studentUpdateSchema = {
 
 router.get("/students/by-teacher/:teacherId", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
+        // Teachers can only view their own students
+        if (req.user?.role === "teacher") {
+            const teacher = await (await import("../models/Teacher.js")).default.findOne({ userId: req.user.userId });
+            if (!teacher || teacher._id.toString() !== req.params.teacherId) {
+                return res.status(403).json({ error: "Teachers can only view their own students" });
+            }
+        }
+
         const students = await Student.find({
             teacherId: req.params.teacherId,
             dropout: { $ne: true },
