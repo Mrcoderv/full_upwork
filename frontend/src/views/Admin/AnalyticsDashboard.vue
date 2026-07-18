@@ -76,8 +76,8 @@
         </v-row>
       </v-card>
 
-      <v-alert v-if="error" type="error" class="mb-4" closable @click:close="error = ''">
-        {{ error }}
+      <v-alert v-if="activeTabError" type="error" class="mb-4" closable @click:close="tabErrors[activeTab] = ''">
+        {{ activeTabError }}
       </v-alert>
 
       <v-tabs v-model="activeTab" color="primary" class="mb-4">
@@ -422,7 +422,15 @@ ChartJS.register(
 )
 
 const activeTab = ref('revenue')
-const error = ref('')
+const tabErrors = reactive({
+  revenue: '',
+  forecast: '',
+  students: '',
+  grades: '',
+  popular: '',
+  dropouts: '',
+})
+const activeTabError = computed(() => tabErrors[activeTab.value] || '')
 
 const filters = reactive({
   startDate: '',
@@ -467,13 +475,14 @@ function buildParams(extra = {}) {
   return { ...params, ...extra }
 }
 
-async function safeGet(path, params) {
+async function safeGet(path, params, tabKey) {
   try {
     const res = await api.get(path, { params })
+    if (tabKey) tabErrors[tabKey] = ''
     return res.data
   } catch (err) {
     console.error(`❌ Failed to load ${path}:`, err)
-    error.value = 'Kunde inte hämta rapportdata. Försök igen.'
+    if (tabKey) tabErrors[tabKey] = 'Kunde inte hämta rapportdata. Försök igen.'
     throw err
   }
 }
@@ -488,8 +497,9 @@ async function loadFilterOptions() {
 
 async function loadRevenue() {
   loading.revenue = true
+  tabErrors.revenue = ''
   try {
-    revenue.value = await safeGet('/analytics/revenue', buildParams())
+    revenue.value = await safeGet('/analytics/revenue', buildParams(), 'revenue')
   } catch {
     // handled
   } finally {
@@ -499,10 +509,12 @@ async function loadRevenue() {
 
 async function loadForecast() {
   loading.forecast = true
+  tabErrors.forecast = ''
   try {
     forecast.value = await safeGet(
       '/analytics/forecast',
       buildParams({ forecastMonths: forecastMonths.value }),
+      'forecast',
     )
   } catch {
     // handled
@@ -513,10 +525,12 @@ async function loadForecast() {
 
 async function loadStudents() {
   loading.students = true
+  tabErrors.students = ''
   try {
     students.value = await safeGet(
       '/analytics/students',
       buildParams({ groupBy: studentGroupBy.value }),
+      'students',
     )
   } catch {
     // handled
@@ -527,8 +541,9 @@ async function loadStudents() {
 
 async function loadGrades() {
   loading.grades = true
+  tabErrors.grades = ''
   try {
-    grades.value = await safeGet('/analytics/grades', buildParams())
+    grades.value = await safeGet('/analytics/grades', buildParams(), 'grades')
   } catch {
     // handled
   } finally {
@@ -538,8 +553,9 @@ async function loadGrades() {
 
 async function loadPopular() {
   loading.popular = true
+  tabErrors.popular = ''
   try {
-    popularCourses.value = await safeGet('/analytics/popular-courses', buildParams())
+    popularCourses.value = await safeGet('/analytics/popular-courses', buildParams(), 'popular')
   } catch {
     // handled
   } finally {
@@ -549,8 +565,9 @@ async function loadPopular() {
 
 async function loadDropouts() {
   loading.dropouts = true
+  tabErrors.dropouts = ''
   try {
-    dropouts.value = await safeGet('/analytics/dropouts', buildParams())
+    dropouts.value = await safeGet('/analytics/dropouts', buildParams(), 'dropouts')
   } catch {
     // handled
   } finally {
@@ -568,11 +585,12 @@ const tabLoaders = {
 }
 
 async function loadActiveTab() {
-  error.value = ''
+  tabErrors[activeTab.value] = ''
   await tabLoaders[activeTab.value]?.()
 }
 
 watch(activeTab, (tab) => {
+  tabErrors[tab] = ''
   tabLoaders[tab]?.()
 })
 
@@ -586,7 +604,7 @@ function resetFilters() {
 }
 
 onMounted(async () => {
-  error.value = ''
+  Object.keys(tabErrors).forEach((k) => (tabErrors[k] = ''))
   await loadFilterOptions()
   await Promise.all([
     loadRevenue(),

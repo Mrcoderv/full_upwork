@@ -211,7 +211,7 @@ export const getMonthlyIncomeForecast = async (filters) => {
 
     const pipeline = [
         ...buildBasePipeline(filters, "gradeDate"),
-        { $match: { grade: { $nin: [null, ""] } } },
+        { $match: { grade: { $nin: [null, ""] }, gradeDate: { $ne: null } } },
         {
             $project: {
                 _id: 0,
