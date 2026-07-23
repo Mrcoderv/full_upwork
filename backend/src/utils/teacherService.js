@@ -2,6 +2,7 @@ import Teacher from "../models/Teacher.js";
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import logger from "./logger.js";
 
 /**
  * Generate a strong random password
@@ -65,7 +66,7 @@ async function getNextAvailableColor() {
         const index = existingTeachers.length % TEACHER_COLORS.length;
         return TEACHER_COLORS[index];
     } catch (error) {
-        console.error('Error getting next available color:', error);
+        logger.error({ err: error }, "Error getting next available color");
         // Fallback to first color if there's an error
         return TEACHER_COLORS[0];
     }
@@ -91,10 +92,7 @@ export async function createOrFindTeacher(
         );
         const existingTeacher = allTeachers.find((t) => {
             if (!t.userId || !t.userId.username) {
-                console.warn(
-                    "Teacher found without valid userId or username:",
-                    t
-                );
+                logger.warn({ teacher: t }, "Teacher found without valid userId or username");
                 return false;
             }
             return (
@@ -143,7 +141,7 @@ export async function createOrFindTeacher(
         const savedTeacher = await teacher.save();
 
         // Log the creation
-        console.log(`👨‍🏫 Auto-created teacher: ${username} (${email})`);
+        logger.info({ username, email }, "Auto-created teacher");
 
         return {
             teacher: savedTeacher,
@@ -151,7 +149,7 @@ export async function createOrFindTeacher(
             password: plainPassword,
         };
     } catch (error) {
-        console.error("Error creating or finding teacher:", error);
+        logger.error({ err: error }, "Error creating or finding teacher");
         throw error;
     }
 }

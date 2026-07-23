@@ -1,47 +1,4 @@
-import winston from "winston";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Configure Winston logger
-const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || "info",
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.errors({ stack: true }),
-        winston.format.json()
-    ),
-    defaultMeta: { service: "mindful-learning-api" },
-    transports: [
-        // Write all logs with level 'error' and below to error.log
-        new winston.transports.File({
-            filename: path.join(__dirname, "../../logs/error.log"),
-            level: "error",
-            maxsize: 5242880, // 5MB
-            maxFiles: 5,
-        }),
-        // Write all logs with level 'info' and below to combined.log
-        new winston.transports.File({
-            filename: path.join(__dirname, "../../logs/combined.log"),
-            maxsize: 5242880, // 5MB
-            maxFiles: 5,
-        }),
-    ],
-});
-
-// If we're not in production, log to console as well
-if (process.env.NODE_ENV !== "production") {
-    logger.add(
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.simple()
-            ),
-        })
-    );
-}
+import logger from "./logger.js";
 
 // Custom error classes
 export class AppError extends Error {
@@ -131,8 +88,7 @@ export const errorMonitor = {
 
         // Send to external monitoring service if configured
         if (process.env.SENTRY_DSN) {
-            // Sentry integration would go here
-            console.log("Sending error to Sentry:", error.message);
+            logger.info({ error: error.message }, "Sending error to Sentry");
         }
     },
 

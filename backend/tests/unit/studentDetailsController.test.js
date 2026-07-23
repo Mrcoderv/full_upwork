@@ -29,6 +29,17 @@ import {
     disconnectTestDatabase,
 } from "../helpers/mongoTest.js";
 
+vi.mock("../../src/utils/logger.js", () => ({
+    default: {
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+    },
+}));
+
+import logger from "../../src/utils/logger.js";
+
 const buildRes = () => {
     const res = {
         statusCode: 200,
@@ -95,6 +106,9 @@ describe("studentDetailsController", () => {
     });
 
     afterEach(() => {
+        logger.error.mockClear();
+        logger.info.mockClear();
+        logger.warn.mockClear();
         vi.restoreAllMocks();
     });
 
@@ -329,10 +343,6 @@ describe("studentDetailsController", () => {
                 populate: populateCourseInstance,
             });
 
-            const errorSpy = vi
-                .spyOn(console, "error")
-                .mockImplementation(() => {});
-
             const req = buildReq({
                 params: { id: new mongoose.Types.ObjectId().toString() },
             });
@@ -342,7 +352,7 @@ describe("studentDetailsController", () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body.education).toEqual([]);
-            expect(errorSpy).toHaveBeenCalled();
+            expect(logger.error).toHaveBeenCalled();
         });
 
         it("returns 500 when fetching details fails", async () => {

@@ -7,6 +7,7 @@ import "../models/Course.js";
 import "../models/CourseInstance.js";
 // Ensure User schema is registered for populate lookups (teacher.userId)
 import "../models/User.js";
+import logger from "./logger.js";
 
 /**
  * Syncs calendar events for students with finalExamDate
@@ -27,13 +28,13 @@ export async function syncCalendarEventsForStudent(studentId) {
             });
 
         if (!student || !student.finalExamDate) {
-            console.log(`⏭️ Student ${studentId} has no finalExamDate, skipping calendar sync`);
+            logger.debug({ studentId }, "Student has no finalExamDate, skipping calendar sync");
             return;
         }
 
         // Skip if student is a dropout
         if (student.dropout) {
-            console.log(`⏭️ Student ${studentId} is a dropout, skipping calendar sync`);
+            logger.debug({ studentId }, "Student is a dropout, skipping calendar sync");
             return;
         }
 
@@ -116,9 +117,9 @@ export async function syncCalendarEventsForStudent(studentId) {
                 // Use teacher name as title, not course name - all events for same teacher/date should have same title
                 existingEvent.title = teacherName || "Okänd lärare";
                 await existingEvent.save();
-                console.log(`✅ Added student ${student.name} to existing calendar event for ${dateKey}`);
+                logger.info({ studentName: student.name, dateKey }, "Added student to existing calendar event");
             } else {
-                console.log(`ℹ️ Student ${student.name} already in calendar event for ${dateKey}`);
+                logger.debug({ studentName: student.name, dateKey }, "Student already in calendar event");
             }
         } else {
             // Create new event - use teacher name as title, not course name
@@ -138,10 +139,10 @@ export async function syncCalendarEventsForStudent(studentId) {
             });
 
             await newEvent.save();
-            console.log(`✅ Created new calendar event for student ${student.name} on ${dateKey}`);
+            logger.info({ studentName: student.name, dateKey }, "Created new calendar event");
         }
     } catch (error) {
-        console.error(`❌ Error syncing calendar event for student ${studentId}:`, error);
+        logger.error({ err: error, studentId }, "Error syncing calendar event for student");
         // Don't throw - this is a background sync operation
     }
 }
@@ -160,7 +161,7 @@ export async function syncAllCalendarEvents() {
             .populate("studentId", "dropout")
             .select("_id studentId slutprovDate");
 
-        console.log(`🔄 Syncing calendar events for ${enrollments.length} enrollments with slutprov...`);
+        logger.info({ count: enrollments.length }, "Syncing calendar events for enrollments with slutprov");
 
         for (const enrollment of enrollments) {
             // Skip if the student is a dropout
@@ -170,9 +171,9 @@ export async function syncAllCalendarEvents() {
             await syncCalendarEventFromEnrollment(enrollment._id);
         }
 
-        console.log(`✅ Finished syncing calendar events`);
+        logger.info("Finished syncing calendar events");
     } catch (error) {
-        console.error("❌ Error syncing all calendar events:", error);
+        logger.error({ err: error }, "Error syncing all calendar events");
         throw error;
     }
 }
@@ -198,12 +199,12 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
             });
 
         if (!enrollment || !enrollment.slutprovDate) {
-            console.log(`⏭️ Enrollment ${enrollmentId} has no slutprovDate, skipping calendar sync`);
+            logger.debug({ enrollmentId }, "Enrollment has no slutprovDate, skipping calendar sync");
             return;
         }
 
         if (!enrollment.studentId) {
-            console.log(`⏭️ Enrollment ${enrollmentId} has no student, skipping calendar sync`);
+            logger.debug({ enrollmentId }, "Enrollment has no student, skipping calendar sync");
             return;
         }
 
@@ -211,7 +212,7 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
 
         // Skip if student is a dropout
         if (student.dropout) {
-            console.log(`⏭️ Student ${student._id} is a dropout, skipping calendar sync`);
+            logger.debug({ studentId: student._id }, "Student is a dropout, skipping calendar sync");
             return;
         }
 
@@ -310,9 +311,9 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
                 }
                 
                 await existingEvent.save();
-                console.log(`✅ Added student ${student.name} to existing calendar event for ${dateKey}`);
+                logger.info({ studentName: student.name, dateKey }, "Added student to existing calendar event from enrollment");
             } else {
-                console.log(`ℹ️ Student ${student.name} already in calendar event for ${dateKey}`);
+                logger.debug({ studentName: student.name, dateKey }, "Student already in calendar event from enrollment");
             }
         } else {
             // Create new event with courseInstanceId in extendedProps for linking
@@ -340,10 +341,10 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
             });
 
             await newEvent.save();
-            console.log(`✅ Created new calendar event for student ${student.name} on ${dateKey} from enrollment (courseInstance: ${courseInstanceId || 'none'})`);
+            logger.info({ studentName: student.name, dateKey, courseInstanceId: courseInstanceId || "none" }, "Created new calendar event from enrollment");
         }
     } catch (error) {
-        console.error(`❌ Error syncing calendar event for enrollment ${enrollmentId}:`, error);
+        logger.error({ err: error, enrollmentId }, "Error syncing calendar event for enrollment");
         // Don't throw - this is a background sync operation
     }
 }

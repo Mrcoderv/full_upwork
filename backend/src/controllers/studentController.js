@@ -14,8 +14,9 @@ import {
     normalizeCodeForMatching,
 } from "../utils/parseStudentExcel.js";
 import { distance } from "fastest-levenshtein";
+import logger from "../utils/logger.js";
 
-console.log("[DEBUG] studentController.js loaded");
+logger.debug("studentController.js loaded");
 
 /**
  * Normalizes a string by removing special characters, accents, and converting to lowercase.
@@ -145,8 +146,8 @@ export function normalizeMunicipalityName(name) {
 
 // ✅ Main upload function
 async function uploadXlsx(req, res) {
-    console.log("[DEBUG] uploadXlsx called");
-    console.log("🟢 Received XLSX file upload request");
+    logger.debug("uploadXlsx called");
+    logger.info("Received XLSX file upload request");
 
     if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -217,28 +218,16 @@ async function uploadXlsx(req, res) {
         for (const pkg of packages) {
             const norm = normalizeCodeForMatching(pkg.coursePackageCode || "");
             normalizedPackageMap[norm] = pkg.coursePackageCode;
-            console.log(
-                `[DEBUG] Package code mapping: "${pkg.coursePackageCode}" → "${norm}"`
-            );
+            logger.debug({ original: pkg.coursePackageCode, normalized: norm }, "Package code mapping");
         }
         const normalizedCourseMap = {};
         for (const c of courses) {
             const norm = normalizeCodeForMatching(c.courseCode || "");
             normalizedCourseMap[norm] = c.courseCode;
-            console.log(
-                `[DEBUG] Course code mapping: "${c.courseCode}" → "${norm}"`
-            );
+            logger.debug({ original: c.courseCode, normalized: norm }, "Course code mapping");
         }
-        console.log(
-            `[DEBUG] Total packages in map: ${
-                Object.keys(normalizedPackageMap).length
-            }`
-        );
-        console.log(
-            `[DEBUG] Total courses in map: ${
-                Object.keys(normalizedCourseMap).length
-            }`
-        );
+        logger.debug({ count: Object.keys(normalizedPackageMap).length }, "Total packages in map");
+        logger.debug({ count: Object.keys(normalizedCourseMap).length }, "Total courses in map");
 
         const now = new Date();
 
@@ -273,15 +262,11 @@ async function uploadXlsx(req, res) {
 
                     // Skip if normalization resulted in empty string
                     if (!normalizedName) {
-                        console.warn(
-                            `[DEBUG] Skipping entry with empty normalized name: "${originalName}"`
-                        );
+                        logger.debug({ originalName }, "Skipping entry with empty normalized name");
                         continue;
                     }
 
-                    console.log(
-                        `[DEBUG] Matching entry: "${originalName}" → normalized: "${normalizedName}"`
-                    );
+                    logger.debug({ originalName, normalized: normalizedName }, "Matching entry");
 
                     const isCourse = /NIVÅ\s*\d+$/i.test(normalizedName);
                     let type = isCourse ? "Course" : "CoursePackage";
@@ -295,25 +280,17 @@ async function uploadXlsx(req, res) {
                         Object.keys(normalizedCourseMap)
                     );
 
-                    console.log(
-                        `[DEBUG] Match results for "${normalizedName}": package=${
-                            matchPackage || "none"
-                        }, course=${matchCourse || "none"}`
-                    );
-                    console.log(
-                        `[DEBUG] Available package keys (first 10): ${Object.keys(
-                            normalizedPackageMap
-                        )
-                            .slice(0, 10)
-                            .join(", ")}`
-                    );
-                    console.log(
-                        `[DEBUG] Available course keys (first 10): ${Object.keys(
-                            normalizedCourseMap
-                        )
-                            .slice(0, 10)
-                            .join(", ")}`
-                    );
+                    logger.debug({
+                        normalized: normalizedName,
+                        package: matchPackage || "none",
+                        course: matchCourse || "none",
+                    }, "Match results");
+                    logger.debug({
+                        packageKeys: Object.keys(normalizedPackageMap).slice(0, 10),
+                    }, "Available package keys");
+                    logger.debug({
+                        courseKeys: Object.keys(normalizedCourseMap).slice(0, 10),
+                    }, "Available course keys");
 
                     // Treat as failure when an entry is a course and neither a course nor package match exists
                     if (type === "Course" && !matchCourse && !matchPackage) {
@@ -408,12 +385,7 @@ async function uploadXlsx(req, res) {
                     let type = isCourse ? "Course" : "CoursePackage";
 
                     // Always log normalized input and all normalized package keys
-                    console.log(
-                        "[DEBUG] Normalized input:",
-                        normalized,
-                        "Normalized package keys:",
-                        Object.keys(normalizedPackageMap)
-                    );
+                    logger.debug({ normalized, packageKeys: Object.keys(normalizedPackageMap) }, "Normalized input and package keys");
 
                     // Only exact match - no fuzzy matching
                     function strictMatch(target, candidates) {
@@ -470,19 +442,24 @@ async function uploadXlsx(req, res) {
                                 bestCourse = candidate;
                             }
                         }
-                        console.warn(
-                            `🟡 No match for: "${entry.name}" → "${normalized}". Best package: ${bestPkg} (d=${bestPkgDist}), best course: ${bestCourse} (d=${bestCourseDist}). Normalized package keys:`,
-                            Object.keys(normalizedPackageMap)
-                        );
+                        logger.warn({
+                            entryName: entry.name,
+                            normalized,
+                            bestPackage: bestPkg,
+                            bestPackageDistance: bestPkgDist,
+                            bestCourse,
+                            bestCourseDistance: bestCourseDist,
+                            packageKeys: Object.keys(normalizedPackageMap),
+                        }, "No match found");
                         // Only push warning for unmatched courses, unless the name matches a known package
                         if (type === "Course" && !matchPackage) {
-                            console.warn("[DEBUG] Pushing no_match warning:", {
+                            logger.warn({
                                 entryName: entry.name,
                                 type,
                                 matchPackage,
                                 normalized,
                                 packageKeys: Object.keys(normalizedPackageMap),
-                            });
+                            }, "Pushing no_match warning");
                             studentWarnings.push({
                                 type: "no_match",
                                 courseName: entry.name,
@@ -533,7 +510,7 @@ async function uploadXlsx(req, res) {
                             userId: user._id,
                         });
                         if (!user.username) {
-                            console.warn("User found without username:", user);
+                            logger.warn({ user }, "User found without username");
                         }
                     } else {
                         // Auto-create teacher with subject if not found
@@ -574,7 +551,7 @@ async function uploadXlsx(req, res) {
         const sample = await Student.findOne({
             email: mergedStudents[0].email,
         });
-        console.log("🔍 Sample saved student.education:", sample.education);
+        logger.debug({ education: sample.education }, "Sample saved student education");
 
         res.status(200).json({
             message: "Upload successful",
@@ -582,7 +559,7 @@ async function uploadXlsx(req, res) {
             warnings,
         });
     } catch (err) {
-        console.error("❌ Upload failed:", err);
+        logger.error({ err }, "Upload failed");
         const status = err.statusCode || 500;
         const payload =
             err.statusCode === 422

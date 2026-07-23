@@ -75,6 +75,18 @@ vi.mock("../../src/utils/errorHandler.js", () => ({
   ...errorHandlerMocks,
 }));
 
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+  fatal: vi.fn(),
+}));
+vi.mock("../../src/utils/logger.js", () => ({
+  __esModule: true,
+  default: loggerMock,
+}));
+
 const dbOptimizer = {
   configurePool: vi.fn(),
   createIndexes: vi.fn(() => Promise.resolve()),
@@ -296,17 +308,15 @@ describe("backend/index.js", () => {
     process.env.MAX_CONCURRENT_REQUESTS = "5";
     dbOptimizer.createIndexes.mockRejectedValueOnce(new Error("index fail"));
 
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     await import("../../index.js");
 
     await thenHandler?.();
     await Promise.resolve();
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      "⚠️ Database index creation failed:",
-      "index fail"
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      "Database index creation failed"
     );
-    warnSpy.mockRestore();
   });
 
   it("loads production env configuration and still mounts the server", async () => {

@@ -3,6 +3,7 @@ import Student from "../models/Student.js";
 import Notification from "../models/Notification.js";
 import Teacher from "../models/Teacher.js";
 import { authenticateUser } from "../controllers/authController.js";
+import logger from "../utils/logger.js";
 const router = express.Router();
 
 import { evaluateActionPlanStatusAndNotify } from "../controllers/notificationController.js";
@@ -35,8 +36,8 @@ router.get("/notifications", authenticateUser, async (req, res) => {
           createdByAdmin: userId // Only show dropout notifications created by this admin
         }
       ];
-      console.log(`🔍 Admin ${req.user.userId} (${req.user.name || req.user.username}) fetching notifications`);
-      console.log(`   - Will only show dropout notifications created by this admin`);
+      logger.debug({ userId: req.user.userId, name: req.user.name || req.user.username }, "Admin fetching notifications")
+      logger.debug("Will only show dropout notifications created by this admin")
     }
     
     // If user is a teacher, filter notifications by their teacherId
@@ -45,7 +46,7 @@ router.get("/notifications", authenticateUser, async (req, res) => {
       const teacher = await Teacher.findOne({ userId: req.user.userId });
       
       if (!teacher) {
-        console.log(`⚠️ No Teacher record found for user ${req.user.userId} (${req.user.name || req.user.username})`);
+        logger.warn({ userId: req.user.userId, name: req.user.name || req.user.username }, "No Teacher record found for user")
         return res.status(403).json({ error: "Teacher profile not found" });
       }
       
@@ -58,25 +59,23 @@ router.get("/notifications", authenticateUser, async (req, res) => {
       
       query.teacher = teacherObjectId;
       
-      console.log(`🔍 Teacher ${teacher._id.toString()} (user: ${req.user.userId}) fetching notifications`);
-      console.log(`   - Query teacher field:`, query.teacher.toString());
-      console.log(`   - Query teacher type:`, query.teacher.constructor.name);
-      console.log(`   - Query object:`, JSON.stringify(query, null, 2));
+      logger.debug({ teacherId: teacher._id.toString(), userId: req.user.userId }, "Teacher fetching notifications")
+      logger.debug({ queryTeacher: query.teacher.toString(), queryTeacherType: query.teacher.constructor.name, query }, "Query teacher details")
       
       // Debug: Check all dropout notifications to see what teacher IDs they have
       const allDropoutNotifications = await Notification.find({ 
         type: "dropout", 
         resolvedByUsers: { $nin: [userId] } // Not resolved by this user
       });
-      console.log(`🔍 All dropout notifications in DB (${allDropoutNotifications.length}):`);
+      logger.debug({ count: allDropoutNotifications.length }, "All dropout notifications in DB")
       for (let idx = 0; idx < allDropoutNotifications.length; idx++) {
         const note = allDropoutNotifications[idx];
-        console.log(`   ${idx + 1}. ID: ${note._id}, Teacher: ${note.teacher ? note.teacher.toString() : 'MISSING'}, Student: ${note.meta?.studentId ? note.meta.studentId.toString() : 'MISSING'}`);
+        logger.debug({ index: idx + 1, id: note._id, teacher: note.teacher ? note.teacher.toString() : 'MISSING', student: note.meta?.studentId ? note.meta.studentId.toString() : 'MISSING' }, "Dropout notification")
         if (note.teacher) {
           const noteTeacherStr = note.teacher.toString();
           const queryTeacherStr = query.teacher.toString();
           const match = noteTeacherStr === queryTeacherStr;
-          console.log(`      Match check: "${noteTeacherStr}" === "${queryTeacherStr}" ? ${match}`);
+          logger.debug({ noteTeacherStr, queryTeacherStr, match }, "Teacher ID match check")
           
           // Try direct query for this specific notification
           if (match) {
@@ -85,7 +84,7 @@ router.get("/notifications", authenticateUser, async (req, res) => {
               teacher: query.teacher,
               resolved: false
             });
-            console.log(`      Direct query for this notification: ${directQuery ? 'FOUND' : 'NOT FOUND'}`);
+            logger.debug({ found: !!directQuery }, "Direct query for notification")
           }
         }
       }
@@ -101,26 +100,25 @@ router.get("/notifications", authenticateUser, async (req, res) => {
           ? new mongoose.Types.ObjectId(query.teacher) 
           : query.teacher
       });
-      console.log(`📬 Query with explicit ObjectId casting found ${notesWithExplicitId.length} notifications`);
+      logger.debug({ count: notesWithExplicitId.length }, "Query with explicit ObjectId casting found notifications")
       
       // Also try with string comparison as fallback
       const notesWithStringMatch = await Notification.find({
         resolvedByUsers: { $nin: [userId] },
         teacher: { $eq: query.teacher.toString() }
       });
-      console.log(`📬 Query with string match found ${notesWithStringMatch.length} notifications`);
+      logger.debug({ count: notesWithStringMatch.length }, "Query with string match found notifications")
     }
     
     const notes = await Notification.find(query);
-    console.log(`📬 Found ${notes.length} notifications matching query`);
-    console.log(`   - Query used:`, JSON.stringify(query, null, 2));
+    logger.debug({ count: notes.length, query }, "Found notifications matching query")
     notes.forEach((note, idx) => {
-      console.log(`   ${idx + 1}. Type: ${note.type}, Teacher: ${note.teacher ? note.teacher.toString() : 'MISSING'}, Student: ${note.meta?.studentId ? note.meta.studentId.toString() : 'MISSING'}, Resolved: ${note.resolved}`);
+      logger.debug({ index: idx + 1, type: note.type, teacher: note.teacher ? note.teacher.toString() : 'MISSING', student: note.meta?.studentId ? note.meta.studentId.toString() : 'MISSING', resolved: note.resolved }, "Notification detail")
       if (query.teacher && note.teacher) {
         const noteTeacherId = note.teacher.toString();
         const queryTeacherId = query.teacher.toString();
         const match = noteTeacherId === queryTeacherId;
-        console.log(`      Teacher ID match: "${noteTeacherId}" === "${queryTeacherId}" ? ${match}`);
+        logger.debug({ noteTeacherId, queryTeacherId, match }, "Teacher ID match check")
       }
     });
 
@@ -147,11 +145,11 @@ router.get("/notifications", authenticateUser, async (req, res) => {
       }
     }
     
-    console.log(`📋 After deduplication: ${uniqueNotes.length} unique notifications`);
+    logger.info({ count: uniqueNotes.length }, "After deduplication: unique notifications");
 
     res.json(uniqueNotes);
   } catch (err) {
-    console.error('Error fetching notifications:', err);
+    logger.error({ err }, "Error fetching notifications");
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -215,17 +213,17 @@ router.put("/notifications/:id/resolve", authenticateUser, async (req, res) => {
     if (!isAlreadyResolved) {
       note.resolvedByUsers.push(userId);
       await note.save();
-      console.log(`✅ User ${userIdString} resolved notification ${note._id}`);
-      console.log(`   - resolvedByUsers after save:`, note.resolvedByUsers.map(id => id.toString()));
+      logger.info({ userId: userIdString, notificationId: note._id }, "User resolved notification");
+      logger.debug({ resolvedByUsers: note.resolvedByUsers.map(id => id.toString()) }, "ResolvedByUsers after save");
     } else {
-      console.log(`ℹ️ User ${userIdString} already resolved notification ${note._id}`);
-      console.log(`   - Current resolvedByUsers:`, note.resolvedByUsers.map(id => id.toString()));
+      logger.info({ userId: userIdString, notificationId: note._id }, "User already resolved notification");
+      logger.debug({ resolvedByUsers: note.resolvedByUsers.map(id => id.toString()) }, "Current resolvedByUsers");
     }
     
     // Reload the note to verify it was saved correctly
     const reloadedNote = await Notification.findById(req.params.id);
-    console.log(`🔍 Reloaded notification ${reloadedNote._id}:`);
-    console.log(`   - resolvedByUsers:`, reloadedNote.resolvedByUsers ? reloadedNote.resolvedByUsers.map(id => id.toString()) : 'MISSING');
+    logger.debug({ notificationId: reloadedNote._id }, "Reloaded notification");
+    logger.debug({ resolvedByUsers: reloadedNote.resolvedByUsers ? reloadedNote.resolvedByUsers.map(id => id.toString()) : 'MISSING' }, "Reloaded resolvedByUsers");
 
     // Keep legacy fields for backwards compatibility (set resolved if all users resolved it)
     // For now, we'll keep it false to maintain per-user resolution
@@ -242,7 +240,7 @@ router.put("/notifications/:id/resolve", authenticateUser, async (req, res) => {
       note 
     });
   } catch (error) {
-    console.error('Fel vid lösning av notifikation:', error)
+    logger.error({ err: error }, "Error resolving notification");
     res.status(500).json({ 
       message: 'Serverfel vid lösning av notifikation', 
       error: error.message 
@@ -269,12 +267,12 @@ router.put("/notifications/:id/reset", authenticateUser, async (req, res) => {
           id => id.toString() !== userIdString
         );
         await note.save();
-        console.log(`✅ User ${userIdString} reset notification ${note._id}`);
+        logger.info({ userId: userIdString, notificationId: note._id }, "User reset notification");
       }
   
       res.json({ message: "Notis återställd", note });
     } catch (err) {
-      console.error("🔴 Fel vid återställning av notis:", err.message);
+      logger.error({ err }, "Error resetting notification");
       res.status(500).send("Serverfel");
     }
   });

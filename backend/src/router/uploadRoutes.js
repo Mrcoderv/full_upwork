@@ -9,6 +9,7 @@ import path from 'path'
 import { uploadXlsx } from '../controllers/studentController.js'
 import { authenticateUser } from '../controllers/authController.js'
 import { hasRole } from '../middleware/auth.js'
+import logger from "../utils/logger.js";
 
 dotenv.config()
 const router = Router()
@@ -77,7 +78,7 @@ async function checkStudentAccess(req, res, next) {
 
     next();
   } catch (error) {
-    console.error("Error checking student access:", error);
+    logger.error({ err: error }, "Error checking student access")
     res.status(500).json({ error: "Internal server error during authorization check" });
   }
 }
@@ -142,7 +143,7 @@ async function checkFileAccess(req, res, next) {
     req.fileRecord = file;
     next();
   } catch (error) {
-    console.error("Error checking file access:", error);
+    logger.error({ err: error }, "Error checking file access")
     const errorMsg = req.method === 'DELETE' ? 'Failed to delete file' : 'Failed to download file';
     res.status(500).json({ error: errorMsg });
   }
@@ -208,7 +209,7 @@ router.post('/:studentId', authenticateUser, checkStudentAccess, upload.single('
 
     stream.pipe(uploadStream)
       .on('error', (err) => {
-        console.error('❌ Upload to GridFS failed:', err)
+        logger.error({ err }, "Upload to GridFS failed")
         res.status(500).json({ error: 'Upload failed', detail: err.message })
       })
       .on('finish', async () => {
@@ -216,15 +217,15 @@ router.post('/:studentId', authenticateUser, checkStudentAccess, upload.single('
           const fileRecord = await db.collection('fs.files').findOne({ _id: uploadStream.id })
           if (!fileRecord) throw new Error('File uploaded but not found in GridFS')
 
-          console.log(`✅ Uploaded "${fileRecord.filename}" for student ${studentId} as ${fileRecord._id}`)
+          logger.info({ filename: fileRecord.filename, studentId, fileId: fileRecord._id }, "Uploaded file")
           res.status(200).json({ file: fileRecord })
         } catch (err) {
-          console.error('❌ Upload finished but failed to fetch file:', err)
+          logger.error({ err }, "Upload finished but failed to fetch file")
           res.status(500).json({ error: 'Upload complete but unable to confirm file record' })
         }
       })
   } catch (err) {
-    console.error('❌ Unexpected upload crash:', err)
+    logger.error({ err }, "Unexpected upload crash")
     res.status(500).json({ error: 'Unexpected error during upload' })
   }
 })
@@ -239,7 +240,7 @@ router.get('/:studentId', authenticateUser, checkStudentAccess, async (req, res)
 
     res.json(files)
   } catch (err) {
-    console.error('❌ Failed to list files:', err)
+    logger.error({ err }, "Failed to list files")
     res.status(500).json({ error: 'Failed to list files' })
   }
 })
@@ -262,7 +263,7 @@ router.get('/download/:fileId', authenticateUser, checkFileAccess, async (req, r
 
     bucket.openDownloadStream(file._id).pipe(res)
   } catch (err) {
-    console.error('❌ Failed to download file:', err)
+    logger.error({ err }, "Failed to download file")
     res.status(500).json({ error: 'Failed to download file' })
   }
 })
@@ -277,12 +278,10 @@ router.delete('/:fileId', authenticateUser, checkFileAccess, async (req, res) =>
 
     await bucket.delete(file._id)
 
-    console.log(
-      `🗑️ [${user.email} | ${user.role}] deleted file ${file._id.toString()} at ${new Date().toISOString()}`
-    )
+    logger.info({ email: user.email, role: user.role, fileId: file._id.toString() }, "Deleted file")
     res.status(200).json({ message: 'File deleted successfully' })
   } catch (err) {
-    console.error('❌ Failed to delete file:', err)
+    logger.error({ err }, "Failed to delete file")
     res.status(500).json({ error: 'Failed to delete file' })
   }
 })
@@ -355,10 +354,10 @@ router.get('/all/apl', authenticateUser, hasRole(['systemadmin', 'admin', 'coord
       { $sort: { studentName: 1 } }
     ]).toArray()
 
-    console.log(`✅ Found ${filesByStudent.length} students with APL files`)
+    logger.info({ count: filesByStudent.length }, "Found students with APL files")
     res.json(filesByStudent)
   } catch (err) {
-    console.error('❌ Failed to list all APL files:', err)
+    logger.error({ err }, "Failed to list all APL files")
     res.status(500).json({ error: 'Failed to list all APL files', detail: err.message })
   }
 })
@@ -395,20 +394,20 @@ router.delete('/cleanup/orphaned', authenticateUser, hasRole(ALLOWED_ADMIN_ROLES
           try {
             await bucket.delete(file._id)
             deletedCount++
-            console.log(`🗑️ Deleted orphaned file ${file._id} (${file.filename}) for non-existent student ${studentId}`)
+            logger.info({ fileId: file._id, filename: file.filename, studentId }, "Deleted orphaned file")
           } catch (deleteErr) {
             errors.push(`Failed to delete file ${file._id}: ${deleteErr.message}`)
-            console.error(`❌ Failed to delete orphaned file ${file._id}:`, deleteErr)
+            logger.error({ err: deleteErr, fileId: file._id }, "Failed to delete orphaned file")
           }
           orphanedCount++
         }
       } catch (checkErr) {
         errors.push(`Error checking file ${file._id}: ${checkErr.message}`)
-        console.error(`❌ Error checking file ${file._id}:`, checkErr)
+        logger.error({ err: checkErr, fileId: file._id }, "Error checking file")
       }
     }
 
-    console.log(`✅ Cleanup complete: Found ${orphanedCount} orphaned files, deleted ${deletedCount}`)
+    logger.info({ orphanedCount, deletedCount }, "Cleanup complete")
     
     res.json({
       message: 'Cleanup completed',
@@ -418,7 +417,7 @@ router.delete('/cleanup/orphaned', authenticateUser, hasRole(ALLOWED_ADMIN_ROLES
       errors: errors.length > 0 ? errors : undefined
     })
   } catch (err) {
-    console.error('❌ Failed to cleanup orphaned files:', err)
+    logger.error({ err }, "Failed to cleanup orphaned files")
     res.status(500).json({ error: 'Failed to cleanup orphaned files', detail: err.message })
   }
 })

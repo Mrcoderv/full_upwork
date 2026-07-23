@@ -1,4 +1,5 @@
 import { normalizeCodeForMatching } from "./parseStudentExcel.js";
+import logger from "./logger.js";
 
 class CourseMatchingService {
     /**
@@ -68,17 +69,13 @@ class CourseMatchingService {
         for (const course of allCourses) {
             const normalizedCode = normalizeCodeForMatching(course.courseCode || "");
             if (normalizedCode === normalizedInput) {
-                console.log(
-                    `[DEBUG] Exact code match found: '${normalizedInput}' → '${course.courseCode}' (${course.courseName})`
-                );
+                logger.debug({ normalizedInput, courseCode: course.courseCode, courseName: course.courseName }, "Exact code match found");
                 return { course, score: 1.0 };
             }
         }
 
         // No match found - return null (strict matching only)
-        console.log(
-            `[DEBUG] No exact code match found for: '${normalizedInput}'`
-        );
+        logger.debug({ normalizedInput }, "No exact code match found");
         return null;
     }
 
@@ -113,17 +110,13 @@ class CourseMatchingService {
                 if (!existingInstance.responsibleTeacher) {
                     existingInstance.responsibleTeacher = responsibleTeacherId;
                     needsSave = true;
-                    console.log(
-                        `[DEBUG] Setting responsibleTeacher for existing course instance: ${existingInstance.courseName} -> ${responsibleTeacherId}`
-                    );
+                    logger.debug({ courseName: existingInstance.courseName, responsibleTeacherId }, "Setting responsibleTeacher for existing course instance");
                 }
                 // If instance has a different responsibleTeacher and we're explicitly providing one, update it
                 else if (existingInstance.responsibleTeacher?.toString() !== responsibleTeacherId.toString()) {
                     existingInstance.responsibleTeacher = responsibleTeacherId;
                     needsSave = true;
-                    console.log(
-                        `[DEBUG] Updating responsibleTeacher for existing course instance: ${existingInstance.courseName} -> ${responsibleTeacherId}`
-                    );
+                    logger.debug({ courseName: existingInstance.courseName, responsibleTeacherId }, "Updating responsibleTeacher for existing course instance");
                 }
             }
 
@@ -132,17 +125,13 @@ class CourseMatchingService {
             if (slutprovDate && !responsibleTeacherId) {
                 existingInstance.slutprovDate = slutprovDate;
                 needsSave = true;
-                console.log(
-                    `[FORCE PATCH] Set slutprovDate for course instance: ${existingInstance.courseName} to ${slutprovDate}`
-                );
+                logger.info({ courseName: existingInstance.courseName, slutprovDate }, "Force patched slutprovDate for course instance");
             } else if (responsibleTeacherId && !slutprovDate) {
                 // Teacher is set but no explicit date - clear existing date to let pre-save hook recalculate
                 if (existingInstance.slutprovDate) {
                     existingInstance.slutprovDate = undefined;
                     needsSave = true;
-                    console.log(
-                        `[FORCE PATCH] Cleared slutprovDate for course instance: ${existingInstance.courseName} to let pre-save hook recalculate based on teacher rules`
-                    );
+                    logger.info({ courseName: existingInstance.courseName }, "Cleared slutprovDate for course instance to let pre-save hook recalculate");
                 }
             }
 
@@ -151,10 +140,7 @@ class CourseMatchingService {
                 await existingInstance.save();
             }
 
-            console.log(
-                `✅ Found existing course instance: ${existingInstance.courseName
-                } (${existingInstance.startDate.toDateString()} - ${existingInstance.endDate.toDateString()})`
-            );
+            logger.info({ courseName: existingInstance.courseName, startDate: existingInstance.startDate.toDateString(), endDate: existingInstance.endDate.toDateString() }, "Found existing course instance");
             return { instance: existingInstance, wasCreated: false };
         }
 
@@ -191,10 +177,7 @@ class CourseMatchingService {
 
         await newInstance.save();
 
-        console.log(
-            `🆕 Created new course instance: ${newInstance.courseName
-            } (${newInstance.startDate.toDateString()} - ${newInstance.endDate.toDateString()})`
-        );
+        logger.info({ courseName: newInstance.courseName, startDate: newInstance.startDate.toDateString(), endDate: newInstance.endDate.toDateString() }, "Created new course instance");
 
         return { instance: newInstance, wasCreated: true };
     }
@@ -217,9 +200,7 @@ class CourseMatchingService {
             errors: [],
         };
 
-        console.log(
-            `[DEBUG] 🔄 Processing ${educationEntries.length} education entries for student ${studentId}`
-        );
+        logger.debug({ educationCount: educationEntries.length, studentId }, "Processing education entries for student");
 
         // Deduplicate missing package errors
         const missingPackages = new Set();
@@ -243,19 +224,13 @@ class CourseMatchingService {
                 });
 
                 if (packageMatch) {
-                    console.log(
-                        `[DEBUG] Exact package match found: '${entry.name}' → '${packageMatch.coursePackageCode}' (${packageMatch.coursePackageName})`
-                    );
+                    logger.debug({ entryName: entry.name, packageCode: packageMatch.coursePackageCode, packageName: packageMatch.coursePackageName }, "Exact package match found");
                 } else {
-                    console.log(
-                        `[DEBUG] No exact package match found for: '${entry.name}' (normalized: '${normalizedEntryCode}')`
-                    );
+                    logger.debug({ entryName: entry.name, normalizedEntryCode }, "No exact package match found");
                 }
                 if (packageMatch) {
                     if (entry.type !== "CoursePackage") {
-                        console.log(
-                            `[DEBUG] Name '${normalizedEntryName}' matches a CoursePackage. Forcing type to CoursePackage.`
-                        );
+                        logger.debug({ normalizedEntryCode }, "Name matches a CoursePackage. Forcing type to CoursePackage");
                     }
                     entry.type = "CoursePackage";
                     entry.refId = packageMatch._id;
@@ -307,13 +282,8 @@ class CourseMatchingService {
                             responsibleTeacherId,
                             initialSlutprovDate
                         );
-                    console.log(
-                        `[DEBUG] CourseInstance created/used for course ${entry.name}:`,
-                        instance && instance.slutprovDate
-                    );
-                    console.log(
-                        `[DEBUG] CourseInstance responsibleTeacher: ${instance?.responsibleTeacher || 'none'} (from student teacherId: ${responsibleTeacherId || 'none'})`
-                    );
+                    logger.debug({ entryName: entry.name, slutprovDate: instance?.slutprovDate }, "CourseInstance created/used for course");
+                    logger.debug({ responsibleTeacher: instance?.responsibleTeacher || "none", studentTeacherId: responsibleTeacherId || "none" }, "CourseInstance responsibleTeacher");
 
                     if (wasCreated) {
                         results.warnings.push({
@@ -334,26 +304,15 @@ class CourseMatchingService {
                         endDate: new Date(entry.endDate),
                     });
                     if (existingEnrollment) {
-                        console.log(
-                            `[DEDUP] Skipping duplicate enrollment for student ${studentId} in course ${match.course._id} (${entry.startDate} - ${entry.endDate})`
-                        );
+                        logger.debug({ studentId, courseId: match.course._id, startDate: entry.startDate, endDate: entry.endDate }, "Skipping duplicate enrollment");
                         continue;
                     }
 
-                    console.log(
-                        `[DEBUG] 🔍 Loading student document for ${studentId}:`
-                    );
-                    console.log(
-                        `[DEBUG] 🔍 studentDocA exists: ${!!studentDocA}`
-                    );
+                    logger.debug({ studentId }, "Loading student document");
+                    logger.debug({ exists: !!studentDocA }, "studentDocA exists");
                     if (studentDocA) {
-                        console.log(
-                            `[DEBUG] 🔍 Student name: ${studentDocA.name}`
-                        );
-                        console.log(
-                            `[DEBUG] 🔍 Current education entries: ${studentDocA.education?.length || 0
-                            }`
-                        );
+                        logger.debug({ studentName: studentDocA.name }, "Student name");
+                        logger.debug({ educationCount: studentDocA.education?.length || 0 }, "Current education entries");
                     }
 
                     // Create enrollment
@@ -370,11 +329,7 @@ class CourseMatchingService {
                         needsSupport: options.needsSupport || false,
                         examMode: options.examMode || 'on-site',
                     });
-                    console.log(
-                        `[DEBUG] Creating individual course enrollment with teacherId: ${enrollment.teacherId || "null"
-                        } (studentDocA.teacherId: ${studentDocA?.teacherId || "null"
-                        }, entry.teacherId: ${entry.teacherId || "null"})`
-                    );
+                    logger.debug({ teacherId: enrollment.teacherId || "null", studentDocTeacherId: studentDocA?.teacherId || "null", entryTeacherId: entry.teacherId || "null" }, "Creating individual course enrollment");
 
                     await enrollment.save();
 
@@ -384,9 +339,7 @@ class CourseMatchingService {
                     if (entry.slutprovDate) {
                         // Use explicit slutprovDate if provided
                         slutprovDate = new Date(entry.slutprovDate);
-                        console.log(
-                            `[DEBUG] 📅 Using provided slutprov date for individual course: ${slutprovDate.toDateString()}`
-                        );
+                        logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Using provided slutprov date for individual course");
                     } else if (!entry.teacherId) {
                         // Only use fallback Wednesday if there's no teacher
                         // If there's a teacher, let the pre-save hook calculate based on teacher rules
@@ -394,33 +347,24 @@ class CourseMatchingService {
                             courseStart,
                             4
                         );
-                        console.log(
-                            `[DEBUG] 📅 Calculated slutprov date for individual course (Wednesday week 4): ${slutprovDate.toDateString()}`
-                        );
+                        logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Calculated slutprov date for individual course (Wednesday week 4)");
                     } else {
                         // Teacher is set but no explicit date - let pre-save hook calculate
                         // Reload enrollment to get the calculated date from the pre-save hook
                         const reloadedEnrollment = await StudentEnrollment.findById(enrollment._id);
                         slutprovDate = reloadedEnrollment?.slutprovDate || null;
                         if (slutprovDate) {
-                            console.log(
-                                `[DEBUG] 📅 Using auto-calculated slutprov date from pre-save hook: ${slutprovDate.toDateString()}`
-                            );
+                            logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Using auto-calculated slutprov date from pre-save hook");
                         } else {
                             // Fallback to Wednesday week 4 if pre-save hook didn't set it
                             slutprovDate = this.getWednesdayOfWeek(courseStart, 4);
-                            console.log(
-                                `[DEBUG] 📅 Fallback: Calculated slutprov date (Wednesday week 4): ${slutprovDate.toDateString()}`
-                            );
+                            logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Fallback: Calculated slutprov date (Wednesday week 4)");
                         }
                     }
 
                     // Validate the slutprov date
                     if (isNaN(slutprovDate.getTime())) {
-                        console.error(
-                            `[ERROR] Invalid slutprov date for individual course: ${entry.slutprovDate || "calculated"
-                            }`
-                        );
+                        logger.error({ slutprovDate: entry.slutprovDate || "calculated" }, "Invalid slutprov date for individual course");
                         continue;
                     }
 
@@ -438,29 +382,18 @@ class CourseMatchingService {
                         studentEmail: studentDocA?.email || "",
                         courseInstanceName: instance.courseName || "",
                     });
-                    console.log(
-                        `✅ Created enrollment for student ${studentId} in course ${entry.name} (CourseInstance: ${instance._id})`
-                    );
+                    logger.info({ studentId, entryName: entry.name, courseInstanceId: instance._id }, "Created enrollment for student in course");
 
                     // DISABLED: Individual calendar event creation to prevent duplicates
                     // Calendar events are now handled by the deduplication system in /calendar-events/syncable
                     // Calendar events are automatically created via calendarEventSync utility
 
                     // --- PATCH: Update student's education array for ALL types ---
-                    console.log(
-                        `[DEBUG] 🔍 About to update education array for student ${studentId}`
-                    );
-                    console.log(
-                        `[DEBUG] 🔍 studentDocA exists: ${!!studentDocA}`
-                    );
+                    logger.debug({ studentId }, "About to update education array for student");
+                    logger.debug({ exists: !!studentDocA }, "studentDocA exists");
                     if (studentDocA) {
-                        console.log(
-                            `[DEBUG] 🔍 Student name: ${studentDocA.name}`
-                        );
-                        console.log(
-                            `[DEBUG] 🔍 Current education entries: ${studentDocA.education?.length || 0
-                            }`
-                        );
+                        logger.debug({ studentName: studentDocA.name }, "Student name");
+                        logger.debug({ educationCount: studentDocA.education?.length || 0 }, "Current education entries");
 
                         // Remove any existing education entry for this course and date range
                         studentDocA.education = (
@@ -478,9 +411,7 @@ class CourseMatchingService {
                             );
                         });
 
-                        console.log(
-                            `[DEBUG] 🔍 After filtering, education entries: ${studentDocA.education.length}`
-                        );
+                        logger.debug({ count: studentDocA.education.length }, "After filtering, education entries");
 
                         // Add the new education entry (always, regardless of type)
                         const newEducationEntry = {
@@ -495,24 +426,15 @@ class CourseMatchingService {
                             removedAt: null,
                         };
 
-                        console.log(
-                            `[DEBUG] 🔍 Adding education entry:`,
-                            newEducationEntry
-                        );
+                        logger.debug({ newEducationEntry }, "Adding education entry");
                         studentDocA.education.push(newEducationEntry);
-                        console.log(
-                            `[DEBUG] 🔍 After adding, education entries: ${studentDocA.education.length}`
-                        );
+                        logger.debug({ count: studentDocA.education.length }, "After adding, education entries");
 
-                        console.log(`[DEBUG] 🔍 Saving student document...`);
+                        logger.debug("Saving student document...");
                         await studentDocA.save();
-                        console.log(
-                            `[DEBUG] ✅ Student document saved successfully`
-                        );
+                        logger.debug("Student document saved successfully");
                     } else {
-                        console.log(
-                            `[DEBUG] ❌ studentDocA is null/undefined, cannot update education array`
-                        );
+                        logger.debug("studentDocA is null/undefined, cannot update education array");
                     }
                     // --- END PATCH ---
                 }
@@ -589,9 +511,7 @@ class CourseMatchingService {
 
                             if (nextExtentWeeks === 2.5) {
                                 shouldGroup = true;
-                                console.log(
-                                    `[DEBUG] 🔗 Grouping courses: '${course.courseName}' (2.5) + '${nextCourse.courseName}' (2.5)`
-                                );
+                                logger.debug({ courseName: course.courseName, nextCourseName: nextCourse.courseName }, "Grouping courses");
                             }
                         }
 
@@ -613,17 +533,10 @@ class CourseMatchingService {
                                 userId,
                                 packageResponsibleTeacherId
                             );
-                        console.log(
-                            `[DEBUG] CoursePackage course instance responsibleTeacher: ${courseInstance?.responsibleTeacher || 'none'} (from student teacherId: ${packageResponsibleTeacherId || 'none'})`
-                        );
-                        console.log(
-                            `[DEBUG] Processing course: '${course.courseName}' | Found/created CourseInstance:`,
-                            courseInstance ? courseInstance._id : null
-                        );
+                        logger.debug({ responsibleTeacher: courseInstance?.responsibleTeacher || "none", studentTeacherId: packageResponsibleTeacherId || "none" }, "CoursePackage course instance responsibleTeacher");
+                        logger.debug({ courseName: course.courseName, courseInstanceId: courseInstance ? courseInstance._id : null }, "Processing course, Found/created CourseInstance");
                         if (!courseInstance || !courseInstance._id) {
-                            console.warn(
-                                `[WARN] No CourseInstance found/created for course '${course.courseName}'. Skipping enrollment for this course.`
-                            );
+                            logger.warn({ courseName: course.courseName }, "No CourseInstance found/created for course. Skipping enrollment");
                             i++;
                             continue;
                         }
@@ -638,9 +551,7 @@ class CourseMatchingService {
                                 endDate: courseEnd,
                             });
                         if (existingEnrollment) {
-                            console.log(
-                                `[DEDUP] Skipping duplicate enrollment for student ${studentId} in course ${course._id} (${courseStart} - ${courseEnd})`
-                            );
+                            logger.debug({ studentId, courseId: course._id, startDate: courseStart, endDate: courseEnd }, "Skipping duplicate enrollment");
                             i++;
                             continue;
                         }
@@ -676,40 +587,26 @@ class CourseMatchingService {
                             needsSupport: options.needsSupport || false,
                             examMode: options.examMode || 'on-site',
                         });
-                        console.log(
-                            `[DEBUG] Creating enrollment with teacherId: ${enrollment.teacherId || "null"
-                            } (studentDocB.teacherId: ${studentDocB?.teacherId || "null"
-                            }, entry.teacherId: ${entry.teacherId || "null"})`
-                        );
-                        console.log(
-                            "[DEBUG] StudentEnrollment to be created:",
-                            enrollment.toObject()
-                        );
+                        logger.debug({ teacherId: enrollment.teacherId || "null", studentDocTeacherId: studentDocB?.teacherId || "null", entryTeacherId: entry.teacherId || "null" }, "Creating enrollment");
+                        logger.debug({ enrollment: enrollment.toObject() }, "StudentEnrollment to be created");
                         await enrollment.save();
 
                         // Calculate slutprov date - for grouped courses, use the same date for both
                         let slutprovDate;
                         if (entry.slutprovDate) {
                             slutprovDate = new Date(entry.slutprovDate);
-                            console.log(
-                                `[DEBUG] 📅 Using provided slutprov date: ${slutprovDate.toDateString()}`
-                            );
+                            logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Using provided slutprov date");
                         } else {
                             slutprovDate = this.getWednesdayOfWeek(
                                 courseStart,
                                 4
                             );
-                            console.log(
-                                `[DEBUG] 📅 Calculated slutprov date (Wednesday week 4): ${slutprovDate.toDateString()}`
-                            );
+                            logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Calculated slutprov date (Wednesday week 4)");
                         }
 
                         // Validate the slutprov date
                         if (isNaN(slutprovDate.getTime())) {
-                            console.error(
-                                `[ERROR] Invalid slutprov date: ${entry.slutprovDate || "calculated"
-                                }`
-                            );
+                        logger.error({ slutprovDate: entry.slutprovDate || "calculated" }, "Invalid slutprov date for individual course");
                             i++;
                             continue;
                         }
@@ -725,20 +622,12 @@ class CourseMatchingService {
                                 courseInstanceName:
                                     courseInstance.courseName || "",
                             });
-                            console.log(
-                                `✅ Created enrollment for student ${studentId} in course ${course.courseName} (CourseInstance: ${courseInstance._id})`
-                            );
+                            logger.info({ studentId, courseName: course.courseName, courseInstanceId: courseInstance._id }, "Created enrollment for student in course");
                         } else {
-                            console.warn(
-                                "[WARN] Skipping enrollment with missing courseInstanceId:",
-                                enrollment.toObject()
-                            );
+                            logger.warn({ enrollment: enrollment.toObject() }, "Skipping enrollment with missing courseInstanceId");
                         }
 
-                        console.log(
-                            `📅 Slutprov date set for student ${studentId} in course ${course.courseName
-                            }: ${slutprovDate.toDateString()}`
-                        );
+                        logger.debug({ studentId, courseName: course.courseName, slutprovDate: slutprovDate.toDateString() }, "Slutprov date set for student in course");
 
                         // Add to education array
                         let studentDocC;
@@ -785,9 +674,7 @@ class CourseMatchingService {
 
                         // If we're grouping courses, process the next course as well
                         if (shouldGroup && nextCourse) {
-                            console.log(
-                                `[DEBUG] 🔗 Processing grouped course: '${nextCourse.courseName}'`
-                            );
+                            logger.debug({ courseName: nextCourse.courseName }, "Processing grouped course");
 
                             // Create CourseInstance for next course (same dates as current course)
                             // Use student's teacher as responsibleTeacher
@@ -814,9 +701,7 @@ class CourseMatchingService {
                                         endDate: courseEnd,
                                     });
                                 if (existingEnrollment) {
-                                    console.log(
-                                        `[DEDUP] Skipping duplicate enrollment for student ${studentId} in course ${nextCourse._id} (${courseStart} - ${courseEnd})`
-                                    );
+                                    logger.debug({ studentId, courseId: nextCourse._id, startDate: courseStart, endDate: courseEnd }, "Skipping duplicate enrollment for grouped course");
                                     i += 2;
                                     continue;
                                 }
@@ -845,13 +730,8 @@ class CourseMatchingService {
                                 nextEnrollment.slutprovDate = slutprovDate;
                                 await nextEnrollment.save();
 
-                                console.log(
-                                    `✅ Created grouped enrollment for student ${studentId} in course ${nextCourse.courseName} (CourseInstance: ${nextCourseInstance._id})`
-                                );
-                                console.log(
-                                    `📅 Same slutprov date for grouped course ${nextCourse.courseName
-                                    }: ${slutprovDate.toDateString()}`
-                                );
+                                logger.info({ studentId, courseName: nextCourse.courseName, courseInstanceId: nextCourseInstance._id }, "Created grouped enrollment for student");
+                                logger.debug({ courseName: nextCourse.courseName, slutprovDate: slutprovDate.toDateString() }, "Same slutprov date for grouped course");
 
                                 // Add to results
                                 results.enrollments.push({
@@ -938,18 +818,7 @@ class CourseMatchingService {
                                 ? new Date(entry.endDate)
                                 : undefined;
 
-                            console.log(
-                                `[DEBUG] 📦 Creating CoursePackage education entry:`
-                            );
-                            console.log(
-                                `[DEBUG] 📦 Package: ${packageDoc.coursePackageName}`
-                            );
-                            console.log(
-                                `[DEBUG] 📦 Entry startDate: ${entry.startDate} -> Parsed: ${packageStartDate}`
-                            );
-                            console.log(
-                                `[DEBUG] 📦 Entry endDate: ${entry.endDate} -> Parsed: ${packageEndDate}`
-                            );
+                            logger.debug({ packageName: packageDoc.coursePackageName, startDate: entry.startDate, parsedStartDate: packageStartDate, endDate: entry.endDate, parsedEndDate: packageEndDate }, "Creating CoursePackage education entry");
 
                             studentDocD.education.push({
                                 type: "CoursePackage",
@@ -972,10 +841,7 @@ class CourseMatchingService {
                                 studentName,
                                 message: `Kurspaket "${packageDoc.coursePackageName}" har lagts till för elev ${studentName}. Paketet innehåller ${packageDoc.coursePackageCourses?.length || 0} kurser som kommer att skapas automatiskt.`,
                             });
-                            console.log(
-                                `✅ Added CoursePackage education entry for student ${studentDocD.name || studentDocD.email
-                                } in package ${packageDoc.coursePackageName}`
-                            );
+                            logger.info({ studentName: studentDocD.name || studentDocD.email, packageName: packageDoc.coursePackageName }, "Added CoursePackage education entry for student");
                         }
                     }
 
@@ -1003,9 +869,7 @@ class CourseMatchingService {
                     //     }
                     // }
                 } else if (entry.type === "Course" && entry.name) {
-                    console.log(
-                        `[DEBUG] Processing individual course: '${entry.name}'`
-                    );
+                    logger.debug({ entryName: entry.name }, "Processing individual course");
 
                     // Find the best matching course
                     const courseMatch = await this.findBestCourseMatch(
@@ -1022,9 +886,7 @@ class CourseMatchingService {
                     }
 
                     const course = courseMatch.course;
-                    console.log(
-                        `[DEBUG] Matched individual course: '${entry.name}' → '${course.courseName}'`
-                    );
+                    logger.debug({ entryName: entry.name, courseName: course.courseName }, "Matched individual course");
 
                     // Calculate course dates
                     const courseStart = entry.startDate
@@ -1057,18 +919,11 @@ class CourseMatchingService {
                             userId,
                             individualResponsibleTeacherId
                         );
-                    console.log(
-                        `[DEBUG] Individual course instance responsibleTeacher: ${courseInstance?.responsibleTeacher || 'none'} (from student teacherId: ${individualResponsibleTeacherId || 'none'})`
-                    );
+                    logger.debug({ responsibleTeacher: courseInstance?.responsibleTeacher || "none", studentTeacherId: individualResponsibleTeacherId || "none" }, "Individual course instance responsibleTeacher");
 
-                    console.log(
-                        `[DEBUG] Processing individual course: '${course.courseName}' | Found/created CourseInstance:`,
-                        courseInstance ? courseInstance._id : null
-                    );
+                    logger.debug({ courseName: course.courseName, courseInstanceId: courseInstance ? courseInstance._id : null }, "Processing individual course, Found/created CourseInstance");
                     if (!courseInstance || !courseInstance._id) {
-                        console.warn(
-                            `[WARN] No CourseInstance found/created for individual course '${course.courseName}'. Skipping enrollment.`
-                        );
+                        logger.warn({ courseName: course.courseName }, "No CourseInstance found/created for individual course. Skipping enrollment");
                         continue;
                     }
 
@@ -1081,9 +936,7 @@ class CourseMatchingService {
                         endDate: courseEnd,
                     });
                     if (existingEnrollment) {
-                        console.log(
-                            `[DEDUP] Skipping duplicate enrollment for student ${studentId} in course ${course._id} (${courseStart} - ${courseEnd})`
-                        );
+                        logger.debug({ studentId, courseId: course._id, startDate: courseStart, endDate: courseEnd }, "Skipping duplicate enrollment for individual course");
                         continue;
                     }
 
@@ -1112,32 +965,22 @@ class CourseMatchingService {
                         examMode: options.examMode,
                     });
 
-                    console.log(
-                        "[DEBUG] Individual course StudentEnrollment to be created:",
-                        enrollment.toObject()
-                    );
+                    logger.debug({ enrollment: enrollment.toObject() }, "Individual course StudentEnrollment to be created");
                     await enrollment.save();
 
                     // Calculate and set slutprov date BEFORE adding to results
                     let slutprovDate;
                     if (entry.slutprovDate) {
                         slutprovDate = new Date(entry.slutprovDate);
-                        console.log(
-                            `[DEBUG] 📅 Using provided slutprov date for individual course: ${slutprovDate.toDateString()}`
-                        );
+                        logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Using provided slutprov date for individual course");
                     } else {
                         slutprovDate = this.getWednesdayOfWeek(courseStart, 4);
-                        console.log(
-                            `[DEBUG] 📅 Calculated slutprov date for individual course (Wednesday week 4): ${slutprovDate.toDateString()}`
-                        );
+                        logger.debug({ slutprovDate: slutprovDate.toDateString() }, "Calculated slutprov date for individual course (Wednesday week 4)");
                     }
 
                     // Validate the slutprov date
                     if (isNaN(slutprovDate.getTime())) {
-                        console.error(
-                            `[ERROR] Invalid slutprov date for individual course: ${entry.slutprovDate || "calculated"
-                            }`
-                        );
+                        logger.error({ slutprovDate: entry.slutprovDate || "calculated" }, "Invalid slutprov date for individual course");
                         continue;
                     }
 
@@ -1152,22 +995,14 @@ class CourseMatchingService {
                             studentEmail: studentDoc?.email || "",
                             courseInstanceName: courseInstance.courseName || "",
                         });
-                        console.log(
-                            `✅ Created enrollment for student ${studentId} in individual course ${course.courseName} (CourseInstance: ${courseInstance._id})`
-                        );
+                        logger.info({ studentId, courseName: course.courseName, courseInstanceId: courseInstance._id }, "Created enrollment for student in individual course");
                     } else {
-                        console.warn(
-                            "[WARN] Skipping individual course enrollment with missing courseInstanceId:",
-                            enrollment.toObject()
-                        );
+                        logger.warn({ enrollment: enrollment.toObject() }, "Skipping individual course enrollment with missing courseInstanceId");
                     }
 
                     // Note: Calendar events are now generated automatically by the /calendar-events/syncable endpoint
                     // based on StudentEnrollment.slutprovDate, so we don't need to create them here
-                    console.log(
-                        `📅 Slutprov date set for student ${studentId} in individual course ${course.courseName
-                        }: ${slutprovDate.toDateString()}`
-                    );
+                    logger.debug({ studentId, courseName: course.courseName, slutprovDate: slutprovDate.toDateString() }, "Slutprov date set for student in individual course");
 
                     // Add to education array if not already present
                     if (studentDoc) {
@@ -1194,10 +1029,7 @@ class CourseMatchingService {
                                 removedAt: null,
                             });
                             await studentDoc.save();
-                            console.log(
-                                `✅ Added individual course education entry for student ${studentDoc.name || studentDoc.email
-                                } in course ${course.courseName}`
-                            );
+                            logger.info({ studentName: studentDoc.name || studentDoc.email, courseName: course.courseName }, "Added individual course education entry for student");
                         }
                     }
                 } else if (entry.type === "Program" && entry.refId) {
@@ -1268,23 +1100,16 @@ class CourseMatchingService {
                     courseName: entry.name,
                     message: error.message,
                 });
-                console.error(
-                    `❌ Error processing education entry for student ${studentId}: ${error.message}`
-                );
+                logger.error({ err: error, studentId }, "Error processing education entry for student");
             }
         }
 
-        console.log(
-            `[DEBUG] ✅ Finished processing ${educationEntries.length} education entries for student ${studentId}. Total enrollments created: ${results.enrollments.length}`
-        );
+        logger.debug({ educationCount: educationEntries.length, studentId, enrollmentCount: results.enrollments.length }, "Finished processing education entries for student");
 
         // Before returning, filter out any enrollments with missing courseInstanceId
         results.enrollments = results.enrollments.filter((enrollment) => {
             if (!enrollment.courseInstanceId) {
-                console.warn(
-                    `[WARN] Filtering out enrollment with missing courseInstanceId:`,
-                    enrollment
-                );
+                logger.warn({ enrollment }, "Filtering out enrollment with missing courseInstanceId");
                 return false;
             }
             return true;

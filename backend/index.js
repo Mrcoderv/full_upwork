@@ -15,9 +15,9 @@ if (process.env.NODE_ENV === "production") {
 }
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-console.log(`🚀 Running in ${process.env.NODE_ENV} mode`);
-console.log(`📌 Loaded environment file: ${envFile}`);
-console.log(`🔑 JWT_SECRET Loaded: ${process.env.JWT_SECRET ? "Yes" : "No"}`);
+logger.info({ env: process.env.NODE_ENV }, "Running in environment mode");
+logger.info({ envFile }, "Loaded environment file");
+logger.info({ loaded: !!process.env.JWT_SECRET }, "JWT secret status");
 
 import express from "express";
 const app = express();
@@ -34,6 +34,7 @@ import {
     requestTimeout,
 } from "./src/middleware/security.js";
 
+import logger from "./src/utils/logger.js";
 import {
     globalErrorHandler,
     performanceMonitor,
@@ -95,7 +96,7 @@ app.use(requestOptimizer.optimizeQuery);
 
 // Enhanced request logging
 app.use((req, res, next) => {
-    console.log(`Incoming request: ${req.method} ${req.url}`);
+    logger.debug({ method: req.method, url: req.url }, "Incoming request");
     next();
 });
 
@@ -136,9 +137,9 @@ app.get("/metrics", (req, res) => {
     res.status(200).json(metrics);
 });
 
-console.log("Attempting to mount router...");
+logger.info("Mounting router");
 app.use("/", router);
-console.log("Router successfully mounted!");
+logger.info("Router mounted");
 
 // Ensure preflight (OPTIONS) requests are handled
 app.options(/.*/, cors());
@@ -165,9 +166,7 @@ if (!process.env.JWT_SECRET) {
     if (process.env.NODE_ENV === "test") {
         process.env.JWT_SECRET = "test-secret";
     } else {
-        console.error(
-            "💥 JWT_SECRET is not set. Refusing to start with an insecure default — set JWT_SECRET in the environment."
-        );
+        logger.fatal("JWT_SECRET is not set. Refusing to start with an insecure default");
         process.exit(1);
     }
 }
@@ -182,20 +181,17 @@ if (process.env.NODE_ENV !== "test") {
             socketTimeoutMS: 45000,
         })
         .then(async () => {
-            console.log("✅ Connected to MongoDB");
+            logger.info("Connected to MongoDB");
 
             // Create database indexes for performance
             try {
                 await dbOptimizer.createIndexes();
             } catch (error) {
-                console.warn(
-                    "⚠️ Database index creation failed:",
-                    error.message
-                );
+                logger.warn({ err: error }, "Database index creation failed");
             }
         })
         .catch((err) => {
-            console.error("❌ MongoDB connection error:", err);
+            logger.error({ err }, "MongoDB connection error");
             errorMonitor.recordError(err);
         });
 }
@@ -205,51 +201,45 @@ app.use(globalErrorHandler);
 
 // Graceful shutdown handling
 process.on("SIGTERM", async () => {
-    console.log("🛑 SIGTERM received, shutting down gracefully...");
+    logger.info("SIGTERM received, shutting down gracefully");
 
-    // Close database connection
     await mongoose.connection.close();
-    console.log("✅ Database connection closed");
+    logger.info("Database connection closed");
 
-    // Log final metrics
-    console.log("📊 Final metrics:", errorMonitor.getErrorStats());
+    logger.info({ metrics: errorMonitor.getErrorStats() }, "Final metrics");
 
     process.exit(0);
 });
 
 process.on("SIGINT", async () => {
-    console.log("🛑 SIGINT received, shutting down gracefully...");
+    logger.info("SIGINT received, shutting down gracefully");
 
-    // Close database connection
     await mongoose.connection.close();
-    console.log("✅ Database connection closed");
+    logger.info("Database connection closed");
 
-    // Log final metrics
-    console.log("📊 Final metrics:", errorMonitor.getErrorStats());
+    logger.info({ metrics: errorMonitor.getErrorStats() }, "Final metrics");
 
     process.exit(0);
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", (err) => {
-    console.error("💥 Uncaught Exception:", err);
+    logger.fatal({ err }, "Uncaught exception");
     errorMonitor.recordError(err);
 
-    // Close database connection
     mongoose.connection.close(() => {
-        console.log("✅ Database connection closed due to uncaught exception");
+        logger.info("Database connection closed due to uncaught exception");
         process.exit(1);
     });
 });
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
-    console.error("💥 Unhandled Rejection:", err);
+    logger.fatal({ err }, "Unhandled rejection");
     errorMonitor.recordError(err);
 
-    // Close database connection
     mongoose.connection.close(() => {
-        console.log("✅ Database connection closed due to unhandled rejection");
+        logger.info("Database connection closed due to unhandled rejection");
         process.exit(1);
     });
 });
@@ -257,19 +247,11 @@ process.on("unhandledRejection", (err) => {
 // Start the server unless running tests
 if (process.env.NODE_ENV !== "test") {
     app.listen(PORT, () => {
-        console.log(`🚀 Server running on localhost:${PORT}`);
-        console.log(
-            `🔒 Security features: Rate limiting, CORS, Helmet, Input validation`
-        );
-        console.log(
-            `⚡ Performance features: Caching, Lazy loading, Query optimization`
-        );
-        console.log(
-            `📊 Monitoring: Error tracking, Performance metrics, Health checks`
-        );
-        console.log(
-            `🧪 Testing: Unit tests, Integration tests, API validation`
-        );
+        logger.info({ port: PORT }, "Server started");
+        logger.info("Security features active: rate limiting, CORS, helmet, input validation");
+        logger.info("Performance features active: caching, lazy loading, query optimization");
+        logger.info("Monitoring active: error tracking, performance metrics, health checks");
+        logger.info("Test suite: unit tests, integration tests, API validation");
     });
 }
 

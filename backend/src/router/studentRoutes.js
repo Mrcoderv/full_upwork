@@ -20,6 +20,7 @@ import User from "../models/User.js";
 import { sendDropoutNotification } from "../controllers/notificationController.js";
 import { hasRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
+import logger from "../utils/logger.js";
 
 const router = Router();
 
@@ -64,7 +65,7 @@ router.get("/students/by-teacher/:teacherId", authenticateUser, hasRole(ALLOWED_
             }))
         );
     } catch (error) {
-        console.error("❌ Error fetching students by teacher:", error.message);
+        logger.error({ err: error }, "Error fetching students by teacher");
         res.status(500).json({ message: "Server error" });
     }
 });
@@ -104,7 +105,7 @@ router.put(
                     student,
                     education,
                 });
-                console.log("Notification sent:", notification);
+                logger.info({ notification }, "Notification sent");
                 await student.save();
                 return res.status(200).json({
                     message: "Status updated and notification sent",
@@ -118,7 +119,7 @@ router.put(
                     .json({ message: "Status updated successfully" });
             }
         } catch (error) {
-            console.error("Error updating status:", error);
+            logger.error({ err: error }, "Error updating status");
             res.status(500).json({ message: "Server error" });
         }
     }
@@ -148,9 +149,9 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
             }
 
             query.teacherId = teacher._id;
-            console.log(`🔍 Teacher ${teacher._id} fetching their students`);
+            logger.debug({ teacherId: teacher._id }, "Teacher fetching their students");
         } else if (hasCoordinatorRole) {
-            console.log(`🔍 Coordinator/Admin ${req.user.email} fetching all students`);
+            logger.debug({ email: req.user.email }, "Coordinator/Admin fetching all students");
         }
 
         // Pagination parameters (default limit 500 to avoid unbounded query)
@@ -406,7 +407,7 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
         }
         res.status(200).json(students);
     } catch (error) {
-        console.error("❌ Error fetching students:", error);
+        logger.error({ err: error }, "Error fetching students");
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -418,10 +419,7 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
  */
 router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate(studentCreateSchema), async (req, res) => {
     try {
-        console.log(
-            "📥 Creating student with payload:",
-            JSON.stringify(req.body, null, 2)
-        );
+        logger.debug({ body: req.body }, "Creating student with payload");
 
         // Required fields check inside handler for raw handler test execution bypassing middleware
         if (
@@ -436,13 +434,7 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
         const student = new Student(req.body);
         const savedStudent = await student.save();
 
-        console.log("✅ Student saved:", {
-            id: savedStudent._id,
-            name: savedStudent.name,
-            email: savedStudent.email,
-            aplStatus: savedStudent.aplStatus,
-            education: savedStudent.education,
-        });
+        logger.info({ id: savedStudent._id, name: savedStudent.name, email: savedStudent.email, aplStatus: savedStudent.aplStatus, education: savedStudent.education }, "Student saved");
 
         if (req.body.education && req.body.education.length > 0) {
             const CourseMatchingService = await import(
@@ -457,16 +449,9 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
                         req.body.createdBy || null
                     );
 
-                console.log(
-                    `✅ Created ${
-                        enrollmentResult?.enrollments?.length || 0
-                    } enrollments for student ${savedStudent.name}`
-                );
+                logger.info({ count: enrollmentResult?.enrollments?.length || 0, studentName: savedStudent.name }, "Created enrollments for student");
             } catch (enrollmentError) {
-                console.error(
-                    "❌ Error creating enrollments:",
-                    enrollmentError
-                );
+                logger.error({ err: enrollmentError }, "Error creating enrollments");
             }
         }
 
@@ -477,16 +462,13 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
                 );
                 await syncCalendarEventsForStudent(savedStudent._id);
             } catch (calendarError) {
-                console.error(
-                    "❌ Error syncing calendar event:",
-                    calendarError
-                );
+                logger.error({ err: calendarError }, "Error syncing calendar event");
             }
         }
 
         res.status(201).json(savedStudent);
     } catch (error) {
-        console.error("❌ Error adding student:", error.message);
+        logger.error({ err: error }, "Error adding student");
         res.status(500).json({ error: "Failed to add student" });
     }
 });
@@ -533,7 +515,7 @@ router.post("/student/:studentId/addcourse", authenticateUser, hasRole(ALLOWED_S
 
         res.status(200).json(updatedStudent);
     } catch (error) {
-        console.error("❌ Error adding course to student:", error);
+        logger.error({ err: error }, "Error adding course to student");
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -557,7 +539,7 @@ router.post("/student/:studentId/setprogram", authenticateUser, hasRole(ALLOWED_
 
         res.status(200).json(student);
     } catch (error) {
-        console.error("❌ Error:", error);
+        logger.error({ err: error }, "Error setting program");
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -582,7 +564,7 @@ router.post("/student/:studentId/addcoursepackage", authenticateUser, hasRole(AL
 
         res.status(200).json(student);
     } catch (error) {
-        console.error("❌ Error:", error);
+        logger.error({ err: error }, "Error adding course package");
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -605,7 +587,7 @@ router.delete("/student/:id/courses/:courseId", authenticateUser, hasRole(ALLOWE
 
         res.json({ message: "Course removed successfully" });
     } catch (error) {
-        console.error("❌ Error removing course:", error);
+        logger.error({ err: error }, "Error removing course");
         res.status(500).json({ error: "Failed to remove course." });
     }
 });
@@ -626,7 +608,7 @@ router.get("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async
 
         res.json(student);
     } catch (error) {
-        console.error("❌ Error fetching student:", error);
+        logger.error({ err: error }, "Error fetching student");
         res.status(500).json({ error: "Failed to fetch student details" });
     }
 });
@@ -649,7 +631,7 @@ router.get("/student/:id/basic", authenticateUser, hasRole(ALLOWED_STAFF_ROLES),
 
         res.json(student);
     } catch (error) {
-        console.error("❌ Error fetching basic student:", error);
+        logger.error({ err: error }, "Error fetching basic student");
         res.status(500).json({
             error: "Failed to fetch basic student details",
         });
@@ -676,19 +658,19 @@ async function deleteStudentFiles(studentId) {
             try {
                 await bucket.delete(file._id);
                 deletedCount++;
-                console.log(`🗑️ Deleted file ${file._id} (${file.filename}) for student ${studentId}`);
+                logger.info({ fileId: file._id, filename: file.filename, studentId }, "Deleted file");
             } catch (err) {
-                console.error(`❌ Failed to delete file ${file._id}:`, err);
+                logger.error({ err, fileId: file._id }, "Failed to delete file");
             }
         }
         
         if (deletedCount > 0) {
-            console.log(`✅ Deleted ${deletedCount} file(s) for student ${studentId}`);
+            logger.info({ deletedCount, studentId }, "Deleted file(s) for student");
         }
         
         return deletedCount;
     } catch (error) {
-        console.error(`❌ Error deleting files for student ${studentId}:`, error);
+        logger.error({ err: error, studentId }, "Error deleting files for student");
         return 0;
     }
 }
@@ -717,13 +699,13 @@ router.delete("/student/:id", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), as
             return res.status(404).json({ error: "Student not found" });
         }
 
-        console.log(`✅ Deleted student ${deletedStudent.name} (${studentId}) and ${deletedFilesCount} associated file(s)`);
+        logger.info({ name: deletedStudent.name, studentId, deletedFilesCount }, "Deleted student and associated file(s)");
         res.json({ 
             message: "Student deleted successfully",
             deletedFilesCount 
         });
     } catch (error) {
-        console.error("❌ Error deleting student:", error);
+        logger.error({ err: error }, "Error deleting student");
         res.status(500).json({ error: "Failed to delete student" });
     }
 });
@@ -752,13 +734,13 @@ router.delete("/students", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async
         
         await Student.deleteMany({});
         
-        console.log(`✅ Deleted all students and ${totalDeletedFiles} associated file(s)`);
+        logger.info({ totalDeletedFiles }, "Deleted all students and associated file(s)");
         res.json({ 
             message: "All students deleted successfully",
             deletedFilesCount: totalDeletedFiles
         });
     } catch (error) {
-        console.error("❌ Error deleting all students:", error);
+        logger.error({ err: error }, "Error deleting all students");
         res.status(500).json({ error: "Failed to delete all students" });
     }
 });
@@ -792,7 +774,7 @@ router.patch("/students/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), as
             return res.status(400).json({ error: "Invalid APL status update" });
         }
     } catch (err) {
-        console.error("❌ Failed to update APL status:", err);
+        logger.error({ err }, "Failed to update APL status");
         return res.status(500).json({ error: "Failed to update APL status" });
     }
 });
@@ -827,7 +809,7 @@ router.post("/students/:id/comment", authenticateUser, hasRole(ALLOWED_STAFF_ROL
         await student.save();
         res.status(200).json({ commentHistory: student.commentHistory });
     } catch (err) {
-        console.error("❌ Failed to save comment:", err);
+        logger.error({ err }, "Failed to save comment");
         res.status(500).json({ error: "Failed to add comment" });
     }
 });
@@ -890,7 +872,7 @@ router.delete("/students/:id/comment", authenticateUser, hasRole(ALLOWED_ADMIN_R
  * @access  Protected (Staff only)
  */
 router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate(studentUpdateSchema), async (req, res) => {
-    console.log("📥 Received payload:", req.body);
+    logger.debug({ body: req.body }, "Received payload");
 
     const allowedFields = [
         "name",
@@ -956,9 +938,7 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
                             await StudentEnrollment.findByIdAndDelete(
                                 existingEnrollment._id
                             );
-                            console.log(
-                                `🗑️ Deleted enrollment for course ${eduData.name}`
-                            );
+                            logger.info({ courseName: eduData.name }, "Deleted enrollment for course");
                             continue;
                         }
 
@@ -985,14 +965,10 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
                             );
 
                         await existingEnrollment.save();
-                        console.log(
-                            `✅ Updated enrollment for course ${eduData.name}`
-                        );
+                        logger.info({ courseName: eduData.name }, "Updated enrollment for course");
                     } else {
                         if (eduData.removedAt) {
-                            console.log(
-                                `⚠️ Course ${eduData.name} marked as removed but no enrollment found - skipping`
-                            );
+                            logger.warn({ courseName: eduData.name }, "Course marked as removed but no enrollment found - skipping");
                             continue;
                         }
 
@@ -1013,14 +989,9 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
                                     req.user?.userId || null
                                 );
 
-                            console.log(
-                                `✅ Created new enrollment for course ${eduData.name}`
-                            );
+                            logger.info({ courseName: eduData.name }, "Created new enrollment for course");
                         } catch (enrollmentError) {
-                            console.error(
-                                `❌ Error creating enrollment for course ${eduData.name}:`,
-                                enrollmentError
-                            );
+                            logger.error({ err: enrollmentError, courseName: eduData.name }, "Error creating enrollment for course");
                         }
                     }
                 }
@@ -1035,13 +1006,9 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
             });
             if (foundTeacher) {
                 updates.teacherId = foundTeacher._id;
-                console.log(
-                    `🔗 Kopplar ${student.name} till TeacherId: ${foundTeacher._id}`
-                );
+                logger.info({ studentName: student.name, teacherId: foundTeacher._id }, "Linked student to TeacherId");
             } else {
-                console.warn(
-                    `⚠️ Ingen matchande lärare hittades för namn: ${student.teacher}`
-                );
+                logger.warn({ teacherName: student.teacher }, "No matching teacher found for name");
             }
         }
 
@@ -1104,7 +1071,7 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
 
         res.status(200).json(responseData);
     } catch (error) {
-        console.error("❌ Error updating student:", error);
+        logger.error({ err: error }, "Error updating student");
         res.status(500).json({ error: "Failed to update student" });
     }
 });
@@ -1125,11 +1092,8 @@ router.post(
                 return res.status(404).json({ error: "Student not found" });
 
             const userId = req.userId;
-            console.log("🔑 userId from session:", userId);
-            console.log(
-                "🎯 seenBy BEFORE update:",
-                student.commentHistory.map((c) => c.seenBy)
-            );
+            logger.debug({ userId }, "userId from session");
+            logger.debug({ seenBy: student.commentHistory.map((c) => c.seenBy) }, "seenBy BEFORE update");
 
             const objectId = new mongoose.Types.ObjectId(userId);
             let updated = false;
@@ -1147,15 +1111,12 @@ router.post(
             if (updated) {
                 student.markModified("commentHistory");
                 await student.save();
-                console.log(
-                    "✅ Final seenBy in DB:",
-                    student.commentHistory.map((c) => c.seenBy)
-                );
+                logger.debug({ seenBy: student.commentHistory.map((c) => c.seenBy) }, "Final seenBy in DB");
             }
 
             res.json({ message: "Marked as seen", updatedStudent: student });
         } catch (err) {
-            console.error("❌ Error in mark-comments-seen:", err);
+            logger.error({ err }, "Error in mark-comments-seen");
             res.status(500).json({ error: "Failed to mark comments as seen." });
         }
     }
@@ -1207,7 +1168,7 @@ router.patch(
 
             res.status(200).json(updatedStudent);
         } catch (error) {
-            console.error("❌ Error updating grade:", error);
+            logger.error({ err: error }, "Error updating grade");
             res.status(500).json({ error: "Server error" });
         }
     }
@@ -1275,7 +1236,7 @@ router.put("/student/:id/education/:courseId/grade", authenticateUser, hasRole(A
 
         res.status(200).json(student);
     } catch (err) {
-        console.error("❌ Error updating grade:", err);
+        logger.error({ err }, "Error updating grade");
         res.status(500).json({ error: "Failed to update grade" });
     }
 });
@@ -1296,7 +1257,7 @@ router.get("/students/earnings", authenticateUser, hasRole(ALLOWED_STAFF_ROLES),
         );
         res.json(students);
     } catch (err) {
-        console.error("❌ Failed to fetch earnings students", err);
+        logger.error({ err }, "Failed to fetch earnings students");
         res.status(500).json({ error: "Server error" });
     }
 });

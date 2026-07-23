@@ -1,7 +1,7 @@
 # ----------------------------
 # deps (backend only — enough for dev target)
 # ----------------------------
-FROM node:25-alpine AS deps
+FROM node:25 AS deps
 ENV APP_HOME=/app NODE_ENV=test
 WORKDIR $APP_HOME
 
@@ -16,8 +16,8 @@ RUN cd frontend && npm ci --no-audit --no-fund
 # ----------------------------
 # test-base
 # ----------------------------
-FROM node:25-alpine AS test-base
-RUN apk add --no-cache make
+FROM node:25 AS test-base
+RUN apt-get update && apt-get install -y --no-install-recommends make && rm -rf /var/lib/apt/lists/*
 RUN npm install -g npm@10
 ENV APP_HOME=/app NODE_ENV=test
 WORKDIR $APP_HOME

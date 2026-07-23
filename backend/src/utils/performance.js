@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { logger } from "./errorHandler.js";
+import logger from "./logger.js";
 
 // Cache configuration
 const cache = new Map();

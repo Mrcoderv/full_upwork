@@ -22,12 +22,13 @@ vi.mock("mongoose", () => ({
     default: mongooseMock,
 }));
 
-vi.mock("../../src/utils/errorHandler.js", () => ({
-    logger: loggerMock,
+vi.mock("../../src/utils/logger.js", () => ({
+    __esModule: true,
+    default: loggerMock,
 }));
 
 import mongoose from "mongoose";
-import { logger } from "../../src/utils/errorHandler.js";
+import logger from "../../src/utils/logger.js";
 import {
     cacheManager,
     queryOptimizer,

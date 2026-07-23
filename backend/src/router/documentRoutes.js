@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import Document from '../models/Document.js';
 import { authenticateUser } from '../controllers/authController.js';
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -18,12 +19,12 @@ const uploadsDir = path.join(__dirname, '../../public/uploads');
 try {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log('✅ Created uploads directory:', uploadsDir);
+    logger.info({ uploadsDir }, "Created uploads directory")
   } else {
-    console.log('✅ Uploads directory exists:', uploadsDir);
+    logger.info({ uploadsDir }, "Uploads directory exists")
   }
 } catch (err) {
-  console.error('❌ Error creating uploads directory:', err);
+  logger.error({ err: err }, "Error creating uploads directory")
 }
 
 const storage = multer.diskStorage({
@@ -35,7 +36,7 @@ const storage = multer.diskStorage({
       }
       cb(null, uploadsDir);
     } catch (err) {
-      console.error('❌ Error in multer destination:', err);
+      logger.error({ err: err }, "Error in multer destination")
       cb(err);
     }
   },
@@ -43,10 +44,10 @@ const storage = multer.diskStorage({
     try {
       const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
       const filename = `${unique}-${file.originalname}`;
-      console.log('Generated filename:', filename);
+      logger.debug({ filename }, "Generated filename")
       cb(null, filename);
     } catch (err) {
-      console.error('❌ Error in multer filename:', err);
+      logger.error({ err: err }, "Error in multer filename")
       cb(err);
     }
   }
@@ -79,9 +80,7 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
       return res.status(400).json({ message: 'File is missing in the request' });
     }
     
-    console.log('File details:', req.file);
-    console.log('Request body:', req.body);
-    console.log('User from token:', req.user);
+    logger.info({ file: req.file, body: req.body, user: req.user }, "File upload details")
 
     const { studentId, teacherId, type, enrollmentId } = req.body;
     const user = req.user;
@@ -123,7 +122,7 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
       const userIdStr = String(user.userId);
       const teacherIdStr = String(teacherId);
       
-      console.log('Permission check - userId:', userIdStr, 'teacherId:', teacherIdStr, 'isAdmin:', isAdmin);
+      logger.debug({ userIdStr, teacherIdStr, isAdmin }, "Permission check for teacher document")
       
       if (!isAdmin && userIdStr !== teacherIdStr) {
         return res.status(403).json({ message: 'Du har inte behörighet att ladda upp dokument för denna lärare' });
@@ -134,13 +133,7 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
         return res.status(400).json({ message: 'teacherId is required' });
       }
 
-      console.log('Creating teacher document with:', {
-        teacher: teacherId,
-        uploadedBy: user.userId,
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        type: type || 'TEACHER_DOCUMENT'
-      });
+      logger.debug({ teacher: teacherId, uploadedBy: user.userId, filename: req.file.filename, originalName: req.file.originalname, type: type || 'TEACHER_DOCUMENT' }, "Creating teacher document")
 
       const doc = await Document.create({
         teacher: teacherId,
@@ -151,7 +144,7 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
         enrollmentId: null,
       });
       
-      console.log('Document created successfully:', doc._id);
+      logger.info({ docId: doc._id }, "Document created successfully")
       return res.status(201).json(doc);
     } else {
       return res.status(400).json({ message: 'Either studentId or teacherId must be provided' });
@@ -163,10 +156,7 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
       return res.status(400).json({ message: 'Either studentId or teacherId must be provided' });
     }
   } catch (error) {
-    console.error('Error during upload:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    logger.error({ err: error }, "Error during upload")
     
     // Handle validation errors specifically
     if (error.name === 'ValidationError' || error instanceof mongoose.Error.ValidationError || error.message?.includes('must be specified')) {
@@ -238,7 +228,7 @@ router.delete('/documents/:id', authenticateUser, async (req, res) => {
     await Document.findByIdAndDelete(req.params.id);
     res.json({ message: 'Raderad' });
   } catch (error) {
-    console.error('Error deleting document:', error);
+    logger.error({ err: error }, "Error deleting document")
     res.status(500).json({ message: 'Kunde inte radera dokumentet', error: error.message });
   }
 });

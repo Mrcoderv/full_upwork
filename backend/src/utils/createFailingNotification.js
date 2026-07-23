@@ -1,6 +1,7 @@
 // utils/createFailingNotification.js
 import Notification from "../models/Notification.js";
 import Student from "../models/Student.js";
+import logger from "./logger.js";
 
 export const createFailingStudentNotification = async (studentId, courseId) => {
   try {
@@ -38,6 +39,6 @@ export const createFailingStudentNotification = async (studentId, courseId) => {
 
     await notification.save();
   } catch (err) {
-    console.error("❌ Kunde inte skapa F-notis:", err);
+    logger.error({ err: err }, "Kunde inte skapa F-notis");
   }
 };

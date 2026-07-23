@@ -3,6 +3,7 @@ import ActionPlan from "../models/ActionPlan.js";
 import Notification from "../models/Notification.js";
 import FormQuestions from "../models/ActionPlanQuestions.js"
 import { isAuthenticated } from "../middleware/auth.js";
+import logger from "../utils/logger.js";
 const router = Router();
 
 router.post("/form-questions", isAuthenticated, async (req, res) => {
@@ -23,7 +24,7 @@ router.post("/form-questions", isAuthenticated, async (req, res) => {
 
 
     } catch (error) {
-        console.error("Error fetching form questions:", error);
+        logger.error({ err: error }, "Error fetching form questions");
         res.status(500).json({ error: "Internal Server Error" });
     }
 })
@@ -145,7 +146,7 @@ router.get('/form-questions/:type', isAuthenticated, async (req, res) => {
     }
 
 
-    console.log(formConfig)
+    logger.debug({ formConfig }, "Form config fetched");
   
       res.json(formConfig.toObject())
     } catch (error) {
@@ -221,7 +222,7 @@ router.post('/update-actionplan', isAuthenticated, async (req, res) => {
       );
       res.send('Inställningar uppdaterade!');
     } catch (error) {
-      console.error('Fel vid uppdatering av inställningar:', error);
+      logger.error({ err: error }, "Error updating action plan settings");
       res.status(500).send('Serverfel vid uppdatering av inställningar.');
     }
   });

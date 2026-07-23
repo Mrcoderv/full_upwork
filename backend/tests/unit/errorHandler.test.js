@@ -7,36 +7,14 @@ import {
     vi,
 } from "vitest";
 
-vi.mock("winston", () => {
-    const logger = {
-        add: vi.fn(),
-        error: vi.fn(),
-    };
-
-    const format = {
-        combine: (...args) => args,
-        timestamp: vi.fn(() => () => "timestamp"),
-        errors: vi.fn(() => (input) => input),
-        json: vi.fn(() => (input) => input),
-        colorize: vi.fn(() => (input) => input),
-        simple: vi.fn(() => (input) => input),
-    };
-
-    class FakeTransport {}
-    const transports = {
-        File: FakeTransport,
-        Console: FakeTransport,
-    };
-
-    const mockWinston = {
-        format,
-        transports,
-        createLogger: vi.fn(() => logger),
-    };
-
+vi.mock("../../src/utils/logger.js", () => {
     return {
-        __esModule: true,
-        default: mockWinston,
+        default: {
+            error: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            debug: vi.fn(),
+        },
     };
 });
 
@@ -104,15 +82,11 @@ describe("errorHandler utilities", () => {
         expect(new ConflictError().statusCode).toBe(409);
     });
 
-    it("adds the console transport when not in production", () => {
-        expect(logger.add).toHaveBeenCalled();
-    });
-
     it("records errors and honors Sentry configuration", () => {
         const error = new AppError("boom", 500);
         const req = buildReq();
         const loggerSpy = vi.spyOn(logger, "error");
-        const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        const loggerInfoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
 
         process.env.SENTRY_DSN = "https://dsn";
         errorMonitor.recordError(error, req);
@@ -121,12 +95,10 @@ describe("errorHandler utilities", () => {
         expect(errorMonitor.errorCounts.size).toBe(1);
         expect(errorMonitor.performanceMetrics.errorCount).toBe(1);
         expect(loggerSpy).toHaveBeenCalled();
-        expect(consoleSpy).toHaveBeenCalledWith(
-            "Sending error to Sentry:",
-            error.message
+        expect(loggerInfoSpy).toHaveBeenCalledWith(
+            { error: error.message },
+            "Sending error to Sentry"
         );
-
-        consoleSpy.mockRestore();
     });
 
     it("records errors without request context", () => {

@@ -10,6 +10,7 @@ import StudentEnrollment from "../models/StudentEnrollment.js";
 import Teacher from "../models/Teacher.js";
 import { authenticateUser } from "../controllers/authController.js";
 import { hasRole } from "../middleware/auth.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ router.get("/courses", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (re
         const uniqueCourses = Array.from(uniqueCoursesMap.values());
         res.json(uniqueCourses);
     } catch (error) {
-        console.error("❌ Error fetching courses from education[]:", error);
+        logger.error({ err: error }, "Error fetching courses from education[]")
         res.status(500).json({ message: "Serverfel vid hämtning av kurser" });
     }
 });
@@ -281,7 +282,7 @@ router.get("/search", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req
 
         res.json(paginatedResults);
     } catch (err) {
-        console.error("❌ Search error:", err);
+        logger.error({ err }, "Search error")
         res.status(500).json({ message: "Serverfel under sökning." });
     }
 });
@@ -481,7 +482,7 @@ router.get("/details/:type/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES),
                         isCourseTemplate: true,
                     };
                 } catch (courseError) {
-                    console.error("❌ Error in Kurs case:", courseError);
+                    logger.error({ err: courseError }, "Error in Kurs case")
                     return res.status(500).json({ message: "Serverfel vid hämtning av kursdetaljer" });
                 }
                 break;
@@ -572,7 +573,7 @@ router.get("/details/:type/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES),
                         isCourseInstance: true,
                     };
                 } catch (courseInstanceError) {
-                    console.error("❌ Error in Kursinstans case:", courseInstanceError);
+                    logger.error({ err: courseInstanceError }, "Error in Kursinstans case")
                     return res.status(500).json({ message: "Serverfel vid hämtning av kursinstansdetaljer" });
                 }
                 break;
@@ -603,7 +604,7 @@ router.get("/details/:type/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES),
 
         res.json(result);
     } catch (error) {
-        console.error("❌ Fetch details error:", error);
+        logger.error({ err: error }, "Fetch details error")
         res.status(500).json({ message: "Serverfel vid hämtning av detaljer" });
     }
 });
@@ -617,7 +618,7 @@ router.put("/update-student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES)
         );
         res.json(updatedStudent);
     } catch (error) {
-        console.error("❌ Error updating student:", error);
+        logger.error({ err: error }, "Error updating student")
         res.status(500).json({ message: "Kunde inte uppdatera studenten" });
     }
 });
@@ -633,7 +634,7 @@ router.put("/update-user/:id", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), a
         );
         res.json(updatedUser);
     } catch (error) {
-        console.error("❌ Error updating user:", error);
+        logger.error({ err: error }, "Error updating user")
         res.status(500).json({ message: "Kunde inte uppdatera användaren" });
     }
 });

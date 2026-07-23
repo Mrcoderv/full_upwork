@@ -7,6 +7,7 @@ import {
     getDropoutReport,
     getFilterOptions,
 } from "../services/analyticsService.js";
+import logger from "../utils/logger.js";
 
 const extractFilters = (req) => ({
     municipality: req.query.municipality || null,
@@ -23,7 +24,7 @@ const handle = (fn) => async (req, res) => {
         const result = await fn(extractFilters(req));
         res.status(200).json(result);
     } catch (err) {
-        console.error(`❌ Analytics error (${fn.name}):`, err);
+        logger.error({ err, fn: fn.name }, "Analytics error");
         res.status(500).json({ message: "Failed to generate report" });
     }
 };
@@ -40,7 +41,7 @@ export const getFilters = async (_req, res) => {
         const options = await getFilterOptions();
         res.status(200).json(options);
     } catch (err) {
-        console.error("❌ Analytics error (getFilters):", err);
+        logger.error({ err }, "Analytics error (getFilters)");
         res.status(500).json({ message: "Failed to load filter options" });
     }
 };

@@ -1,6 +1,7 @@
 import { Router } from "express";
 const router = Router();
 import mongoose from "mongoose";
+import logger from "../utils/logger.js";
 import Student from "../models/Student.js";
 import { authenticateUser } from "../controllers/authController.js";
 import Notification from "../models/Notification.js";
@@ -95,7 +96,7 @@ router.get("/students/ungraded", authenticateUser, async (req, res) => {
                     }
                   }
                 } catch (err) {
-                  console.error("Fel vid hämtning av utbildningsdata:", err);
+                  logger.error({ err }, "Fel vid hämtning av utbildningsdata");
                 }
 
                 populated.isGraded = !!populated.grade;
@@ -119,7 +120,7 @@ router.get("/students/ungraded", authenticateUser, async (req, res) => {
 
     res.json(enrichedStudents);
   } catch (error) {
-    console.error("❌ Fel vid hämtning av obetygsatta elever:", error);
+    logger.error({ err: error }, "Fel vid hämtning av obetygsatta elever");
     res.status(500).json({ message: "Serverfel vid hämtning av elever" });
   }
 });
@@ -163,7 +164,7 @@ router.put("/admin/unlock-grade", authenticateUser, async (req, res) => {
 
     res.send("Betyg upplåst");
   } catch (err) {
-    console.error("Upplåsning misslyckades:", err);
+    logger.error({ err }, "Upplåsning misslyckades");
     res.status(500).send("Internt serverfel");
   }
 });
@@ -436,7 +437,7 @@ router.get('/students-to-grade', authenticateUser, async (req, res) => {
 
     res.json(studentsToGrade);
   } catch (err) {
-    console.error('Error fetching students to grade:', err);
+    logger.error({ err }, "Error fetching students to grade");
     res.status(500).send('Server error');
   }
 });
@@ -486,7 +487,7 @@ router.post("/teacher/save-grade", authenticateUser, async (req, res) => {
 
     res.send("✅ Betyg sparat!");
   } catch (err) {
-    console.error("Error saving grade:", err);
+    logger.error({ err }, "Error saving grade");
     res.status(500).send("Server error");
   }
 });
@@ -521,7 +522,7 @@ router.post("/teacher/lock-grade", authenticateUser, async (req, res) => {
       .status(404)
       .json({ error: "Course not found in student's education" });
   } catch (error) {
-    console.error("❌ Error locking grade:", error);
+    logger.error({ err: error }, "Error locking grade");
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -540,7 +541,7 @@ router.delete('/enrollments/:id', authenticateUser, async (req, res) => {
     }
     res.json({ success: true, message: 'Enrollment deleted' });
   } catch (err) {
-    console.error('Error deleting enrollment:', err);
+    logger.error({ err }, "Error deleting enrollment");
     res.status(500).json({ error: 'Failed to delete enrollment' });
   }
 });
@@ -620,7 +621,7 @@ router.get('/debug/students-to-grade', authenticateUser, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in debug endpoint:', error);
+    logger.error({ err: error }, "Error in debug endpoint");
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -691,7 +692,7 @@ router.get('/debug/students-past-end-date', authenticateUser, async (req, res) =
       }
     });
   } catch (error) {
-    console.error('Error in debug endpoint:', error);
+    logger.error({ err: error }, "Error in debug endpoint");
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -721,7 +722,7 @@ router.get('/locked-grades', authenticateUser, async (req, res) => {
       total: lockedGrades.length,
     });
   } catch (error) {
-    console.error('Error fetching locked grades:', error);
+    logger.error({ err: error }, "Error fetching locked grades");
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -751,7 +752,7 @@ router.get('/student/:studentId/grades', authenticateUser, async (req, res) => {
       total: grades.length,
     });
   } catch (error) {
-    console.error('Error fetching student grades:', error);
+    logger.error({ err: error }, "Error fetching student grades");
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -782,7 +783,7 @@ router.get('/course-instance/:courseInstanceId/grades', authenticateUser, async 
       total: grades.length,
     });
   } catch (error) {
-    console.error('Error fetching course instance grades:', error);
+    logger.error({ err: error }, "Error fetching course instance grades");
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -823,7 +824,7 @@ router.put('/update-grade/:enrollmentId', authenticateUser, async (req, res) => 
       enrollment,
     });
   } catch (error) {
-    console.error('Error updating grade:', error);
+    logger.error({ err: error }, "Error updating grade");
     res.status(500).json({ error: 'Internal server error' });
   }
 });
