@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import logger from "../utils/logger.js";
 
 const courseInstanceSchema = new mongoose.Schema(
     {
@@ -89,7 +90,7 @@ courseInstanceSchema.pre("validate", function () {
 courseInstanceSchema.pre("save", async function () {
     // Check if this was explicitly set via the update endpoint (bypass auto-calculation)
     if (this._slutprovDateExplicitlySet) {
-        console.log(`[DEBUG] Pre-save hook: _slutprovDateExplicitlySet flag is true, preserving:`, this.slutprovDate);
+        logger.debug({ slutprovDate: this.slutprovDate }, "Pre-save hook: _slutprovDateExplicitlySet flag is true, preserving");
         delete this._slutprovDateExplicitlySet; // Clean up the flag
         return; // Don't auto-calculate
     }
@@ -101,7 +102,7 @@ courseInstanceSchema.pre("save", async function () {
                                   !isNaN(new Date(this.slutprovDate).getTime()) &&
                                   new Date(this.slutprovDate).getFullYear() > 1970; // Not epoch date
     
-    console.log(`[DEBUG] Pre-save hook - slutprovDate:`, {
+    logger.debug({
         value: this.slutprovDate,
         isModified: isSlutprovDateExplicitlySet,
         hasValidDate: hasValidSlutprovDate,
@@ -109,11 +110,11 @@ courseInstanceSchema.pre("save", async function () {
         endDate: this.endDate,
         dateType: typeof this.slutprovDate,
         dateInstance: this.slutprovDate instanceof Date
-    });
+    }, "Pre-save hook - slutprovDate");
     
     // If slutprovDate was explicitly modified and has a valid date, preserve it
     if (isSlutprovDateExplicitlySet && hasValidSlutprovDate) {
-        console.log(`[DEBUG] Pre-save hook: Preserving explicitly set slutprovDate:`, this.slutprovDate);
+        logger.debug({ slutprovDate: this.slutprovDate }, "Pre-save hook: Preserving explicitly set slutprovDate");
         return; // Don't auto-calculate
     }
     
@@ -124,12 +125,10 @@ courseInstanceSchema.pre("save", async function () {
             const calculatedDate = await calculateSlutprovDate(this.responsibleTeacher, this.endDate);
             if (calculatedDate) {
                 this.slutprovDate = calculatedDate;
-                console.log(
-                    `📅 Auto-calculated slutprovDate for course "${this.courseName}": ${calculatedDate.toDateString()}`
-                );
+                logger.info({ courseName: this.courseName, calculatedDate: calculatedDate.toDateString() }, "Auto-calculated slutprovDate for course");
             }
         } catch (error) {
-            console.error("Error calculating slutprovDate:", error);
+            logger.error({ err: error }, "Error calculating slutprovDate");
             // Don't fail the save if calculation fails
         }
     }

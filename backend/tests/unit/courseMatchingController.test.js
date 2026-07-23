@@ -1747,6 +1747,13 @@ describe("getStudentEnrollments", () => {
 
 describe("getCourseInstanceEnrollments", () => {
     it("returns enrollments for course instance", async () => {
+        const mockEnrollments = [{ _id: "e1" }];
+        const chain = {
+            populate: vi.fn().mockReturnThis(),
+            sort: vi.fn().mockResolvedValue(mockEnrollments),
+        };
+        StudentEnrollment.find.mockReturnValue(chain);
+
         const req = {
             params: { instanceId: "inst1" },
             query: { status: "enrolled" },
@@ -1758,8 +1765,10 @@ describe("getCourseInstanceEnrollments", () => {
         expect(StudentEnrollment.find).toHaveBeenCalledWith(
             expect.objectContaining({ courseInstanceId: "inst1", status: "enrolled" })
         );
+        expect(chain.populate).toHaveBeenCalledTimes(4);
+        expect(chain.sort).toHaveBeenCalledWith({ startDate: -1 });
         expect(res.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: true, enrollments: expect.any(Array) })
+            expect.objectContaining({ success: true, enrollments: mockEnrollments })
         );
     });
 

@@ -1,5 +1,6 @@
 import express from "express";
 import Course from "../models/Course.js";
+import logger from "../utils/logger.js";
 // Rate limiting disabled
 // import {
 //     courseDetailRateLimiter,
@@ -14,7 +15,7 @@ router.get("/courses", async (req, res) => {
         const courses = await Course.find();
         res.json(courses);
     } catch (error) {
-        console.error("Error fetching courses:", error);
+        logger.error({ err: error }, "Error fetching courses");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -29,7 +30,7 @@ router.get(
                 return res.status(404).json({ error: "Course not found" });
             res.json(course);
         } catch (error) {
-            console.error("Error fetching course:", error);
+            logger.error({ err: error }, "Error fetching course");
             res.status(500).json({ error: "Internal Server Error" });
         }
     }
@@ -47,7 +48,7 @@ router.get("/courses/id", async (req, res) => {
 
         res.json({ courseId: course._id });
     } catch (error) {
-        console.error("Error fetching course ID:", error);
+        logger.error({ err: error }, "Error fetching course ID");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -84,7 +85,7 @@ router.post("/course", async (req, res) => {
 
         res.status(201).json(created);
     } catch (error) {
-        console.error("Error creating course:", error);
+        logger.error({ err: error }, "Error creating course");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });

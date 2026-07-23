@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import logger from "./logger.js";
 
 function parseExcelDate(value) {
     if (!value) return null;
@@ -71,7 +72,7 @@ export async function parseStudentExcel(fileBuffer, teacherName) {
     const studentsToSave = [];
     let consecutiveEmptyRows = 0;
 
-    console.log(`[DEBUG] 📋 Excel parsing: Starting to process ${worksheet.rowCount} rows`);
+    logger.debug({ rowCount: worksheet.rowCount }, "Excel parsing: Starting to process rows");
 
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
         const row = worksheet.getRow(rowNumber);
@@ -98,7 +99,7 @@ export async function parseStudentExcel(fileBuffer, teacherName) {
         if (requiredFields.every((field) => !rowObject[field])) {
             consecutiveEmptyRows++;
             if (consecutiveEmptyRows >= 20) {
-                console.log(`[DEBUG] 📋 Excel parsing: Stopping at row ${rowNumber} due to ${consecutiveEmptyRows} consecutive empty rows`);
+                logger.debug({ rowNumber, consecutiveEmptyRows }, "Excel parsing: Stopping due to consecutive empty rows");
                 break; // Increased from 5 to 20
             }
             continue;
@@ -134,13 +135,10 @@ export async function parseStudentExcel(fileBuffer, teacherName) {
             const parsedEndDate = parseExcelDate(rowObject["SLUT"]);
             const parsedSlutprovDate = parseExcelDate(rowObject["PREL. DATUM SLUTPROV"]);
             
-            console.log(`[DEBUG] 📋 Parsing education entry for student ${rowObject["NAMN"]}:`);
-            console.log(`[DEBUG] 📋 Raw START: ${rowObject["START"]} -> Parsed: ${parsedStartDate}`);
-            console.log(`[DEBUG] 📋 Raw SLUT: ${rowObject["SLUT"]} -> Parsed: ${parsedEndDate}`);
-            console.log(`[DEBUG] 📋 Raw PREL. DATUM SLUTPROV: ${rowObject["PREL. DATUM SLUTPROV"]} -> Parsed: ${parsedSlutprovDate}`);
+            logger.debug({ studentName: rowObject["NAMN"], rawStart: rowObject["START"], parsedStartDate, rawSlut: rowObject["SLUT"], parsedEndDate, rawSlutprov: rowObject["PREL. DATUM SLUTPROV"], parsedSlutprovDate }, "Parsing education entry for student");
             
             const cleanedName = cleanCourseName(name);
-            console.log(`[DEBUG] 📋 Parsing course: raw="${name}" → cleaned="${cleanedName}"`);
+            logger.debug({ raw: name, cleaned: cleanedName }, "Parsing course");
             education.push({
                 type: "Course",
                 name: cleanedName,
@@ -174,8 +172,8 @@ export async function parseStudentExcel(fileBuffer, teacherName) {
         });
     }
 
-    console.log(`[DEBUG] 📋 Excel parsing: Completed. Parsed ${studentsToSave.length} students`);
-    console.log(`[DEBUG] 📋 Student names parsed:`, studentsToSave.map(s => s.name || 'unknown'));
+    logger.debug({ count: studentsToSave.length }, "Excel parsing: Completed");
+    logger.debug({ studentNames: studentsToSave.map(s => s.name || "unknown") }, "Student names parsed");
 
     return studentsToSave;
 }

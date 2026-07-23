@@ -1,4 +1,5 @@
 import { Router } from "express";
+import logger from "../utils/logger.js";
 import taskRoutes from "./taskRoutes.js";
 import authRoutes from "./authRoutes.js";
 import studentRoutes from "./studentRoutes.js";
@@ -23,7 +24,7 @@ import analyticsRoutes from "./analyticsRoutes.js";
 
 const router = Router();
 
-console.log(" Registering API routes...");
+logger.info("Registering API routes...");
 
 //  Log before mounting each route
 router.use("/api", examRoutes);

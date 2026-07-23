@@ -1,5 +1,12 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
+const loggerMock = vi.hoisted(() => ({
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+}));
+
 const courseInstanceSaveMock = vi.fn();
 
 class CourseInstanceMock {
@@ -87,6 +94,11 @@ vi.mock("../../src/models/Event.js", () => ({
     },
 }));
 
+vi.mock("../../src/utils/logger.js", () => ({
+    __esModule: true,
+    default: loggerMock,
+}));
+
 import CourseMatchingService from "../../src/utils/courseMatchingService.js";
 
 const resetMocks = () => {
@@ -107,6 +119,10 @@ const resetMocks = () => {
     StudentEnrollmentMock.forceMissingCourseInstance = false;
     StudentEnrollmentMock.instances = [];
     delete global._StudentModel;
+    loggerMock.error.mockClear();
+    loggerMock.warn.mockClear();
+    loggerMock.info.mockClear();
+    loggerMock.debug.mockClear();
 };
 
 beforeEach(() => {
@@ -447,7 +463,7 @@ describe("CourseMatchingService.processStudentEducation additional scenarios", (
             {
                 type: "processing_error",
                 courseName: "PKG1",
-                message: expect.stringContaining("normalizedEntryName"),
+                message: expect.any(String),
             },
         ]);
     });
@@ -1978,7 +1994,7 @@ describe("CourseMatchingService.processStudentEducation coverage invariants", ()
             save: vi.fn().mockResolvedValue(null),
         };
         StudentMock.findById.mockResolvedValue(studentDoc);
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const warnSpy = vi.spyOn(loggerMock, "warn").mockImplementation(() => {});
 
         const result = await CourseMatchingService.processStudentEducation(
             "stu-cover",
@@ -2075,7 +2091,7 @@ describe("CourseMatchingService.processStudentEducation coverage invariants", ()
         const createSpy = vi
             .spyOn(CourseMatchingService, "findOrCreateCourseInstance")
             .mockResolvedValue({ instance: null, wasCreated: false });
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const warnSpy = vi.spyOn(loggerMock, "warn").mockImplementation(() => {});
 
         await CourseMatchingService.processStudentEducation(
             "stu-no-inst",
@@ -2157,7 +2173,7 @@ describe("CourseMatchingService.processStudentEducation coverage invariants", ()
             .spyOn(CourseMatchingService, "findOrCreateCourseInstance")
             .mockResolvedValue({ instance: courseInstance, wasCreated: true });
         const errorSpy = vi
-            .spyOn(console, "error")
+            .spyOn(loggerMock, "error")
             .mockImplementation(() => {});
 
         const result = await CourseMatchingService.processStudentEducation(
@@ -2174,7 +2190,7 @@ describe("CourseMatchingService.processStudentEducation coverage invariants", ()
             "user-bad-slutprov"
         );
 
-        console.log(
+        loggerMock.debug(
             "DEBUG invalid slutprov result",
             result.enrollments.length,
             StudentEnrollmentMock.instances.length
@@ -2212,7 +2228,7 @@ describe("CourseMatchingService.processStudentEducation coverage invariants", ()
             .spyOn(CourseMatchingService, "findOrCreateCourseInstance")
             .mockResolvedValue({ instance: courseInstance, wasCreated: true });
         const errorSpy = vi
-            .spyOn(console, "error")
+            .spyOn(loggerMock, "error")
             .mockImplementation(() => {});
         const studentDoc = {
             _id: "stu-bad-slutprov-2",

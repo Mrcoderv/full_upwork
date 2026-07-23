@@ -3,6 +3,7 @@
 import { Router } from 'express'
 import FileAuditLog from '../models/FileAuditLog.js'
 import { isAuthenticated, hasRole } from '../middleware/auth.js'
+import logger from "../utils/logger.js";
 
 const router = Router()
 
@@ -33,7 +34,7 @@ router.get('/:studentId', isAuthenticated, hasRole(['admin', 'teacher', 'coordin
       logs,
     })
   } catch (error) {
-    console.error('❌ Failed to fetch audit logs:', error)
+    logger.error({ err: error }, "Failed to fetch audit logs")
     res.status(500).json({ error: 'Failed to fetch audit logs' })
   }
 })

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import Task from "../models/Task.js";
-import { authenticateUser } from "../controllers/authController.js"; // ✅ Fixed middleware import
+import { authenticateUser } from "../controllers/authController.js";
+import logger from "../utils/logger.js";
 
 const router = Router();
 
@@ -8,13 +9,13 @@ const router = Router();
  * ✅ Fetch All Tasks (Only for the Authenticated User)
  */
 router.get("/task/", authenticateUser, async (req, res) => {
-  console.log("GET /api/task hit!"); // Debugging
+  logger.debug("GET /api/task hit!")
 
   try {
     const tasks = await Task.find({ userId: req.userId }).lean();
     res.json(tasks);
   } catch (error) {
-    console.error("❌ Error fetching tasks:", error);
+    logger.error({ err: error }, "Error fetching tasks")
     res.status(500).json({ error: "Serverfel vid hämtning av uppgifter." });
   }
 });
@@ -40,10 +41,10 @@ router.post("/task/", authenticateUser, async (req, res) => {
       userId: req.userId, // ✅ Fixed userId reference
     });
 
-    console.log("✅ New task created:", newTask);
+    logger.info({ newTask }, "New task created")
     res.status(201).json(newTask);
   } catch (error) {
-    console.error("❌ Error creating task:", error);
+    logger.error({ err: error }, "Error creating task")
     res.status(500).json({ error: "Serverfel vid skapande av uppgift." });
   }
 });
@@ -73,7 +74,7 @@ router.put("/task/:id", authenticateUser, async (req, res) => {
 
     res.json(updatedTask);
   } catch (error) {
-    console.error("❌ Error updating task:", error);
+    logger.error({ err: error }, "Error updating task")
     res.status(500).json({
       error: "Serverfel vid uppdatering av uppgift.",
     });
@@ -85,7 +86,7 @@ router.put("/task/:id", authenticateUser, async (req, res) => {
  */
 router.delete("/task/:id", authenticateUser, async (req, res) => {
   try {
-    console.log(`🛠 Attempting to delete task with ID: ${req.params.id}`); // Debugging
+    logger.debug({ taskId: req.params.id }, "Attempting to delete task")
 
     const deletedTask = await Task.findOneAndDelete({
       _id: req.params.id,
@@ -99,10 +100,10 @@ router.delete("/task/:id", authenticateUser, async (req, res) => {
       });
     }
 
-    console.log(`✅ Task deleted: ${deletedTask._id}`);
+    logger.info({ taskId: deletedTask._id }, "Task deleted")
     res.json({ message: "Uppgift borttagen", taskId: req.params.id });
   } catch (error) {
-    console.error("❌ Error deleting task:", error);
+    logger.error({ err: error }, "Error deleting task")
     res.status(500).json({
       error: "Serverfel vid borttagning av uppgift.",
     });
@@ -120,7 +121,7 @@ router.delete("/delalltasks", authenticateUser, async (req, res) => {
       deletedCount: result.deletedCount,
     });
   } catch (error) {
-    console.error("❌ Error deleting all tasks:", error);
+    logger.error({ err: error }, "Error deleting all tasks")
     res.status(500).json({
       error: "Serverfel vid borttagning av uppgifter.",
     });

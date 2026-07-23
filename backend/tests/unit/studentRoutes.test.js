@@ -26,6 +26,7 @@ vi.mock("../../src/models/Student.js", () => {
         findByIdAndUpdate: vi.fn(),
         findByIdAndDelete: vi.fn(),
         deleteMany: vi.fn(),
+        countDocuments: vi.fn(),
     });
 
     return {
@@ -76,6 +77,17 @@ vi.mock("../../src/controllers/authController.js", () => {
         authenticateUser,
     };
 });
+
+const loggerMock = vi.hoisted(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+}));
+vi.mock("../../src/utils/logger.js", () => ({
+    __esModule: true,
+    default: loggerMock,
+}));
 
 const TeacherMock = {
     findOne: vi.fn(),
@@ -203,6 +215,8 @@ beforeEach(() => {
     Student.findByIdAndUpdate.mockReset();
     Student.findByIdAndDelete.mockReset();
     Student.deleteMany.mockReset();
+    Student.countDocuments.mockReset();
+    Student.countDocuments.mockResolvedValue(0);
     sendDropoutNotification.mockReset();
     CourseMatchingServiceMock.default.processStudentEducation.mockReset();
     calendarEventSyncMock.syncCalendarEventsForStudent.mockReset();
@@ -1796,7 +1810,6 @@ describe("PUT /student/:id", () => {
         CourseMatchingServiceMock.default.processStudentEducation.mockRejectedValueOnce(
             new Error("enroll-fail")
         );
-        const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
         const res = createRes();
 
         await handler(
@@ -1816,8 +1829,7 @@ describe("PUT /student/:id", () => {
             res
         );
 
-        expect(consoleError).toHaveBeenCalled();
-        consoleError.mockRestore();
+        expect(loggerMock.error).toHaveBeenCalled();
     });
 
     it("warns when teacher link lookup returns nothing", async () => {
@@ -1838,7 +1850,6 @@ describe("PUT /student/:id", () => {
             sort: vi.fn().mockResolvedValue([]),
         });
         TeacherMock.findOne.mockResolvedValue(null);
-        const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const res = createRes();
 
         global.Teacher = TeacherMock;
@@ -1848,8 +1859,7 @@ describe("PUT /student/:id", () => {
             delete global.Teacher;
         }
 
-        expect(consoleWarn).toHaveBeenCalled();
-        consoleWarn.mockRestore();
+        expect(loggerMock.warn).toHaveBeenCalled();
     });
 });
 

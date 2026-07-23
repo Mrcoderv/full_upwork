@@ -18,6 +18,17 @@ import {
     disconnectTestDatabase,
 } from "../helpers/mongoTest.js";
 
+vi.mock("../../src/utils/logger.js", () => ({
+    default: {
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+    },
+}));
+
+import logger from "../../src/utils/logger.js";
+
 const TEACHER_COLORS = [
     "#e6194b",
     "#3cb44b",
@@ -67,6 +78,9 @@ describe("teacherService", () => {
     }, 60000);
 
     beforeEach(async () => {
+        logger.error.mockClear();
+        logger.info.mockClear();
+        logger.warn.mockClear();
         await Teacher.deleteMany({});
         await User.deleteMany({});
     });
@@ -115,7 +129,6 @@ describe("teacherService", () => {
         const hashSpy = vi
             .spyOn(bcrypt, "hash")
             .mockResolvedValue("hashed-value");
-        vi.spyOn(console, "log").mockImplementation(() => {});
 
         const result = await createOrFindTeacher("  New Teacher  ", null, "");
 
@@ -152,13 +165,11 @@ describe("teacherService", () => {
         });
 
         vi.spyOn(bcrypt, "hash").mockResolvedValue("hashed-value");
-        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-        vi.spyOn(console, "log").mockImplementation(() => {});
 
         const result = await createOrFindTeacher("Fresh Teacher", null, "Science");
 
         expect(result.wasCreated).toBe(true);
-        expect(warnSpy).toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalled();
 
         const createdTeacher = await Teacher.findOne({
             _id: result.teacher._id,
@@ -182,7 +193,6 @@ describe("teacherService", () => {
         }
 
         vi.spyOn(bcrypt, "hash").mockResolvedValue("hashed-value");
-        vi.spyOn(console, "log").mockImplementation(() => {});
 
         const result = await createOrFindTeacher("Extra Teacher");
 
@@ -203,8 +213,6 @@ describe("teacherService", () => {
         );
 
         vi.spyOn(bcrypt, "hash").mockResolvedValue("hashed-value");
-        vi.spyOn(console, "error").mockImplementation(() => {});
-        vi.spyOn(console, "log").mockImplementation(() => {});
 
         const result = await createOrFindTeacher("Fallback Teacher");
 
@@ -217,15 +225,14 @@ describe("teacherService", () => {
         vi.spyOn(bcrypt, "hash").mockResolvedValue("hashed-value");
         const error = new Error("User save failed");
         vi.spyOn(User.prototype, "save").mockRejectedValueOnce(error);
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
         await expect(
             createOrFindTeacher("Broken Teacher", null, "Math")
         ).rejects.toThrow("User save failed");
 
-        expect(errorSpy).toHaveBeenCalledWith(
-            "Error creating or finding teacher:",
-            error
+        expect(logger.error).toHaveBeenCalledWith(
+            { err: error },
+            "Error creating or finding teacher"
         );
     });
 });

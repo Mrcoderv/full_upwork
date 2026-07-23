@@ -4,6 +4,7 @@ import nodemailer from "nodemailer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
+import logger from "../utils/logger.js";
 
 
 const router = express.Router();
@@ -39,7 +40,7 @@ router.post("/register", async (req, res) => {
 
         return res.status(201).send({ message: "Användare registrerad!" });
     } catch (error) {
-        console.error("Error during registration:", error);
+        logger.error({ err: error }, "Error during registration");
         return res
             .status(500)
             .send({ message: "Ett fel uppstod vid registrering." });
@@ -65,7 +66,7 @@ router.post("/reset-password", async (req, res) => {
 
         return res.send({ message: "Lösenordet har ändrats!" });
     } catch (error) {
-        console.error("Error during password reset:", error);
+        logger.error({ err: error }, "Error during password reset");
         if (error.name === "TokenExpiredError") {
             return res.status(401).send({ message: "Token har löpt ut." });
         }
@@ -101,7 +102,7 @@ router.put(
 
             res.send({ message: "User roles updated successfully.", user });
         } catch (error) {
-            console.error("Error updating user roles:", error);
+            logger.error({ err: error }, "Error updating user roles");
             res.status(500).send({
                 message: "An error occurred while updating user roles.",
             });
@@ -139,7 +140,7 @@ router.put(
 
             res.send({ message: "User permissions updated successfully.", user });
         } catch (error) {
-            console.error("Error updating user permissions:", error);
+            logger.error({ err: error }, "Error updating user permissions");
             res.status(500).send({
                 message: "An error occurred while updating user permissions.",
             });
@@ -176,7 +177,7 @@ router.post(
                 tempPassword: tempPassword, // Return the plain text password for admin display
             });
         } catch (error) {
-            console.error("Error resetting password:", error);
+            logger.error({ err: error }, "Error resetting password");
             res.status(500).send({
                 message: "An error occurred while resetting password.",
             });
@@ -244,7 +245,7 @@ router.post(
                 tempPassword: tempPassword, // Only for development/admin use
             });
         } catch (error) {
-            console.error("Error creating user for student:", error);
+            logger.error({ err: error }, "Error creating user for student");
             res.status(500).send({
                 message: "An error occurred while creating user for student.",
             });

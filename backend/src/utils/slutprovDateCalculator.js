@@ -1,6 +1,7 @@
 /**
  * Utility functions for calculating slutprovDate (final test date) based on teacher and course end date
  */
+import logger from "./logger.js";
 
 /**
  * Get the teacher's username from a Teacher document (populated or not)
@@ -83,8 +84,8 @@ export async function calculateSlutprovDate(teacher, courseEndDate) {
     const normalizedName = teacherUsername.trim().toLowerCase();
     
     // Debug logging
-    console.log(`📅 Calculating slutprovDate for teacher: "${teacherUsername}" (normalized: "${normalizedName}")`);
-    console.log(`📅 Course end date: ${courseEndDate.toISOString().split('T')[0]}`);
+    logger.debug({ teacherUsername, normalizedName }, "Calculating slutprovDate for teacher");
+    logger.debug({ courseEndDate: courseEndDate.toISOString().split('T')[0] }, "Course end date");
 
     // Helper function to get a specific day of the week before a date
     const getDayOfWeekBefore = (date, targetDay) => {
@@ -146,7 +147,7 @@ export async function calculateSlutprovDate(teacher, courseEndDate) {
     // Allan/Iman/Maja/Mette - Saturday the week before course end
     if (["allan", "iman", "maja", "mette"].some(name => nameMatches(name))) {
         const result = getDayOfWeekInPreviousWeek(courseEndDate, 6); // 6 = Saturday
-        console.log(`📅 ✅ Matched Allan/Iman/Maja/Mette rule - Calculated Saturday: ${result.toISOString().split('T')[0]}`);
+        logger.debug({ teacherUsername, calculatedDate: result.toISOString().split('T')[0] }, "Matched Allan/Iman/Maja/Mette rule - Calculated Saturday");
         return result;
     }
 
@@ -157,33 +158,33 @@ export async function calculateSlutprovDate(teacher, courseEndDate) {
         // If course ends on Friday, test is Thursday (day before)
         // If course ends on another day, find the previous Thursday
         const result = getDayOfWeekBefore(courseEndDate, 4); // 4 = Thursday
-        console.log(`📅 ✅ Matched Eva rule - Calculated Thursday: ${result.toISOString().split('T')[0]}`);
+        logger.debug({ teacherUsername, calculatedDate: result.toISOString().split('T')[0] }, "Matched Eva rule - Calculated Thursday");
         return result;
     }
 
     // Mirsada - Wednesday the week before course end
     if (nameMatches("mirsada")) {
         const result = getDayOfWeekInPreviousWeek(courseEndDate, 3); // 3 = Wednesday
-        console.log(`📅 ✅ Matched Mirsada rule - Calculated Wednesday: ${result.toISOString().split('T')[0]}`);
+        logger.debug({ teacherUsername, calculatedDate: result.toISOString().split('T')[0] }, "Matched Mirsada rule - Calculated Wednesday");
         return result;
     }
 
     // Elham/Linnéa/Ulrika/Jonathan - Sunday the week before course end
     if (["elham", "linnea", "linnéa", "ulrika", "jonathan"].some(name => nameMatches(name))) {
         const result = getDayOfWeekInPreviousWeek(courseEndDate, 0); // 0 = Sunday
-        console.log(`📅 ✅ Matched Elham/Linnéa/Ulrika/Jonathan rule - Calculated Sunday: ${result.toISOString().split('T')[0]}`);
+        logger.debug({ teacherUsername, calculatedDate: result.toISOString().split('T')[0] }, "Matched Elham/Linea/Ulrika/Jonathan rule - Calculated Sunday");
         return result;
     }
 
     // Angelina - Plans her own (default: Wednesday the week before course end)
     if (nameMatches("angelina")) {
         const result = getDayOfWeekInPreviousWeek(courseEndDate, 3); // 3 = Wednesday
-        console.log(`📅 ✅ Matched Angelina rule - Calculated Wednesday: ${result.toISOString().split('T')[0]}`);
+        logger.debug({ teacherUsername, calculatedDate: result.toISOString().split('T')[0] }, "Matched Angelina rule - Calculated Wednesday");
         return result;
     }
 
     // No matching rule
-    console.log(`📅 ⚠️ No matching rule found for teacher: "${teacherUsername}"`);
+    logger.warn({ teacherUsername }, "No matching rule found for teacher");
     return null;
 }
 

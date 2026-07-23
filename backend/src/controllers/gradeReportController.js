@@ -1,4 +1,5 @@
 import { generateGradeReport } from '../services/gradeReportService.js';
+import logger from '../utils/logger.js';
 // TODO: Add validation with Joi, once it is added as a dependency.
 
 export const getGradeReport = async (req, res) => {
@@ -12,7 +13,7 @@ export const getGradeReport = async (req, res) => {
         const report = await generateGradeReport({ municipality, courseId, startDate, endDate });
         res.status(200).json(report);
     } catch (err) {
-        console.error('Error generating grade report:', err);
+        logger.error({ err }, 'Error generating grade report');
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };

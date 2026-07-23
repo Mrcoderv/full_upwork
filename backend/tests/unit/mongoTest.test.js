@@ -6,31 +6,29 @@ import {
     getTestMongoUri,
 } from "../helpers/mongoTest.js";
 
-describe("mongoTest helpers", () => {
-    const defaultUri = "mongodb://127.0.0.1:27017/mindfullearning";
-    const originalMongoUri = process.env.MONGO_URI;
+// Mock MongoMemoryServer
+vi.mock("mongodb-memory-server", () => {
+    return {
+        MongoMemoryServer: {
+            create: vi.fn().mockResolvedValue({
+                getUri: vi.fn().mockReturnValue("mongodb://127.0.0.1:27017/mindful_test_mem"),
+                stop: vi.fn().mockResolvedValue(true),
+            })
+        }
+    }
+});
 
+describe("mongoTest helpers", () => {
     beforeEach(() => {
-        process.env.MONGO_URI = defaultUri;
+        vi.clearAllMocks();
     });
 
     afterEach(() => {
-        if (typeof originalMongoUri === "undefined") {
-            delete process.env.MONGO_URI;
-        } else {
-            process.env.MONGO_URI = originalMongoUri;
-        }
         vi.restoreAllMocks();
         mongoose.connection.readyState = 0;
     });
 
-    it("builds a uri for the configured Mongo host", () => {
-        const uri = getTestMongoUri();
-        expect(uri).toMatch(/^mongodb:\/\/127\.0\.0\.1:27017\//);
-        expect(uri).toContain("mindful_test_");
-    });
-
-    it("connectTestDatabase calls mongoose.connect and returns the uri", async () => {
+    it("connectTestDatabase calls mongoose.connect and returns the memory uri", async () => {
         const connectSpy = vi
             .spyOn(mongoose, "connect")
             .mockResolvedValueOnce();
@@ -38,11 +36,16 @@ describe("mongoTest helpers", () => {
         const uri = await connectTestDatabase();
 
         expect(connectSpy).toHaveBeenCalledOnce();
-        expect(uri).toBe(connectSpy.mock.calls[0][0]);
-        expect(uri).toContain("mindful_test_");
+        expect(uri).toBe("mongodb://127.0.0.1:27017/mindful_test_mem");
+        expect(getTestMongoUri()).toBe(uri);
     });
 
     it("disconnectTestDatabase drops and disconnects when connected", async () => {
+        // Connect first so mongoServer is set
+        mongoose.connection.readyState = 0;
+        vi.spyOn(mongoose, "connect").mockResolvedValueOnce();
+        await connectTestDatabase();
+        
         mongoose.connection.readyState = 1;
         const dropSpy = vi
             .spyOn(mongoose.connection, "dropDatabase")
@@ -55,9 +58,10 @@ describe("mongoTest helpers", () => {
 
         expect(dropSpy).toHaveBeenCalledOnce();
         expect(disconnectSpy).toHaveBeenCalledOnce();
+        expect(getTestMongoUri()).toBe("");
     });
 
-    it("disconnectTestDatabase no-ops when already disconnected", async () => {
+    it("disconnectTestDatabase no-ops when already disconnected and no mongoServer", async () => {
         mongoose.connection.readyState = 0;
         const dropSpy = vi.spyOn(mongoose.connection, "dropDatabase");
         const disconnectSpy = vi.spyOn(mongoose, "disconnect");

@@ -22,6 +22,7 @@ import {
     getMyCourseInstances,
     addStudentsToInstance,
 } from "../controllers/courseMatchingController.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -53,7 +54,7 @@ router.post(
 router.get(
     "/course-instances/mine",
     (req, res, next) => {
-        console.log("🔍 /course-instances/mine route hit");
+        logger.debug("course-instances/mine route hit");
         next();
     },
     isAuthenticated,

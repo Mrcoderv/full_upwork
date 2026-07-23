@@ -9,6 +9,7 @@ import {
 } from "../controllers/authController.js";
 import { authRateLimiter } from "../middleware/security.js";
 import { validate } from "../middleware/validation.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -41,7 +42,7 @@ router.post("/auth/register", authRateLimiter, validate(registerSchema), async (
 
         return res.status(201).json({ message: "Användare registrerad!" });
     } catch (error) {
-        console.error("❌ Registration error:", error);
+        logger.error({ err: error }, "Registration error");
         return res
             .status(500)
             .json({ message: "Ett fel uppstod vid registreringen." });

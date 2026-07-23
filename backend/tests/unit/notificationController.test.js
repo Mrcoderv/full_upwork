@@ -29,6 +29,17 @@ import {
     disconnectTestDatabase,
 } from "../helpers/mongoTest.js";
 
+vi.mock("../../src/utils/logger.js", () => ({
+    default: {
+        error: vi.fn(),
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+    },
+}));
+
+import logger from "../../src/utils/logger.js";
+
 describe("notificationController", () => {
     beforeAll(async () => {
         await connectTestDatabase();
@@ -39,6 +50,9 @@ describe("notificationController", () => {
     }, 60000);
 
     beforeEach(async () => {
+        logger.error.mockClear();
+        logger.info.mockClear();
+        logger.warn.mockClear();
         await Notification.deleteMany({});
         await Student.deleteMany({});
         await User.deleteMany({});
@@ -277,16 +291,13 @@ describe("notificationController", () => {
         });
 
         it("logs errors when evaluation fails", async () => {
-            const errorSpy = vi
-                .spyOn(console, "error")
-                .mockImplementation(() => {});
             vi.spyOn(Notification, "exists").mockRejectedValueOnce(
                 new Error("Boom")
             );
 
             await evaluateActionPlanStatusAndNotify();
 
-            expect(errorSpy).toHaveBeenCalled();
+            expect(logger.error).toHaveBeenCalled();
         });
     });
 
@@ -347,16 +358,13 @@ describe("notificationController", () => {
         });
 
         it("logs errors when evaluation fails", async () => {
-            const errorSpy = vi
-                .spyOn(console, "error")
-                .mockImplementation(() => {});
             vi.spyOn(Student, "find").mockReturnValue({
                 lean: () => Promise.reject(new Error("Fail")),
             });
 
             await evaluateGradingStatusAndNotify();
 
-            expect(errorSpy).toHaveBeenCalled();
+            expect(logger.error).toHaveBeenCalled();
         });
     });
 
@@ -463,7 +471,6 @@ describe("notificationController", () => {
 
     describe("sendStudyplanChangedNotification", () => {
         it("logs and returns when skipNotification is set", async () => {
-            const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
             const enrollmentId = new mongoose.Types.ObjectId();
 
             await sendStudyplanChangedNotification({
@@ -471,8 +478,9 @@ describe("notificationController", () => {
                 changeType: "created",
             });
 
-            expect(logSpy).toHaveBeenCalledWith(
-                `Skipping notification for StudentEnrollment ${enrollmentId}`
+            expect(logger.info).toHaveBeenCalledWith(
+                { enrollmentId },
+                "Skipping notification for StudentEnrollment"
             );
 
             const count = await Notification.countDocuments({

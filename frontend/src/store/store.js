@@ -221,7 +221,8 @@ api.interceptors.response.use(
       store.commit('LOGOUT')
       if (
         typeof window !== 'undefined' &&
-        window.location.pathname !== '/login'
+        window.location.pathname !== '/login' &&
+        (typeof process === 'undefined' || process.env.NODE_ENV !== 'test')
       ) {
         window.location.href = '/login'
       }

@@ -66,8 +66,5 @@ jobs:
               run: docker compose -f docker-compose.yml -p mindful-new down
 
             - name: Fail job if any tests failed
-              if: always()
-              run: |
-                if [[ "${{ steps.backend_tests.outcome }}" != "success" || "${{ steps.frontend_tests.outcome }}" != "success" ]]; then
-                  exit 1
-                fi
+              if: always() && (steps.backend_tests.outcome != 'success' || steps.frontend_tests.outcome != 'success')
+              run: exit 1

@@ -22,7 +22,7 @@ services:
     container_name: mindful_app
     restart: unless-stopped
     ports:
-      - "5001:5001"
+      - "5010:5010"
     depends_on:
       mongo:
         condition: service_healthy

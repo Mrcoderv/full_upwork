@@ -66,7 +66,6 @@ describe("CourseInstance model", () => {
     it("auto-calculates slutprovDate when responsibleTeacher is set", async () => {
         const calculatedDate = new Date("2024-02-10T00:00:00.000Z");
         calculateSlutprovDate.mockResolvedValue(calculatedDate);
-        vi.spyOn(console, "log").mockImplementation(() => {});
 
         const instance = buildInstance({
             responsibleTeacher: new mongoose.Types.ObjectId(),
@@ -82,7 +81,6 @@ describe("CourseInstance model", () => {
 
     it("continues saving when slutprovDate calculation fails", async () => {
         calculateSlutprovDate.mockRejectedValue(new Error("Boom"));
-        vi.spyOn(console, "error").mockImplementation(() => {});
 
         const instance = buildInstance({
             responsibleTeacher: new mongoose.Types.ObjectId(),

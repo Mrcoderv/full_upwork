@@ -1,5 +1,6 @@
 import express from "express";
 import Program from "../models/Program.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -67,7 +68,7 @@ router.get("/programs", async (req, res) => {
 
         res.json(formattedPrograms);
     } catch (error) {
-        console.error("❌ Error fetching programs:", error);
+        logger.error({ err: error }, "Error fetching programs")
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -100,7 +101,7 @@ router.get("/program/:programId/courses", async (req, res) => {
 
         res.json(courses);
     } catch (error) {
-        console.error("Error fetching program courses:", error);
+        logger.error({ err: error }, "Error fetching program courses")
         res.status(500).json({ error: "Server error" });
     }
 });

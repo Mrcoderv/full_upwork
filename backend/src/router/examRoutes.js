@@ -9,6 +9,7 @@ import StudentEnrollment from "../models/StudentEnrollment.js";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
 import { createGlobalNotification } from "../controllers/notificationController.js"; // Lägg till högst upp
 import Notification from "../models/Notification.js";
+import logger from "../utils/logger.js";
 
 function calculateExamDate(requestedMonth) {
     const months = {
@@ -30,7 +31,7 @@ function calculateExamDate(requestedMonth) {
     const year = new Date().getFullYear();
 
     if (month === undefined) {
-        console.error("Ogiltigt månad:", requestedMonth);
+        logger.error({ month: requestedMonth }, "Invalid month");
         return null;
     }
 
@@ -89,7 +90,7 @@ router.post("/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), async 
 
         res.status(201).json(savedExam);
     } catch (err) {
-        console.error("Error saving exam:", err.message);
+        logger.error({ err }, "Error saving exam");
 
         // Provide more specific error messages
         if (err.name === "ValidationError") {
@@ -114,7 +115,7 @@ router.put("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), asy
         }
         res.json(updatedExam);
     } catch (err) {
-        console.error("Error updating exam:", err.message);
+        logger.error({ err }, "Error updating exam");
         res.status(500).json({ error: "Failed to update exam." });
     }
 });
@@ -131,7 +132,7 @@ router.get("/admin/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), a
         });
         res.json(exams);
     } catch (err) {
-        console.error("Error fetching exams for admin:", err.message);
+        logger.error({ err }, "Error fetching exams for admin");
         res.status(500).json({ error: "Failed to fetch exams." });
     }
 });
@@ -153,7 +154,7 @@ router.get("/exams", isAuthenticated, async (req, res) => {
 
             // Filter exams by this teacher's ID
             query.teacherId = teacher._id;
-            console.log(`🔍 Teacher ${teacher._id} fetching their exams`);
+            logger.debug({ teacherId: teacher._id }, "Teacher fetching their exams");
         }
 
         const exams = await Exam.find(query).populate({
@@ -216,7 +217,7 @@ router.get("/exams", isAuthenticated, async (req, res) => {
 
         res.json(exams);
     } catch (err) {
-        console.error("Error fetching exams:", err.message);
+        logger.error({ err }, "Error fetching exams");
         res.status(500).json({ error: "Failed to fetch exams." });
     }
 });
@@ -227,7 +228,7 @@ router.post("/calendar-events", isAuthenticated, async (req, res) => {
         await event.save();
         res.status(201).json({ message: "Event sparat", event });
     } catch (error) {
-        console.error("❌ Fel vid manuell event-skapning:", error.message);
+        logger.error({ err: error }, "Error creating manual event");
         res.status(500).json({ error: "Kunde inte spara event." });
     }
 });
@@ -253,9 +254,7 @@ router.get("/calendar-events", isAuthenticated, async (req, res) => {
 
             // Filter events by this teacher's ID
             query.teacherId = teacher._id;
-            console.log(
-                `🔍 Teacher ${teacher._id} fetching their calendar events (excluding slutprov/exam type)`
-            );
+            logger.debug({ teacherId: teacher._id }, "Teacher fetching their calendar events");
         }
 
         const events = await CalendarEvent.find(query);
@@ -273,7 +272,7 @@ router.get("/calendar-events", isAuthenticated, async (req, res) => {
         
         res.json(fixedEvents);
     } catch (err) {
-        console.error("❌ Fel vid hämtning:", err);
+        logger.error({ err }, "Error fetching calendar events");
         res.status(500).json({ error: "Kunde inte hämta sparade event" });
     }
 });
@@ -300,7 +299,7 @@ router.put(
                 useTransaction = true;
             } catch (error) {
                 // If transactions aren't supported, continue without them
-                console.log("⚠️ Transactions not supported, proceeding without transaction:", error.message);
+                logger.warn({ err: error }, "Transactions not supported, proceeding without transaction");
                 if (session) {
                     try {
                         session.endSession();
@@ -312,7 +311,7 @@ router.put(
                 useTransaction = false;
             }
         } else {
-            console.log("ℹ️ Running without transactions (local development mode)");
+            logger.info("Running without transactions (local development mode)");
         }
 
         try {
@@ -394,8 +393,8 @@ router.put(
             const updateOptions = useTransaction && session ? { session } : {};
 
             // 1. Update enrollments
-            console.log(`[MOVE-GROUP] Updating enrollments for teacher ${teacherId} from ${fromDate} to ${toDate}`);
-            console.log(`[MOVE-GROUP] Date range: ${fromDateStart.toISOString()} to ${fromDateEnd.toISOString()}`);
+            logger.info({ teacherId, fromDate, toDate }, "Updating enrollments");
+            logger.debug({ fromDateStart, fromDateEnd }, "Move-group date range");
             
             // First, find enrollments that match to see what we're working with
             // Try multiple queries to catch all possible enrollments:
@@ -428,9 +427,9 @@ router.put(
                 )
             ];
             
-            console.log(`[MOVE-GROUP] Found ${allMatchingEnrollments.length} matching enrollments`);
+            logger.debug({ count: allMatchingEnrollments.length }, "Found matching enrollments");
             allMatchingEnrollments.forEach(e => {
-                console.log(`  - Enrollment ${e._id}: student=${e.studentId}, courseInstance=${e.courseInstanceId?._id}, teacherId=${e.teacherId}, currentSlutprovDate=${e.slutprovDate}`);
+                logger.debug({ enrollmentId: e._id, studentId: e.studentId, courseInstanceId: e.courseInstanceId?._id, teacherId: e.teacherId, slutprovDate: e.slutprovDate }, "Enrollment details");
             });
             
             // Update enrollments by teacherId and date
@@ -468,7 +467,7 @@ router.put(
                 allMatchingEnrollments.length
             );
             
-            console.log(`[MOVE-GROUP] Updated ${totalEnrollmentsUpdated} enrollments (by teacher: ${enrollmentsUpdateResult1.modifiedCount}, by courseInstance: ${enrollmentsUpdateResult2.modifiedCount})`);
+            logger.info({ totalUpdated: totalEnrollmentsUpdated, byTeacher: enrollmentsUpdateResult1.modifiedCount, byCourseInstance: enrollmentsUpdateResult2.modifiedCount }, "Updated enrollments");
 
             // 2. Update CourseInstance.slutprovDate
             // First, find all course instances that have enrollments with the old date
@@ -490,7 +489,7 @@ router.put(
             ];
             const uniqueCourseInstanceIds = [...new Set(allCourseInstanceIds)];
             
-            console.log(`[MOVE-GROUP] Course instance IDs to update:`, uniqueCourseInstanceIds);
+            logger.debug({ courseInstanceIds: uniqueCourseInstanceIds }, "Course instance IDs to update");
             
             let courseInstancesUpdated = 0;
             if (uniqueCourseInstanceIds.length > 0) {
@@ -508,10 +507,10 @@ router.put(
                                 await instance.save();
                             }
                             courseInstancesUpdated++;
-                            console.log(`📅 Updated CourseInstance ${instanceId} from ${fromDate} to ${toDate}`);
+                            logger.info({ instanceId, fromDate, toDate }, "Updated CourseInstance");
                         }
                     } catch (err) {
-                        console.error(`❌ Error updating CourseInstance ${instanceId}:`, err);
+                        logger.error({ err, instanceId }, "Error updating CourseInstance");
                     }
                 }
                 
@@ -524,7 +523,7 @@ router.put(
                     { $set: { slutprovDate: toLocal } },
                     updateOptions
                 );
-                console.log(`[MOVE-GROUP] Updated ${enrollmentsForInstances.modifiedCount} enrollments for course instances (all enrollments, not just matching date)`);
+                logger.info({ modifiedCount: enrollmentsForInstances.modifiedCount }, "Updated enrollments for course instances");
             } else {
                 // If no courseInstanceIds provided, try to find course instances by teacher and date
                 const courseInstancesByDate = await CourseInstance.find({
@@ -536,7 +535,7 @@ router.put(
                 });
                 
                 if (courseInstancesByDate.length > 0) {
-                    console.log(`[MOVE-GROUP] Found ${courseInstancesByDate.length} course instances by date, updating them`);
+                    logger.info({ count: courseInstancesByDate.length }, "Found course instances by date, updating them");
                     for (const instance of courseInstancesByDate) {
                         try {
                             instance.slutprovDate = toLocal;
@@ -548,7 +547,7 @@ router.put(
                             }
                             courseInstancesUpdated++;
                         } catch (err) {
-                            console.error(`❌ Error updating CourseInstance ${instance._id}:`, err);
+                            logger.error({ err, instanceId: instance._id }, "Error updating CourseInstance");
                         }
                     }
                     
@@ -561,9 +560,7 @@ router.put(
                         { $set: { slutprovDate: toLocal } },
                         updateOptions
                     );
-                    console.log(
-                        `📅 Updated ${courseInstancesUpdated} CourseInstances (by date) and ${enrollmentsForInstances.modifiedCount} enrollments from ${fromDate} to ${toDate}`
-                    );
+                    logger.info({ updatedCourseInstances: courseInstancesUpdated, updatedEnrollments: enrollmentsForInstances.modifiedCount, fromDate, toDate }, "Updated CourseInstances by date and enrollments");
                 }
             }
 
@@ -623,7 +620,7 @@ router.put(
                             courseInstanceIdsFromEvents.add(idStr);
                         }
                     });
-                    console.log(`[MOVE-GROUP] CalendarEvent ${event._id} has courseInstanceIds:`, Array.from(courseInstanceIdsFromEvents));
+                    logger.debug({ eventId: event._id, courseInstanceIds: Array.from(courseInstanceIdsFromEvents) }, "CalendarEvent has courseInstanceIds");
                 }
                 
                 // Update the event's start date to the new date (at local midnight)
@@ -634,14 +631,14 @@ router.put(
                     await event.save();
                 }
                 calendarEventsUpdated++;
-                console.log(`📅 Moved CalendarEvent ${event._id} from ${fromDate} to ${toDate}`);
+                logger.info({ eventId: event._id, fromDate, toDate }, "Moved CalendarEvent");
             }
             
             // 5. Update course instances from calendar events' courseInstanceIds
             // This ensures course instances are updated when their linked calendar event is moved
             if (courseInstanceIdsFromEvents.size > 0) {
                 const eventCourseInstanceIds = Array.from(courseInstanceIdsFromEvents);
-                console.log(`[MOVE-GROUP] Updating ${eventCourseInstanceIds.length} course instances linked to calendar events:`, eventCourseInstanceIds);
+                logger.info({ count: eventCourseInstanceIds.length, courseInstanceIds: eventCourseInstanceIds }, "Updating course instances linked to calendar events");
                 
                 // Add these to the unique course instance IDs if not already there
                 eventCourseInstanceIds.forEach(id => {
@@ -664,7 +661,7 @@ router.put(
                                 await instance.save();
                             }
                             courseInstancesUpdated++;
-                            console.log(`📅 Updated CourseInstance ${instanceId} from calendar event link from ${fromDate} to ${toDate}`);
+                            logger.info({ instanceId, fromDate, toDate }, "Updated CourseInstance from calendar event link");
                             
                             // Also update ALL enrollments for this course instance
                             const enrollmentsForInstance = await StudentEnrollment.updateMany(
@@ -672,10 +669,10 @@ router.put(
                                 { $set: { slutprovDate: toLocal } },
                                 updateOptions
                             );
-                            console.log(`[MOVE-GROUP] Updated ${enrollmentsForInstance.modifiedCount} enrollments for course instance ${instanceId} (from calendar event link)`);
+                            logger.info({ modifiedCount: enrollmentsForInstance.modifiedCount, instanceId }, "Updated enrollments for course instance from calendar event link");
                         }
                     } catch (err) {
-                        console.error(`❌ Error updating CourseInstance ${instanceId} from calendar event:`, err);
+                        logger.error({ err, instanceId }, "Error updating CourseInstance from calendar event");
                     }
                 }
             }
@@ -698,13 +695,10 @@ router.put(
                 try {
                     await session.abortTransaction();
                 } catch (abortError) {
-                    console.error("Error aborting transaction:", abortError);
+                    logger.error({ err: abortError }, "Error aborting transaction");
                 }
             }
-            console.error(
-                "❌ Failed to move group:",
-                error
-            );
+            logger.error({ err: error }, "Failed to move group");
             res.status(500).json({
                 error: "Failed to move group. The operation was rolled back.",
             });
@@ -714,7 +708,7 @@ router.put(
                 try {
                     session.endSession();
                 } catch (endError) {
-                    console.error("Error ending session:", endError);
+                    logger.error({ err: endError }, "Error ending session");
                 }
             }
         }
@@ -775,7 +769,7 @@ router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
             }
 
             // Find the event
-            console.log(`🔍 Looking for calendar event with query:`, JSON.stringify(query, null, 2));
+            logger.debug({ query }, "Looking for calendar event");
             let existingEvent = await CalendarEvent.findOne(query);
             
             if (!existingEvent) {
@@ -793,7 +787,7 @@ router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
                 } else {
                     broaderQuery["extendedProps.teacherId"] = { $exists: false };
                 }
-                console.log(`🔍 Trying broader date range query:`, JSON.stringify(broaderQuery, null, 2));
+                logger.debug({ broaderQuery }, "Trying broader date range query");
                 existingEvent = await CalendarEvent.findOne(broaderQuery);
             }
             
@@ -821,10 +815,10 @@ router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
                 if (updateFields.color) existingEvent.color = updateFields.color;
                 
                 updatedEvent = await existingEvent.save();
-                console.log(`✅ Updated calendar event ${existingEvent._id} (composite key: ${id}) with ${updatedEvent.extendedProps?.students?.length || 0} students`);
+                logger.info({ eventId: existingEvent._id, compositeKey: id, studentCount: updatedEvent.extendedProps?.students?.length || 0 }, "Updated calendar event");
             } else {
                 // Event doesn't exist - create it from the updateFields
-                console.log(`⚠️ Calendar event not found, creating new one for composite key: ${id}`);
+                logger.warn({ compositeKey: id }, "Calendar event not found, creating new one");
                 
                 // Determine title - prefer teacher name, fallback to generic title
                 let eventTitle = "Okänd lärare";
@@ -848,7 +842,7 @@ router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
                 });
                 
                 updatedEvent = await newEvent.save();
-                console.log(`✅ Created new calendar event ${updatedEvent._id} (composite key: ${id}) with ${updatedEvent.extendedProps?.students?.length || 0} students`);
+                logger.info({ eventId: updatedEvent._id, compositeKey: id, studentCount: updatedEvent.extendedProps?.students?.length || 0 }, "Created new calendar event");
             }
         } else {
             // Regular MongoDB ObjectId - use findByIdAndUpdate
@@ -865,7 +859,7 @@ router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
 
         res.json({ message: "✅ Event uppdaterat", event: updatedEvent });
     } catch (err) {
-        console.error("❌ Fel vid uppdatering av event:", err.message);
+        logger.error({ err }, "Error updating event");
         res.status(500).json({ error: "Kunde inte uppdatera event" });
     }
 });
@@ -885,7 +879,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
     }
 
     try {
-        console.log("🔍 /calendar-events/syncable called");
+        logger.debug("Calendar-events/syncable called");
 
         let studentQuery = {
             finalExamDate: { $ne: null },
@@ -910,9 +904,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
             studentQuery.teacherId = teacher._id;
             // For enrollments, we'll filter after populating to check both teacherId and courseInstance.responsibleTeacher
             // Remove the teacherId filter from enrollmentQuery so we can check both
-            console.log(
-                `🔍 Teacher ${teacher._id} fetching their syncable calendar events`
-            );
+            logger.debug({ teacherId: teacher._id }, "Teacher fetching their syncable calendar events");
         }
 
         // Manuellda slutprov (studenter med finalExamDate)
@@ -927,10 +919,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
             model: "Course",
             select: "courseName courseCode",
         });
-        console.log(
-            "📅 Students with finalExamDate:",
-            studentsWithFinalExam.length
-        );
+        logger.debug({ count: studentsWithFinalExam.length }, "Students with finalExamDate");
 
         // Automatiska kurs-slutprov (från enrollments)
         // Fetch all enrollments first, then filter after populating to check both teacherId and courseInstance.responsibleTeacher
@@ -972,9 +961,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                 
                 return matchesEnrollmentTeacher || matchesCourseInstanceTeacher;
             });
-            console.log(
-                `🔍 Filtered enrollments for teacher ${teacherFilter}: ${enrollmentsToProcess.length} out of ${allEnrollmentsWithSlutprov.length}`
-            );
+            logger.debug({ teacherFilter, filteredCount: enrollmentsToProcess.length, totalCount: allEnrollmentsWithSlutprov.length }, "Filtered enrollments for teacher");
         }
         
         // Filter out enrollments where the student is a dropout
@@ -982,26 +969,9 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
             (enrollment) => !enrollment.studentId || !enrollment.studentId.dropout
         );
         
-        console.log(
-            "📅 Enrollments with slutprovDate (after filtering dropouts):",
-            enrollmentsWithSlutprov.length,
-            "(filtered from",
-            allEnrollmentsWithSlutprov.length,
-            "total)"
-        );
+        logger.debug({ count: enrollmentsWithSlutprov.length, totalFiltered: allEnrollmentsWithSlutprov.length }, "Enrollments with slutprovDate after filtering dropouts");
         enrollmentsWithSlutprov.forEach((e) => {
-            console.log(
-                "  - Student:",
-                e.studentId?.name,
-                "Course:",
-                e.mainCourseId?.courseName,
-                "Date:",
-                e.slutprovDate,
-                "Teacher:",
-                e.teacherId?.userId?.username ||
-                    e.studentId?.teacherId?.userId?.username ||
-                    "None"
-            );
+            logger.debug({ student: e.studentId?.name, course: e.mainCourseId?.courseName, date: e.slutprovDate, teacher: e.teacherId?.userId?.username || e.studentId?.teacherId?.userId?.username || "None" }, "Enrollment with slutprovDate");
         });
 
         const grouped = {};
@@ -1010,13 +980,13 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
         for (const student of studentsWithFinalExam) {
             try {
                 if (!student.finalExamDate) {
-                    console.warn("skip, saknar finalExamDate", student.name);
+                    logger.warn({ student: student.name }, "skip, missing finalExamDate");
                     continue;
                 }
                 
                 // Allow students without teacherId - they'll be grouped separately
                 if (!student.teacherId || !student.teacherId.userId) {
-                    console.warn(`⚠️ Student ${student.name} has no teacherId, will group by date only`);
+                    logger.warn({ student: student.name }, "Student has no teacherId, will group by date only");
                 }
 
                 const dateKey = localDateKey(student.finalExamDate);
@@ -1140,15 +1110,11 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     const endOfDay = new Date(dateKey + "T23:59:59.999Z");
 
                     // Debug the query parameters
-                    console.log(`🔍 Querying ExamAttendance with:`);
-                    console.log(`🔍   dateKey: ${dateKey}`);
-                    console.log(`🔍   startOfDay: ${startOfDay}`);
-                    console.log(`🔍   endOfDay: ${endOfDay}`);
-                    console.log(
-                        `🔍   teacherId: ${
-                            student.teacherId._id
-                        } (type: ${typeof student.teacherId._id})`
-                    );
+                    logger.debug("Querying ExamAttendance with:");
+                    logger.debug({ dateKey }, "ExamAttendance query dateKey");
+                    logger.debug({ startOfDay }, "ExamAttendance query startOfDay");
+                    logger.debug({ endOfDay }, "ExamAttendance query endOfDay");
+                    logger.debug({ teacherId: student.teacherId._id, teacherIdType: typeof student.teacherId._id }, "ExamAttendance query teacherId");
 
                     // Find attendance records and filter out dropout students
                     const allAttendanceRecords = student.teacherId?._id ? await ExamAttendance.find({
@@ -1175,24 +1141,14 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     );
 
                     // Debug logging
-                    console.log(
-                        `🔍 Event ${key} - Found ${attendanceRecords.length} attendance records`
-                    );
-                    console.log(
-                        `🔍 Records with time: ${recordsWithTime.length}, with municipality: ${recordsWithMunicipality.length}, with location: ${recordsWithLocation.length}`
-                    );
+                    logger.debug({ key, count: attendanceRecords.length }, "Event attendance records found");
+                    logger.debug({ withTime: recordsWithTime.length, withMunicipality: recordsWithMunicipality.length, withLocation: recordsWithLocation.length }, "Attendance records breakdown");
                     if (recordsWithTime.length > 0)
-                        console.log(
-                            `🔍 First time record: ${recordsWithTime[0].examTime}`
-                        );
+                        logger.debug({ examTime: recordsWithTime[0].examTime }, "First time record");
                     if (recordsWithMunicipality.length > 0)
-                        console.log(
-                            `🔍 First municipality record: ${recordsWithMunicipality[0].examMunicipality}`
-                        );
+                        logger.debug({ examMunicipality: recordsWithMunicipality[0].examMunicipality }, "First municipality record");
                     if (recordsWithLocation.length > 0)
-                        console.log(
-                            `🔍 First location record: ${recordsWithLocation[0].examLocation}`
-                        );
+                        logger.debug({ examLocation: recordsWithLocation[0].examLocation }, "First location record");
 
                     // Get the most common values (or first if all are the same)
                     const eventExamTime =
@@ -1214,9 +1170,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                               studentExamLocation ||
                               "";
 
-                    console.log(
-                        `🔍 Final event exam info - Time: "${eventExamTime}", Municipality: "${eventExamMunicipality}", Location: "${eventExamLocation}"`
-                    );
+                    logger.debug({ examTime: eventExamTime, examMunicipality: eventExamMunicipality, examLocation: eventExamLocation }, "Final event exam info");
 
                     const startDate = new Date(dateKey + "T12:00:00.000Z"); // noon UTC to avoid TZ drift
                     grouped[key] = {
@@ -1279,15 +1233,9 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     existingStudent.examLocation = finalExamLocation;
                 }
 
-                console.log(
-                    `🔍 Manual - Added student ${student.name} with finalExamDate: ${student.finalExamDate}`
-                );
+                logger.debug({ student: student.name, finalExamDate: student.finalExamDate }, "Manual - Added student");
             } catch (err) {
-                console.warn(
-                    "Fel i studentsWithFinalExam-loopen:",
-                    err.message,
-                    student
-                );
+                logger.warn({ err, student }, "Error in studentsWithFinalExam loop");
             }
         }
 
@@ -1346,9 +1294,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                 
                 // If still no teacher found, skip this enrollment
                 if (!teacherId) {
-                    console.log(
-                        `⚠️ No teacher found for student ${student.name} in course ${course.courseName}`
-                    );
+                    logger.warn({ student: student.name, course: course.courseName }, "No teacher found for student in course");
                     continue;
                 }
 
@@ -1395,15 +1341,11 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     const endOfDay = new Date(dateKey + "T23:59:59.999Z");
 
                     // Debug the query parameters for auto events
-                    console.log(`🔍 Auto Querying ExamAttendance with:`);
-                    console.log(`🔍   dateKey: ${dateKey}`);
-                    console.log(`🔍   startOfDay: ${startOfDay}`);
-                    console.log(`🔍   endOfDay: ${endOfDay}`);
-                    console.log(
-                        `🔍   teacherId: ${
-                            teacherId._id
-                        } (type: ${typeof teacherId._id})`
-                    );
+                    logger.debug("Auto querying ExamAttendance with:");
+                    logger.debug({ dateKey }, "ExamAttendance query dateKey");
+                    logger.debug({ startOfDay }, "ExamAttendance query startOfDay");
+                    logger.debug({ endOfDay }, "ExamAttendance query endOfDay");
+                    logger.debug({ teacherId: student.teacherId._id, teacherIdType: typeof student.teacherId._id }, "ExamAttendance query teacherId");
 
                     const attendanceRecords = await ExamAttendance.find({
                         examDate: { $gte: startOfDay, $lte: endOfDay },
@@ -1424,24 +1366,14 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     );
 
                     // Debug logging
-                    console.log(
-                        `🔍 Auto Event ${key} - Found ${attendanceRecords.length} attendance records`
-                    );
-                    console.log(
-                        `🔍 Auto Records with time: ${recordsWithTime.length}, with municipality: ${recordsWithMunicipality.length}, with location: ${recordsWithLocation.length}`
-                    );
+                    logger.debug({ key, count: attendanceRecords.length }, "Auto event attendance records found");
+                    logger.debug({ withTime: recordsWithTime.length, withMunicipality: recordsWithMunicipality.length, withLocation: recordsWithLocation.length }, "Auto attendance records breakdown");
                     if (recordsWithTime.length > 0)
-                        console.log(
-                            `🔍 Auto First time record: ${recordsWithTime[0].examTime}`
-                        );
+                        logger.debug({ examTime: recordsWithTime[0].examTime }, "Auto first time record");
                     if (recordsWithMunicipality.length > 0)
-                        console.log(
-                            `🔍 Auto First municipality record: ${recordsWithMunicipality[0].examMunicipality}`
-                        );
+                        logger.debug({ examMunicipality: recordsWithMunicipality[0].examMunicipality }, "Auto first municipality record");
                     if (recordsWithLocation.length > 0)
-                        console.log(
-                            `🔍 Auto First location record: ${recordsWithLocation[0].examLocation}`
-                        );
+                        logger.debug({ examLocation: recordsWithLocation[0].examLocation }, "Auto first location record");
 
                     const eventExamTime =
                         recordsWithTime.length > 0
@@ -1456,9 +1388,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                             ? recordsWithLocation[0].examLocation
                             : student.examLocation || "";
 
-                    console.log(
-                        `🔍 Auto Final event exam info - Time: "${eventExamTime}", Municipality: "${eventExamMunicipality}", Location: "${eventExamLocation}"`
-                    );
+                    logger.debug({ examTime: eventExamTime, examMunicipality: eventExamMunicipality, examLocation: eventExamLocation }, "Auto final event exam info");
 
                     grouped[key] = {
                         id: `${teacherId._id}_${dateKey}`,
@@ -1542,19 +1472,13 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     }
                 }
 
-                console.log(
-                    `🔍 Auto - Added student ${student.name} with finalExamDate: ${enrollment.slutprovDate}`
-                );
+                logger.debug({ student: student.name, slutprovDate: enrollment.slutprovDate }, "Auto - Added student");
             } catch (err) {
-                console.warn(
-                    "Fel i enrollmentsWithSlutprov-loopen:",
-                    err.message,
-                    enrollment
-                );
+                logger.warn({ err, enrollment }, "Error in enrollmentsWithSlutprov loop");
             }
         }
 
-        console.log("📅 Final grouped events:", Object.keys(grouped).length);
+        logger.debug({ count: Object.keys(grouped).length }, "Final grouped events");
         
         // Ensure all events use teacher name as title (not course name)
         for (const [key, event] of Object.entries(grouped)) {
@@ -1614,17 +1538,17 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     }
                     
                     const existingCalendarEvents = await CalendarEvent.find(broaderQuery).sort({ createdAt: -1 });
-                    console.log(`🔍 Found ${existingCalendarEvents.length} existing CalendarEvent(s) for ${key} (teacher: ${teacherIdStr}, date: ${dateKey})`);
+                    logger.debug({ count: existingCalendarEvents.length, key, teacherId: teacherIdStr, date: dateKey }, "Found existing CalendarEvents");
                     if (existingCalendarEvents.length > 0) {
                         existingCalendarEvents.forEach(evt => {
-                            console.log(`  - Event ${evt._id}: title="${evt.title}", type="${evt.extendedProps?.type}", students=${evt.extendedProps?.students?.length || 0}`);
+                            logger.debug({ eventId: evt._id, title: evt.title, type: evt.extendedProps?.type, studentCount: evt.extendedProps?.students?.length || 0 }, "Existing CalendarEvent details");
                         });
                     }
                     
                     if (existingCalendarEvents.length > 0) {
                         // If multiple events exist for the same teacher/date, merge them and delete duplicates
                         if (existingCalendarEvents.length > 1) {
-                            console.log(`⚠️ Found ${existingCalendarEvents.length} duplicate CalendarEvents for ${key}, merging them`);
+                            logger.warn({ count: existingCalendarEvents.length, key }, "Found duplicate CalendarEvents, merging them");
                             
                             // Use the most recent event as the base, but merge all student lists
                             const baseEvent = existingCalendarEvents[0];
@@ -1645,7 +1569,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                             // Delete duplicate events (keep only the first one)
                             for (let i = 1; i < existingCalendarEvents.length; i++) {
                                 await CalendarEvent.findByIdAndDelete(existingCalendarEvents[i]._id);
-                                console.log(`🗑️ Deleted duplicate CalendarEvent ${existingCalendarEvents[i]._id}`);
+                                logger.debug({ eventId: existingCalendarEvents[i]._id }, "Deleted duplicate CalendarEvent");
                             }
                             
                             // Update the base event with merged students and fix title to use teacher name
@@ -1658,10 +1582,10 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                             } else if (baseEvent.title && (baseEvent.title.includes("Slutprov") || baseEvent.title.includes(" - "))) {
                                 // Title has course name but no teacher - this shouldn't happen, but fix it
                                 baseEvent.title = "Okänd lärare";
-                                console.log(`⚠️ Fixed duplicate event title from "${baseEvent.title}" to "Okänd lärare"`);
+                                logger.warn({ oldTitle: baseEvent.title }, "Fixed duplicate event title to unknown teacher");
                             }
                             await baseEvent.save();
-                            console.log(`✅ Fixed and saved merged CalendarEvent ${baseEvent._id} with title "${baseEvent.title}"`);
+                            logger.info({ eventId: baseEvent._id, title: baseEvent.title }, "Fixed and saved merged CalendarEvent");
                             
                             // Use the base event for merging
                             const existingCalendarEvent = baseEvent;
@@ -1716,7 +1640,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                                     existingCalendarEvent.title = finalTeacherName;
                                     existingCalendarEvent.extendedProps.teacher = finalTeacherName;
                                     await existingCalendarEvent.save();
-                                    console.log(`✅ Fixed CalendarEvent ${existingCalendarEvent._id} title from "${oldTitle}" to "${finalTeacherName}"`);
+                                    logger.info({ eventId: existingCalendarEvent._id, oldTitle, newTitle: finalTeacherName }, "Fixed CalendarEvent title");
                                 }
                             } else {
                                 // No teacher name available - use generic
@@ -1725,7 +1649,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                                     const oldTitle = existingCalendarEvent.title;
                                     existingCalendarEvent.title = "Okänd lärare";
                                     await existingCalendarEvent.save();
-                                    console.log(`⚠️ Fixed CalendarEvent ${existingCalendarEvent._id} title from "${oldTitle}" to "Okänd lärare" (no teacher found)`);
+                                        logger.warn({ eventId: existingCalendarEvent._id, oldTitle }, "Fixed CalendarEvent title to unknown teacher (no teacher found)");
                                 }
                             }
                             
@@ -1740,7 +1664,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                                 event.extendedProps.examLocation = existingCalendarEvent.extendedProps.examLocation;
                             }
                             
-                            console.log(`✅ Merged ${existingCalendarEvents.length} duplicate CalendarEvents for ${key} - using ${mergedStudents.length} students`);
+                            logger.info({ count: existingCalendarEvents.length, key, studentCount: mergedStudents.length }, "Merged duplicate CalendarEvents");
                         } else {
                             // Single existing event - merge normally
                             const existingCalendarEvent = existingCalendarEvents[0];
@@ -1795,7 +1719,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                                         existingCalendarEvent.title = teacherName;
                                         existingCalendarEvent.extendedProps.teacher = teacherName;
                                         await existingCalendarEvent.save();
-                                        console.log(`✅ Fixed CalendarEvent ${existingCalendarEvent._id} title from "${oldTitle}" to "${teacherName}"`);
+                                        logger.info({ eventId: existingCalendarEvent._id, oldTitle, newTitle: teacherName }, "Fixed CalendarEvent title");
                                     }
                                 } else {
                                     // No teacher name available - use generic
@@ -1804,7 +1728,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                                         const oldTitle = existingCalendarEvent.title;
                                         existingCalendarEvent.title = "Okänd lärare";
                                         await existingCalendarEvent.save();
-                                        console.log(`⚠️ Fixed CalendarEvent ${existingCalendarEvent._id} title from "${oldTitle}" to "Okänd lärare" (no teacher found)`);
+                                    logger.warn({ eventId: existingCalendarEvent._id, oldTitle }, "Fixed CalendarEvent title to unknown teacher (no teacher found)");
                                     }
                                 }
                                 
@@ -1819,13 +1743,13 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                                     event.extendedProps.examLocation = existingCalendarEvent.extendedProps.examLocation;
                                 }
                                 
-                                console.log(`✅ Merged saved CalendarEvent for ${key} - using ${mergedStudents.length} students (${savedStudents.length} saved, ${dynamicStudentsMap.size} dynamic)`);
+                                logger.info({ key, studentCount: mergedStudents.length, savedCount: savedStudents.length, dynamicCount: dynamicStudentsMap.size }, "Merged saved CalendarEvent");
                             }
                         }
                     }
                 }
             } catch (err) {
-                console.error(`❌ Error checking existing CalendarEvent for key ${key}:`, err);
+                logger.error({ err, key }, "Error checking existing CalendarEvent");
                 // Continue with dynamically generated event if check fails
             }
         }
@@ -1870,7 +1794,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
             });
             
             if (totalRemoved > 0) {
-                console.log(`🗑️ Filtered out ${totalRemoved} dropout student(s) from events`);
+                logger.debug({ count: totalRemoved }, "Filtered out dropout students from events");
             }
         }
         
@@ -1885,7 +1809,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
             } else if (event.title && (event.title.includes("Slutprov") || event.title.includes(" - "))) {
                 // Title has course name, but no teacher - use generic
                 event.title = "Okänd lärare";
-                console.log(`⚠️ Fixed event title from "${event.title}" to "Okänd lärare" (no teacher found)`);
+                logger.warn({ oldTitle: event.title }, "Fixed event title to unknown teacher (no teacher found)");
             }
             
             // Deduplicate by teacherId and date
@@ -1919,7 +1843,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                 // Merge students from duplicate events
                 const existingEvent = finalEventsMap.get(dedupKey);
                 if (!existingEvent) {
-                    console.error(`❌ Error: existingEvent is null for key ${dedupKey}`);
+                    logger.error({ key: dedupKey }, "Error: existingEvent is null");
                     return; // Use return instead of continue in forEach callback
                 }
                 if (!existingEvent.extendedProps) {
@@ -1952,7 +1876,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     existingEvent.title = "Okänd lärare";
                 }
                 
-                console.log(`🔀 Deduplicated event ${dedupKey} (title: "${event.title}") - merged ${studentsToAdd.length} students into existing event (final title: "${existingEvent.title}")`);
+                logger.debug({ key: dedupKey, title: event.title, mergedCount: studentsToAdd.length, finalTitle: existingEvent.title }, "Deduplicated event");
             } else {
                 // Ensure students array exists
                 if (!event.extendedProps.students) {
@@ -1964,11 +1888,11 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                     event.title = event.extendedProps.teacher;
                 } else if (event.title && (event.title.includes("Slutprov") || event.title.includes(" - "))) {
                     event.title = "Okänd lärare";
-                    console.log(`⚠️ Fixed event title from course name to "Okänd lärare" for ${dedupKey}`);
+                    logger.warn({ key: dedupKey }, "Fixed event title from course name to unknown teacher");
                 }
                 
                 finalEventsMap.set(dedupKey, event);
-                console.log(`✅ Added event ${dedupKey} with title "${event.title}" and ${event.extendedProps?.students?.length || 0} students`);
+                logger.info({ key: dedupKey, title: event.title, studentCount: event.extendedProps?.students?.length || 0 }, "Added event");
             }
         });
         
@@ -1981,21 +1905,21 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
                 if (event.extendedProps?.teacher) {
                     const oldTitle = event.title;
                     event.title = event.extendedProps.teacher;
-                    console.log(`🔧 Final safety fix: Changed event title from "${oldTitle}" to "${event.title}"`);
+                    logger.debug({ oldTitle, newTitle: event.title }, "Final safety fix: changed event title");
                 } else {
                     const oldTitle = event.title;
                     event.title = "Okänd lärare";
-                    console.log(`🔧 Final safety fix: Changed event title from "${oldTitle}" to "Okänd lärare" (no teacher)`);
+                    logger.debug({ oldTitle }, "Final safety fix: changed event title to unknown teacher (no teacher)");
                 }
             }
             return event;
         });
         
-        console.log(`📅 Returning ${sanitizedEvents.length} deduplicated events (from ${Object.keys(grouped).length} grouped events)`);
+        logger.info({ eventCount: sanitizedEvents.length, groupedCount: Object.keys(grouped).length }, "Returning deduplicated events");
         
         res.json(sanitizedEvents);
     } catch (err) {
-        console.error("❌ Fel vid synk:", err.message, err.stack);
+        logger.error({ err }, "Error during sync");
         res.status(500).json({ error: "Kunde inte hämta synkade events." });
     }
 });
@@ -2113,7 +2037,7 @@ router.post("/calendar-events/fix-titles", isAuthenticated, async (req, res) => 
             deleted
         });
     } catch (err) {
-        console.error("❌ Error fixing event titles:", err);
+        logger.error({ err }, "Error fixing event titles");
         res.status(500).json({ error: "Kunde inte fixa event-titlar" });
     }
 });
@@ -2137,7 +2061,7 @@ router.delete("/calendar-events/cleanup-slutprov", isAuthenticated, async (req, 
             deletedCount: result.deletedCount
         });
     } catch (err) {
-        console.error("❌ Fel vid cleanup:", err.message);
+        logger.error({ err }, "Error during cleanup");
         res.status(500).json({ error: "Kunde inte rensa events." });
     }
 });
@@ -2154,7 +2078,7 @@ router.get("/calendar-events/:id", isAuthenticated, async (req, res) => {
 
         res.json(event);
     } catch (err) {
-        console.error("❌ Fel vid hämtning av event:", err.message);
+        logger.error({ err }, "Error fetching event");
         res.status(500).json({ error: "Kunde inte hämta event." });
     }
 });
@@ -2195,7 +2119,7 @@ router.get("/calendar-events/attendance/:date/:teacherId", isAuthenticated, asyn
 
         res.json(attendanceRecords);
     } catch (error) {
-        console.error("❌ Error fetching attendance data:", error);
+        logger.error({ err: error }, "Error fetching attendance data");
         res.status(500).json({ error: "Failed to fetch attendance data" });
     }
 });
@@ -2223,13 +2147,13 @@ router.put("/update-exam/:id", isAuthenticated, async (req, res) => {
 
         res.json({ message: "✅ Slutprov uppdaterat", student });
     } catch (error) {
-        console.error("❌ Fel vid uppdatering av prov:", error.message);
+        logger.error({ err: error }, "Error updating exam");
         res.status(500).json({ error: "Serverfel", details: error.message });
     }
 });
 
 router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res) => {
-    console.log("📌 API /mark-attendance anropad! Data mottagen:", req.body);
+    logger.debug({ body: req.body }, "API /mark-attendance called");
     try {
         const { personalNumber } = req.params;
 
@@ -2238,7 +2162,7 @@ router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res)
 
         const student = await Student.findOne({ personalNumber: normalizedPN });
 
-        console.log("🔍 Hittade student:", student);
+        logger.debug({ student }, "Found student");
         if (!student) {
             return res.status(404).json({ message: "Student not found" });
         }
@@ -2247,10 +2171,10 @@ router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res)
         student.attendedExam = req.body.attended;
         await student.save();
 
-        console.log("✅ Attendance marked for:", student);
+        logger.info({ student: student.name, studentId: student._id }, "Attendance marked");
         res.json({ message: "Attendance marked", student });
     } catch (error) {
-        console.error("❌ Error marking attendance:", error.message);
+        logger.error({ err: error }, "Error marking attendance");
         res.status(500).json({ message: "Server error", error: error.message });
     }
 });
@@ -2274,13 +2198,13 @@ router.post("/examtime-location", isAuthenticated, async (req, res) => {
             }
         );
 
-        console.log("✅ Uppdaterade studenter:", result.modifiedCount);
+        logger.info({ modifiedCount: result.modifiedCount }, "Updated students");
         res.status(200).json({
             message: "Provinfo uppdaterad",
             updatedCount: result.modifiedCount,
         });
     } catch (error) {
-        console.error("❌ Fel vid uppdatering av exam:", error.message);
+        logger.error({ err: error }, "Error updating exam");
         res.status(500).json({ message: "Serverfel", error: error.message });
     }
 });
@@ -2336,7 +2260,7 @@ router.get("/attendance-stats/:studentId", isAuthenticated, async (req, res) => 
 
         res.json(stats);
     } catch (error) {
-        console.error("❌ Error getting attendance stats:", error);
+        logger.error({ err: error }, "Error getting attendance stats");
         res.status(500).json({ error: "Failed to get attendance statistics" });
     }
 });
@@ -2350,18 +2274,18 @@ router.delete("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), 
         }
         res.json({ message: "Prövning raderad.", exam });
     } catch (err) {
-        console.error("Fel vid radering av prövning:", err.message);
+        logger.error({ err }, "Error deleting exam");
         res.status(500).json({ error: "Kunde inte radera prövning." });
     }
 });
 
 // PATCH: Batch update attendance for a specific event (date + teacher)
 router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res) => {
-    console.log("🚀 mark-attendance endpoint called!");
-    console.log("📥 Request body:", req.body);
-    console.log("📥 Request method:", req.method);
-    console.log("📥 Request URL:", req.url);
-    console.log("📥 Request headers:", req.headers);
+    logger.info("mark-attendance endpoint called");
+    logger.debug({ body: req.body }, "mark-attendance request body");
+    logger.debug({ method: req.method }, "mark-attendance request method");
+    logger.debug({ url: req.url }, "mark-attendance request URL");
+    logger.debug({ headers: req.headers }, "mark-attendance request headers");
     try {
         const {
             date,
@@ -2373,13 +2297,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
             examMunicipality: eventExamMunicipality,
             examLocation: eventExamLocation,
         } = req.body;
-        console.log("🔍 mark-attendance called with:", {
-            date,
-            teacherId,
-            students,
-            courseName,
-            courseId,
-        });
+        logger.debug({ date, teacherId, students, courseName, courseId }, "mark-attendance called with");
 
         if (!date || !teacherId || !Array.isArray(students)) {
             return res
@@ -2402,9 +2320,9 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
             String(examDate.getMonth() + 1).padStart(2, "0") +
             "-" +
             String(examDate.getDate()).padStart(2, "0");
-        console.log(`🔍 Original date: ${date}`);
-        console.log(`🔍 Parsed examDate: ${examDate}`);
-        console.log(`🔍 Generated dateKey: ${dateKey}`);
+        logger.debug({ date }, "Original date");
+        logger.debug({ examDate }, "Parsed examDate");
+        logger.debug({ dateKey }, "ExamAttendance query dateKey");
 
         // Note: Events are dynamic and not stored in CalendarEvent collection
         // Exam info is stored in ExamAttendance records and retrieved via /calendar-events/syncable
@@ -2413,7 +2331,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
             try {
                 const studentDoc = await Student.findById(student._id);
                 if (!studentDoc) {
-                    console.log(`❌ Student not found: ${student._id}`);
+                    logger.debug({ studentId: student._id }, "Student not found");
                     return {
                         success: false,
                         studentId: student._id,
@@ -2425,9 +2343,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
                 const startOfDay = new Date(dateKey + "T00:00:00.000Z");
                 const endOfDay = new Date(dateKey + "T23:59:59.999Z");
 
-                console.log(
-                    `🔍 Looking for existing attendance record for student ${student._id} on date ${dateKey} with teacher ${teacherId}`
-                );
+                logger.debug({ studentId: student._id, dateKey, teacherId }, "Looking for existing attendance record");
                 let attendanceRecord = await ExamAttendance.findOne({
                     examDate: { $gte: startOfDay, $lte: endOfDay },
                     teacherId: teacherId,
@@ -2435,9 +2351,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
                 });
 
                 if (!attendanceRecord) {
-                    console.log(
-                        `🔍 No existing record found, creating new ExamAttendance record`
-                    );
+                    logger.debug("No existing record found, creating new ExamAttendance record");
                     // Create new attendance record
                     attendanceRecord = new ExamAttendance({
                         examDate: new Date(dateKey + "T00:00:00.000Z"),
@@ -2458,16 +2372,9 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
                             student.examLocation || eventExamLocation || "",
                         recordedBy: req.user?._id,
                     });
-                    console.log(`🔍 Created new ExamAttendance record:`, {
-                        examDate: attendanceRecord.examDate,
-                        teacherId: attendanceRecord.teacherId,
-                        studentId: attendanceRecord.studentId,
-                        examTime: attendanceRecord.examTime,
-                        examMunicipality: attendanceRecord.examMunicipality,
-                        examLocation: attendanceRecord.examLocation,
-                    });
+                    logger.debug({ examDate: attendanceRecord.examDate, teacherId: attendanceRecord.teacherId, studentId: attendanceRecord.studentId, examTime: attendanceRecord.examTime, examMunicipality: attendanceRecord.examMunicipality, examLocation: attendanceRecord.examLocation }, "Created new ExamAttendance record");
                 } else {
-                    console.log(`🔍 Found existing record, updating it`);
+                    logger.debug("Found existing record, updating it");
                     // Update existing record
                     attendanceRecord.attended = !!student.attended;
                     attendanceRecord.paidExamFee = !!student.paidExamFee;
@@ -2485,21 +2392,13 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
                             student.examLocation || eventExamLocation;
                 }
 
-                console.log(`🔍 About to save attendance record...`);
+                logger.debug("About to save attendance record");
                 await attendanceRecord.save();
-                console.log(
-                    `🔍 Successfully saved attendance record with ID: ${attendanceRecord._id}`
-                );
-                console.log(
-                    `💾 Saved attendance record: ${attendanceRecord._id} for student ${studentDoc.name} - attended: ${attendanceRecord.attended}`
-                );
-                console.log(`💾 Saved examDate: ${attendanceRecord.examDate}`);
-                console.log(
-                    `💾 Saved teacherId: ${attendanceRecord.teacherId}`
-                );
-                console.log(
-                    `💾 Saved studentId: ${attendanceRecord.studentId}`
-                );
+                logger.debug({ recordId: attendanceRecord._id }, "Successfully saved attendance record");
+                logger.debug({ recordId: attendanceRecord._id, student: studentDoc.name, attended: attendanceRecord.attended }, "Saved attendance record");
+                logger.debug({ examDate: attendanceRecord.examDate }, "Saved examDate");
+                logger.debug({ teacherId: attendanceRecord.teacherId }, "Saved teacherId");
+                logger.debug({ studentId: attendanceRecord.studentId }, "Saved studentId");
 
                 // Note: Exam info is stored in ExamAttendance records
                 // Event-level info is retrieved via /calendar-events/syncable
@@ -2548,19 +2447,14 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
 
                 await studentDoc.save();
 
-                console.log(
-                    `✅ Updated attendance for student ${studentDoc.name}: ${student.attended}`
-                );
+                logger.info({ student: studentDoc.name, attended: student.attended }, "Updated attendance for student");
                 return {
                     success: true,
                     studentId: student._id,
                     attendanceId: attendanceRecord._id,
                 };
             } catch (error) {
-                console.error(
-                    `❌ Error updating student ${student._id}:`,
-                    error
-                );
+                logger.error({ err: error, studentId: student._id }, "Error updating student");
                 return {
                     success: false,
                     studentId: student._id,
@@ -2573,9 +2467,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
         const successCount = results.filter((r) => r.success).length;
         const failureCount = results.filter((r) => !r.success).length;
 
-        console.log(
-            `📊 Attendance update results: ${successCount} successful, ${failureCount} failed`
-        );
+        logger.info({ successCount, failureCount }, "Attendance update results");
 
         // Note: Events are dynamic and not stored in CalendarEvent collection
         // Exam info is stored in ExamAttendance records and will be retrieved via /calendar-events/syncable
@@ -2587,7 +2479,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
             failureCount,
         });
     } catch (err) {
-        console.error("❌ Error updating attendance/fee:", err);
+        logger.error({ err }, "Error updating attendance/fee");
         res.status(500).json({ error: "Server error" });
     }
 });
@@ -2597,7 +2489,7 @@ router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmi
         const { decision, comment } = req.body;
         const examId = req.params.id;
 
-        console.log(`Hantera beslut: ${decision} för examId: ${examId}`);
+        logger.info({ decision, examId }, "Handling decision");
 
         // Hämta den befintliga prövningen
         const exam = await Exam.findById(examId).populate("teacherId");
@@ -2644,7 +2536,7 @@ router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmi
 
         res.json(updatedExam);
     } catch (err) {
-        console.error("Fel vid uppdatering av beslut:", err);
+        logger.error({ err }, "Error updating decision");
         res.status(500).json({ error: "Kunde inte spara beslut." });
     }
 });
@@ -2680,7 +2572,7 @@ router.get("/exams/student/:studentId", isAuthenticated, async (req, res) => {
 
         res.json(items);
     } catch (error) {
-        console.error("❌ Failed to list student exams:", error);
+        logger.error({ err: error }, "Failed to list student exams");
         res.status(500).json({ error: "Failed to list student exams" });
     }
 });

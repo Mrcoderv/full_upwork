@@ -2,6 +2,7 @@ import Notification from "../models/Notification.js";
 import Student from "../models/Student.js";
 import User from "../models/User.js";
 import Course from "../models/Course.js";
+import logger from "../utils/logger.js";
 
 
 /**
@@ -157,7 +158,7 @@ export async function evaluateActionPlanStatusAndNotify() {
       await resolveGlobalNotification("global_action_plan_required");
     }
   } catch (err) {
-    console.error("Fel i evaluateActionPlanStatusAndNotify:", err);
+    logger.error({ err }, "Error in evaluateActionPlanStatusAndNotify");
   }
 }
   
@@ -179,13 +180,13 @@ export async function evaluateActionPlanStatusAndNotify() {
       if (ungradedStudents.length > 0) {
         const message = "Det finns elever som inte har fått betyg ännu. Vänlig betygsätt dem snarast."
         await createGlobalNotification("grades_pending", message);
-        console.log("Notis skickad om ofullständig betygssättning:", message);
+        logger.info({ message }, "Notification sent for incomplete grading");
       } else {
         await resolveGlobalNotification("grades_pending");
-        console.log("Alla elever har fått betyg – ingen notis behövs.");
+        logger.info("All students have grades - no notification needed");
       }
     } catch (err) {
-      console.error("Fel i evaluateGradingStatusAndNotify:", err);
+      logger.error({ err }, "Error in evaluateGradingStatusAndNotify");
     }
   }
   
@@ -245,7 +246,7 @@ export async function evaluateActionPlanStatusAndNotify() {
 export async function sendStudyplanChangedNotification({ doc, changeType, changes = null }) {
     try {
         if (doc.skipNotification) {
-            console.log(`Skipping notification for StudentEnrollment ${doc._id}`);
+            logger.info({ enrollmentId: doc._id }, "Skipping notification for StudentEnrollment");
             return;
         }
 
@@ -254,7 +255,7 @@ export async function sendStudyplanChangedNotification({ doc, changeType, change
         const course = await Course.findById(doc.mainCourseId);
 
         if (!student || !course) {
-            console.error(`Could not find Student or Course for StudentEnrollment ${doc._id}`);
+            logger.error({ enrollmentId: doc._id }, "Could not find Student or Course for StudentEnrollment");
             return;
         }
 
@@ -287,7 +288,7 @@ export async function sendStudyplanChangedNotification({ doc, changeType, change
         });
 
     } catch (error) {
-        console.error('Error creating study plan change notification:', error);
+        logger.error({ err: error }, "Error creating study plan change notification");
     }
 }
   

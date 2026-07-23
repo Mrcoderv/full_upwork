@@ -9,6 +9,7 @@ import { normalizeMunicipalityName } from "./studentController.js";
 import Course from "../models/Course.js";
 import { distance } from "fastest-levenshtein";
 import mongoose from "mongoose";
+import logger from "../utils/logger.js";
 
 /**
  * Course Matching Controller
@@ -17,7 +18,7 @@ import mongoose from "mongoose";
  */
 import CoursePackage from "../models/CoursePackage.js";
 
-console.log("[DEBUG] courseMatchingController.js loaded");
+logger.debug("courseMatchingController.js loaded");
 
 const formatDateOnlyUTC = (dateValue) => {
     if (!dateValue) return "";
@@ -112,11 +113,11 @@ const mergeDuplicateCourseInstances = async (instances) => {
  * @returns {Promise<void>}
  */
 export const uploadStudentsForMatching = async (req, res) => {
-    console.log("[DEBUG] uploadStudentsForMatching called");
+    logger.debug("uploadStudentsForMatching called");
     try {
-        console.log("🔍 req.user:", req.user);
-        console.log("🔍 req.userId:", req.userId);
-        console.log("🔍 req.cookies:", req.cookies);
+        logger.debug({ user: req.user }, "Request user");
+        logger.debug({ userId: req.userId }, "Request userId");
+        logger.debug({ cookies: req.cookies }, "Request cookies");
 
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -130,14 +131,10 @@ export const uploadStudentsForMatching = async (req, res) => {
         // Parse students using the existing parser
         const parsedStudents = await parseStudentExcel(fileBuffer, teacherNameFallback);
 
-        console.log(`[DEBUG] 📊 Excel parsing results:`);
-        console.log(
-            `[DEBUG] Total students parsed from Excel: ${parsedStudents.length}`
-        );
-        console.log(
-            `[DEBUG] Student names:`,
-            parsedStudents.map((s) => s.name || s.email || "unknown")
-        );
+        logger.debug({ count: parsedStudents.length }, "Total students parsed from Excel");
+        logger.debug({
+            names: parsedStudents.map((s) => s.name || s.email || "unknown"),
+        }, "Student names from Excel");
 
         // ✅ Group by email and merge multiple entries (same logic as studentController.js)
         const grouped = new Map();
@@ -154,13 +151,10 @@ export const uploadStudentsForMatching = async (req, res) => {
         }
 
         const mergedStudents = [...grouped.values()];
-        console.log(
-            `[DEBUG] 📊 After deduplication: ${mergedStudents.length} unique students`
-        );
-        console.log(
-            `[DEBUG] Merged student names:`,
-            mergedStudents.map((s) => s.name || s.email || "unknown")
-        );
+        logger.debug({ count: mergedStudents.length }, "After deduplication");
+        logger.debug({
+            names: mergedStudents.map((s) => s.name || s.email || "unknown"),
+        }, "Merged student names");
 
         if (mergedStudents.length === 0) {
             return res
@@ -293,7 +287,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                         subject: teacherResult.teacher?.subject || "Övrigt",
                     });
 
-                    console.log(`👨‍🏫 Auto-created teacher: ${safeUsername}`);
+                    logger.info({ username: safeUsername }, "Auto-created teacher");
 
                     // Create notification for the user who uploaded the file
                     try {
@@ -302,22 +296,14 @@ export const uploadStudentsForMatching = async (req, res) => {
                             `Lärare "${safeUsername}" skapades automatiskt vid uppladdning av studenter. Lösenord: ${teacherResult.password}`
                         );
                     } catch (notificationError) {
-                        console.error(
-                            "❌ Error creating notification:",
-                            notificationError
-                        );
+                        logger.error({ err: notificationError }, "Error creating notification");
                     }
                 }
 
                 teacherMap.set(teacherName, teacherResult.teacher);
-                console.log(
-                    `[DEBUG] Teacher mapped: '${teacherName}' → ${teacherResult.teacher?._id || 'null'}`
-                );
+                logger.debug({ teacherName, teacherId: teacherResult.teacher?._id || 'null' }, "Teacher mapped");
             } catch (error) {
-                console.error(
-                    `❌ Error handling teacher creation for '${teacherName}':`,
-                    error
-                );
+                logger.error({ err: error, teacherName }, "Error handling teacher creation");
                 results.errors.push({
                     type: "teacher_creation",
                     teacher: teacherName,
@@ -336,13 +322,13 @@ export const uploadStudentsForMatching = async (req, res) => {
             // Normalize code using the same function as Excel parser
             const norm = normalizeCodeForMatching(pkg.coursePackageCode || "");
             normalizedPackageMap[norm] = pkg;
-            console.log(`[DEBUG] Package code mapping: "${pkg.coursePackageCode}" → "${norm}"`);
+            logger.debug({ original: pkg.coursePackageCode, normalized: norm }, "Package code mapping");
         }
-        console.log(`[DEBUG] Total packages in map: ${Object.keys(normalizedPackageMap).length}`);
+        logger.debug({ count: Object.keys(normalizedPackageMap).length }, "Total packages in map");
 
         // Build normalized course map using courseCode
         const allCourses = await Course.find({}).lean();
-        console.log(`[DEBUG] Found ${allCourses.length} courses in database`);
+        logger.debug({ count: allCourses.length }, "Found courses in database");
         const normalizedCourseMap = {};
         for (const c of allCourses) {
             // Normalize code using the same function as Excel parser
@@ -350,16 +336,16 @@ export const uploadStudentsForMatching = async (req, res) => {
             normalizedCourseMap[norm] = c;
             // Only log first 50 to avoid spam, but log all if there are issues
             if (Object.keys(normalizedCourseMap).length <= 50) {
-                console.log(`[DEBUG] Course code mapping: "${c.courseCode}" → "${norm}"`);
+                logger.debug({ original: c.courseCode, normalized: norm }, "Course code mapping");
             }
         }
-        console.log(`[DEBUG] Total courses in map: ${Object.keys(normalizedCourseMap).length}`);
+        logger.debug({ count: Object.keys(normalizedCourseMap).length }, "Total courses in map");
         // Log all normalized course codes for debugging (limit to first 100)
         const allNormalizedCodes = Object.keys(normalizedCourseMap).sort();
-        console.log(`[DEBUG] All normalized course codes (first 100): ${allNormalizedCodes.slice(0, 100).join(', ')}`);
+        logger.debug({ codes: allNormalizedCodes.slice(0, 100) }, "All normalized course codes (first 100)");
         if (allNormalizedCodes.length === 0) {
-            console.error(`[ERROR] ⚠️ NO COURSES FOUND IN DATABASE! This will cause all matching to fail.`);
-            console.error(`[ERROR] Please check that courses have been imported into the database.`);
+            logger.error("NO COURSES FOUND IN DATABASE - this will cause all matching to fail");
+            logger.error("Please check that courses have been imported into the database");
         }
 
         // Pre-validation: if any course or package entry cannot be matched, abort upload
@@ -391,13 +377,13 @@ export const uploadStudentsForMatching = async (req, res) => {
                     
                     // Skip if normalization resulted in empty string
                     if (!normalized) {
-                        console.warn(`[DEBUG] Skipping entry with empty normalized name: "${originalName}"`);
+                        logger.debug({ originalName }, "Skipping entry with empty normalized name");
                         continue;
                     }
                     
-                    console.log(`[DEBUG] Matching entry: "${originalName}" → normalized: "${normalized}"`);
-                    console.log(`[DEBUG] Checking if "${normalized}" exists in course map: ${normalized in normalizedCourseMap}`);
-                    console.log(`[DEBUG] Checking if "${normalized}" exists in package map: ${normalized in normalizedPackageMap}`);
+                    logger.debug({ originalName, normalized }, "Matching entry");
+                    logger.debug({ normalized, inCourseMap: normalized in normalizedCourseMap }, "Checking course map");
+                    logger.debug({ normalized, inPackageMap: normalized in normalizedPackageMap }, "Checking package map");
                     if (!(normalized in normalizedCourseMap) && !(normalized in normalizedPackageMap)) {
                         // Show closest matches for debugging
                         const allCodes = [...Object.keys(normalizedCourseMap), ...Object.keys(normalizedPackageMap)];
@@ -405,7 +391,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                             .map(code => ({ code, dist: distance(normalized, code) }))
                             .sort((a, b) => a.dist - b.dist)
                             .slice(0, 5);
-                        console.log(`[DEBUG] Closest matches for "${normalized}":`, closest);
+                        logger.debug({ normalized, closest }, "Closest matches");
                     }
                     const isCourse = /NIVÅ\s*\d+$/i.test(normalized);
 
@@ -419,14 +405,21 @@ export const uploadStudentsForMatching = async (req, res) => {
                         Object.keys(normalizedCourseMap)
                     );
                     
-                    console.log(`[DEBUG] Match results for "${normalized}": package=${matchPkg || 'none'}, course=${matchCourse || 'none'}`);
-                    console.log(`[DEBUG] Available package keys (first 20): ${Object.keys(normalizedPackageMap).slice(0, 20).join(', ')}`);
-                    console.log(`[DEBUG] Available course keys (first 20): ${Object.keys(normalizedCourseMap).slice(0, 20).join(', ')}`);
-                    console.log(`[DEBUG] Total available courses: ${Object.keys(normalizedCourseMap).length}, packages: ${Object.keys(normalizedPackageMap).length}`);
+                    logger.debug({
+                        normalized,
+                        package: matchPkg || 'none',
+                        course: matchCourse || 'none',
+                    }, "Match results");
+                    logger.debug({ packageKeys: Object.keys(normalizedPackageMap).slice(0, 20) }, "Available package keys");
+                    logger.debug({ courseKeys: Object.keys(normalizedCourseMap).slice(0, 20) }, "Available course keys");
+                    logger.debug({
+                        courses: Object.keys(normalizedCourseMap).length,
+                        packages: Object.keys(normalizedPackageMap).length,
+                    }, "Total available courses and packages");
 
                     // If no match found in either collection, add to reasons
                     if (!matchCourse && !matchPkg) {
-                        console.warn(`[WARNING] No match found for "${originalName}" (normalized: "${normalized}")`);
+                        logger.warn({ originalName, normalized }, "No match found");
                         // Find closest matches for suggestions
                         const allCodes = [
                             ...Object.keys(normalizedCourseMap),
@@ -495,12 +488,10 @@ export const uploadStudentsForMatching = async (req, res) => {
         let zeroEnrollmentErrors = [];
         const createdStudentIds = [];
         for (const studentData of mergedStudents) {
-            console.log(
-                `[DEBUG] Processing student: ${
-                    studentData.name || studentData.email || "unknown"
-                } | Raw education:`,
-                studentData.education
-            );
+            logger.debug({
+                name: studentData.name || studentData.email || "unknown",
+                education: studentData.education,
+            }, "Processing student");
 
             // First, create or find the student
             let dbStudent = null;
@@ -530,14 +521,8 @@ export const uploadStudentsForMatching = async (req, res) => {
 
                 if (!dbStudent) {
                     // Create new student
-                    console.log(
-                        "[DEBUG] Creating student with data:",
-                        studentData
-                    );
-                    console.log(
-                        "[DEBUG] Municipality value before creation:",
-                        studentData.municipality
-                    );
+                    logger.debug({ studentData }, "Creating student with data");
+                    logger.debug({ municipality: studentData.municipality }, "Municipality value before creation");
 
                     // Allowed municipality types from schema
                     const allowedMunicipalities = [
@@ -603,20 +588,11 @@ export const uploadStudentsForMatching = async (req, res) => {
                         const fuzzyMatch =
                             getClosestMunicipality(rawMunicipality);
                         if (fuzzyMatch) {
-                            console.log(
-                                `[DEBUG] Fuzzy matched municipality: '${rawMunicipality}' → '${fuzzyMatch}'`
-                            );
+                            logger.debug({ rawMunicipality, fuzzyMatch }, "Fuzzy matched municipality");
                             normalizedMunicipality = fuzzyMatch;
                         } else {
                             const allowedList = allowedMunicipalities.join(", ");
-                            console.error(
-                                `[ERROR] Invalid municipality for student ${
-                                    studentData.name ||
-                                    studentData.email ||
-                                    "unknown"
-                                }:`,
-                                rawMunicipality
-                            );
+                            logger.error({ student: studentData.name || studentData.email || "unknown", municipality: rawMunicipality }, "Invalid municipality");
                             const error = new Error(
                                 `Ogiltig kommun för student ${studentData.name || studentData.email || "unknown"}: "${rawMunicipality}"`
                             );
@@ -666,17 +642,13 @@ export const uploadStudentsForMatching = async (req, res) => {
                     await dbStudent.save();
                     wasStudentCreated = true;
                     createdStudentIds.push(dbStudent._id.toString());
-                    console.log(
-                        `✅ Created new student: ${dbStudent.name} (${
-                            dbStudent.email
-                        }) with teacherId: ${dbStudent.teacherId || "null"}`
-                    );
+                    logger.info({ name: dbStudent.name, email: dbStudent.email, teacherId: dbStudent.teacherId || "null" }, "Created new student");
                     // Convert to plain object for easier manipulation
                     try {
                         const studentObj = dbStudent.toObject ? dbStudent.toObject() : (dbStudent.toJSON ? dbStudent.toJSON() : dbStudent);
                         results.students.push(studentObj);
                     } catch (objErr) {
-                        console.error("Error converting student to object:", objErr);
+                        logger.error({ err: objErr }, "Error converting student to object");
                         // Fallback: use the student as-is
                         results.students.push(dbStudent);
                     }
@@ -696,18 +668,13 @@ export const uploadStudentsForMatching = async (req, res) => {
                         const studentObj = dbStudent.toObject ? dbStudent.toObject() : (dbStudent.toJSON ? dbStudent.toJSON() : dbStudent);
                         results.students.push(studentObj);
                     } catch (objErr) {
-                        console.error("Error converting student to object:", objErr);
+                        logger.error({ err: objErr }, "Error converting student to object");
                         // Fallback: use the student as-is
                         results.students.push(dbStudent);
                     }
                 }
             } catch (error) {
-                console.error(
-                    `❌ Error creating/finding student ${
-                        studentData.name || studentData.email
-                    }:`,
-                    error
-                );
+                logger.error({ err: error, studentName: studentData.name || studentData.email }, "Error creating/finding student");
                 const errorDetails = {
                     studentName: studentData.name || "Okänt namn",
                     studentEmail: studentData.email || "Ingen e-post",
@@ -735,11 +702,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                 !Array.isArray(studentData.education) ||
                 studentData.education.length === 0
             ) {
-                console.log(
-                    `[DEBUG] No education entries for student: ${
-                        studentData.name || studentData.email || "unknown"
-                    }`
-                );
+                logger.debug({ name: studentData.name || studentData.email || "unknown" }, "No education entries for student");
                 continue;
             }
 
@@ -749,7 +712,7 @@ export const uploadStudentsForMatching = async (req, res) => {
             });
             const enrollmentsBefore = results.enrollments.length;
             for (const entry of studentData.education) {
-                console.log(`[DEBUG] Education entry (raw):`, entry);
+                logger.debug({ entry }, "Education entry (raw)");
                 // Normalize the code using the same function as database codes
                 // (entry.name already has cleanCourseName applied during parsing)
                 const originalName = entry.name || "";
@@ -757,11 +720,11 @@ export const uploadStudentsForMatching = async (req, res) => {
                 
                 // Skip if normalization resulted in empty string
                 if (!normalized) {
-                    console.warn(`[DEBUG] Skipping entry with empty normalized name: "${originalName}"`);
+                    logger.warn({ originalName }, "Skipping entry with empty normalized name");
                     continue;
                 }
                 
-                console.log(`[DEBUG] Matching entry: "${originalName}" → normalized: "${normalized}"`);
+                logger.debug({ originalName, normalized }, "Matching entry normalized");
                 
                 // Check if it's a course (ends with NIVÅ + number, or contains common course keywords)
                 // Treat as Course if it ends with common NIVÅ patterns: 1, 1A, 1B, 2A, 1A1, etc.
@@ -779,37 +742,25 @@ export const uploadStudentsForMatching = async (req, res) => {
                 
                 if (matchesPackage) {
                     type = "CoursePackage";
-                    console.log(
-                        `[DEBUG] Name '${normalized}' matches a CoursePackage. Forcing type to CoursePackage.`
-                    );
+                    logger.debug({ normalized }, "Name matches a CoursePackage. Forcing type to CoursePackage.");
                 } else if (matchesCourse) {
                     type = "Course";
-                    console.log(
-                        `[DEBUG] Name '${normalized}' matches a Course. Forcing type to Course.`
-                    );
+                    logger.debug({ normalized }, "Name matches a Course. Forcing type to Course.");
                 } else {
                     // No exact match found, use pattern-based detection
                     type = isCourse ? "Course" : "CoursePackage";
-                    console.log(
-                        `[DEBUG] No exact match for '${normalized}', using pattern-based type: ${type}`
-                    );
+                    logger.debug({ normalized, type }, "No exact match, using pattern-based type");
                 }
-                console.log(
-                    `[DEBUG] Education entry (normalized): '${normalized}' | Type: ${type}`
-                );
+                logger.debug({ normalized, type }, "Education entry normalized with type");
 
                 if (type === "CoursePackage") {
                     // Only exact match - no fuzzy matching or fallback
                     let pkg = normalizedPackageMap[normalized];
                     if (!pkg) {
-                        console.log(
-                            `[DEBUG] No exact package match found for: '${normalized}'`
-                        );
+                        logger.debug({ normalized }, "No exact package match found");
                     }
                     if (pkg) {
-                        console.log(
-                            `[DEBUG] Matched package: '${normalized}' → '${pkg.coursePackageName}'`
-                        );
+                        logger.debug({ normalized, packageName: pkg.coursePackageName }, "Matched package");
 
                         // Call courseMatchingService to process the package enrollment
                         try {
@@ -828,12 +779,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                                     ],
                                     req.user?.userId || null
                                 );
-                            console.log(
-                                `[DEBUG] Enrollment result for student ${
-                                    dbStudent.name || dbStudent.email
-                                }:`,
-                                result
-                            );
+                            logger.debug({ studentName: dbStudent.name || dbStudent.email, result }, "Enrollment result for student");
 
                             // Aggregate the enrollments from the service result
                             if (
@@ -842,13 +788,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                                 Array.isArray(result.enrollments)
                             ) {
                                 results.enrollments.push(...result.enrollments);
-                                console.log(
-                                    `[DEBUG] Added ${
-                                        result.enrollments.length
-                                    } enrollments to results for student ${
-                                        dbStudent.name || dbStudent.email
-                                    }`
-                                );
+                                logger.debug({ count: result.enrollments.length, studentName: dbStudent.name || dbStudent.email }, "Added enrollments to results for student");
                             }
 
                             // Also aggregate any warnings or errors
@@ -867,12 +807,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                                 results.errors.push(...result.errors);
                             }
                         } catch (err) {
-                            console.error(
-                                `[ERROR] Failed to enroll student ${
-                                    dbStudent.name || dbStudent.email
-                                } in package ${pkg.coursePackageName}:`,
-                                err
-                            );
+                            logger.error({ err, studentName: dbStudent.name || dbStudent.email, packageName: pkg.coursePackageName }, "Failed to enroll student in package");
                             results.errors.push({
                                 studentName: dbStudent.name || dbStudent.email,
                                 studentEmail: dbStudent.email || "",
@@ -887,15 +822,10 @@ export const uploadStudentsForMatching = async (req, res) => {
                     } else {
                         // Do NOT push a warning for unmatched course packages
                         // Only log for debugging
-                        console.warn(
-                            `[WARN] No course package match for: '${normalized}'. Available keys:`,
-                            Object.keys(normalizedPackageMap)
-                        );
+                        logger.warn({ normalized, availableKeys: Object.keys(normalizedPackageMap) }, "No course package match");
                     }
                 } else if (type === "Course") {
-                    console.log(
-                        `[DEBUG] Processing individual course: '${normalized}'`
-                    );
+                    logger.debug({ normalized }, "Processing individual course");
 
                     // Call courseMatchingService to process the individual course enrollment
                     try {
@@ -913,12 +843,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                                 ],
                                 req.user?.userId || null
                             );
-                        console.log(
-                            `[DEBUG] Course enrollment result for student ${
-                                dbStudent.name || dbStudent.email
-                            }:`,
-                            result
-                        );
+                        logger.debug({ studentName: dbStudent.name || dbStudent.email, result }, "Course enrollment result for student");
 
                         // Aggregate the enrollments from the service result
                         if (
@@ -927,13 +852,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                             Array.isArray(result.enrollments)
                         ) {
                             results.enrollments.push(...result.enrollments);
-                            console.log(
-                                `[DEBUG] Added ${
-                                    result.enrollments.length
-                                } course enrollments to results for student ${
-                                    dbStudent.name || dbStudent.email
-                                }`
-                            );
+                            logger.debug({ count: result.enrollments.length, studentName: dbStudent.name || dbStudent.email }, "Added course enrollments to results for student");
                         }
 
                         // Also aggregate any warnings or errors
@@ -952,12 +871,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                             results.errors.push(...result.errors);
                         }
                     } catch (err) {
-                        console.error(
-                            `[ERROR] Failed to enroll student ${
-                                dbStudent.name || dbStudent.email
-                            } in course ${entry.name}:`,
-                            err
-                        );
+                        logger.error({ err, studentName: dbStudent.name || dbStudent.email, courseCode: entry.name }, "Failed to enroll student in course");
                         results.errors.push({
                             studentName: dbStudent.name || dbStudent.email,
                             studentEmail: dbStudent.email || "",
@@ -1010,15 +924,15 @@ export const uploadStudentsForMatching = async (req, res) => {
                         const dbStudentId = dbStudent._id?.toString();
                         const matches = warningStudentId === dbStudentId;
                         if (!matches && warningStudentId) {
-                            console.log(`[DEBUG] Warning studentId mismatch: warning="${warningStudentId}" vs dbStudent="${dbStudentId}"`);
+                            logger.debug({ warningStudentId, dbStudentId }, "Warning studentId mismatch");
                         }
                         return matches;
                     })
                     .map(w => w.courseName)
                     .filter(Boolean);
                 
-                console.log(`[DEBUG] Found ${unmatchedCourses.length} unmatched courses for student ${dbStudent.name}: ${unmatchedCourses.join(', ')}`);
-                console.log(`[DEBUG] Total warnings in results: ${results.warnings.length}, no_match warnings: ${results.warnings.filter(w => w.type === 'no_match').length}`);
+                logger.debug({ count: unmatchedCourses.length, studentName: dbStudent.name, unmatchedCourses }, "Found unmatched courses for student");
+                logger.debug({ totalWarnings: results.warnings.length, noMatchWarnings: results.warnings.filter(w => w.type === 'no_match').length }, "Warning counts");
                 
                 // Find similar course suggestions for unmatched courses
                 const suggestions = [];
@@ -1081,21 +995,16 @@ export const uploadStudentsForMatching = async (req, res) => {
                     try {
                         await Student.findByIdAndDelete(dbStudent._id);
                     } catch (e) {
-                        console.error(
-                            "[CLEANUP] Failed to delete student with zero enrollments:",
-                            e
-                        );
+                        logger.error({ err: e }, "Failed to delete student with zero enrollments during cleanup");
                     }
                 }
             }
         }
 
-        console.log(`[DEBUG] 📊 Processing results:`);
-        console.log(`[DEBUG] Students processed: ${results.students.length}`);
-        console.log(
-            `[DEBUG] Students created/found:`,
-            results.students.map((s) => s.name || s.email || "unknown")
-        );
+        logger.debug({ studentsProcessed: results.students.length }, "Processing results");
+        logger.debug({
+            names: results.students.map((s) => s.name || s.email || "unknown"),
+        }, "Students created/found");
 
         // After processing all students, deduplicate missing package errors globally
         const seenPackages = new Set();
@@ -1110,10 +1019,9 @@ export const uploadStudentsForMatching = async (req, res) => {
             seenPackages.add(norm);
             return true;
         });
-        console.log(
-            "[DEBUG] Deduplicated missing package errors:",
-            results.errors.filter((e) => e.type === "missing_package")
-        );
+        logger.debug({
+            deduplicatedErrors: results.errors.filter((e) => e.type === "missing_package"),
+        }, "Deduplicated missing package errors");
 
         // Normalize error shape for frontend (use 'error' property, not 'message')
         results.errors = (results.errors || []).map((e) => ({
@@ -1121,13 +1029,13 @@ export const uploadStudentsForMatching = async (req, res) => {
             error: e.error || e.message || "",
         }));
 
-        console.log("📊 Final results:", {
+        logger.info({
             students: results.students.length,
             enrollments: results.enrollments?.length || 0,
             warnings: results.warnings?.length || 0,
             errors: results.errors?.length || 0,
             createdTeachers: results.createdTeachers.length,
-        });
+        }, "Final results");
 
         // If any student ended with zero enrollments, abort entire upload
         if (zeroEnrollmentErrors.length > 0) {
@@ -1159,7 +1067,7 @@ export const uploadStudentsForMatching = async (req, res) => {
                     // Ensure we have a valid student ID
                     const studentId = student._id || student.id;
                     if (!studentId) {
-                        console.warn(`Student missing ID, skipping education population:`, student.name || student.email);
+                        logger.warn({ studentName: student.name || student.email }, "Student missing ID, skipping education population");
                         student.education = Array.isArray(student.education) ? student.education : [];
                         continue;
                     }
@@ -1196,13 +1104,13 @@ export const uploadStudentsForMatching = async (req, res) => {
                     const existingEducation = Array.isArray(student.education) ? student.education : [];
                     student.education = [...existingEducation, ...enrollmentEducation];
                 } catch (err) {
-                    console.error(`Error populating education for student ${student._id || student.id || 'unknown'}:`, err);
+                    logger.error({ err, studentId: student._id || student.id || 'unknown' }, "Error populating education for student");
                     // If enrollment fetch fails, use existing education or empty array
                     student.education = Array.isArray(student.education) ? student.education : [];
                 }
             }
             } catch (importErr) {
-                console.error("Error importing StudentEnrollment model:", importErr);
+                logger.error({ err: importErr }, "Error importing StudentEnrollment model");
                 // If import fails, just use existing education data
                 for (const student of results.students) {
                     student.education = Array.isArray(student.education) ? student.education : [];
@@ -1216,7 +1124,7 @@ export const uploadStudentsForMatching = async (req, res) => {
             results,
         });
     } catch (error) {
-        console.error("Error uploading students for matching:", error);
+        logger.error({ err: error }, "Error uploading students for matching");
         const status = error.statusCode || 500;
         if (status === 422) {
             // Build a comprehensive error response
@@ -1298,7 +1206,7 @@ export const processStudentEducation = async (req, res) => {
             results,
         });
     } catch (error) {
-        console.error("Error processing student education:", error);
+        logger.error({ err: error }, "Error processing student education");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1332,7 +1240,7 @@ export const findCourseMatch = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("Error finding course match:", error);
+        logger.error({ err: error }, "Error finding course match");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1420,7 +1328,7 @@ export const getCourseInstances = async (req, res) => {
             instances: instancesWithCounts,
         });
     } catch (error) {
-        console.error("Error fetching course instances:", error);
+        logger.error({ err: error }, "Error fetching course instances");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1473,8 +1381,8 @@ export const getMyCourseInstances = async (req, res) => {
 
         // Debug: Log first instance to see population
         if (instances.length > 0) {
-            console.log('[DEBUG] Sample course instance responsibleTeacher:', instances[0].responsibleTeacher);
-            console.log('[DEBUG] Sample course instance (full):', JSON.stringify(instances[0].toObject(), null, 2));
+            logger.debug({ responsibleTeacher: instances[0].responsibleTeacher }, "Sample course instance responsibleTeacher");
+            logger.debug({ instance: JSON.stringify(instances[0].toObject(), null, 2) }, "Sample course instance (full)");
         }
 
         const merged = await mergeDuplicateCourseInstances(instances);
@@ -1505,7 +1413,7 @@ export const getMyCourseInstances = async (req, res) => {
                 if (instanceObj.responsibleTeacher && typeof instanceObj.responsibleTeacher === 'object') {
                     // If userId is not populated, it might be just an ObjectId
                     if (!instanceObj.responsibleTeacher.userId && instanceObj.responsibleTeacher._id) {
-                        console.log('[DEBUG] responsibleTeacher.userId not populated, attempting manual populate');
+                        logger.debug("responsibleTeacher.userId not populated, attempting manual populate");
                         // This shouldn't happen if populate worked, but handle it gracefully
                     }
                 }
@@ -1523,7 +1431,7 @@ export const getMyCourseInstances = async (req, res) => {
             instances: instancesWithCounts,
         });
     } catch (error) {
-        console.error("Error fetching teacher's course instances:", error);
+        logger.error({ err: error }, "Error fetching teacher's course instances");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1557,7 +1465,7 @@ export const getStudentEnrollments = async (req, res) => {
             enrollments,
         });
     } catch (error) {
-        console.error("Error fetching student enrollments:", error);
+        logger.error({ err: error }, "Error fetching student enrollments");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1583,7 +1491,7 @@ export const getCourseInstanceEnrollments = async (req, res) => {
             enrollments,
         });
     } catch (error) {
-        console.error("Error fetching course instance enrollments:", error);
+        logger.error({ err: error }, "Error fetching course instance enrollments");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1594,7 +1502,7 @@ export const updateEnrollmentStatus = async (req, res) => {
         const { status, reason, notes } = req.body;
         const userId = req.user?.userId;
 
-        console.log(`[updateEnrollmentStatus] Updating enrollment ${enrollmentId} to status: ${status}`);
+        logger.debug({ enrollmentId, status }, "Updating enrollment status");
 
         const enrollment = await StudentEnrollment.findById(enrollmentId);
         if (!enrollment) {
@@ -1618,7 +1526,7 @@ export const updateEnrollmentStatus = async (req, res) => {
                 enrollment.courseInstanceId
             );
         } catch (statsError) {
-            console.error("Error updating course instance stats (non-fatal):", statsError);
+            logger.error({ err: statsError }, "Error updating course instance stats (non-fatal)");
         }
 
         // Reload enrollment to get updated data
@@ -1632,8 +1540,7 @@ export const updateEnrollmentStatus = async (req, res) => {
             enrollment: updatedEnrollment,
         });
     } catch (error) {
-        console.error("Error updating enrollment status:", error);
-        console.error("Error stack:", error.stack);
+        logger.error({ err: error }, "Error updating enrollment status");
         res.status(500).json({ 
             error: "Internal server error",
             message: error.message 
@@ -1669,7 +1576,7 @@ export const updateEnrollmentDates = async (req, res) => {
             enrollment,
         });
     } catch (error) {
-        console.error("Error updating enrollment dates:", error);
+        logger.error({ err: error }, "Error updating enrollment dates");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1775,7 +1682,7 @@ export const deleteEnrollmentAndShift = async (req, res) => {
             updatedEnrollmentsCount: updatedEnrollments.length,
         });
     } catch (error) {
-        console.error("Error deleting enrollment and shifting dates:", error);
+        logger.error({ err: error }, "Error deleting enrollment and shifting dates");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1877,7 +1784,7 @@ export const updateStudyplanTempo = async (req, res) => {
             updatedCount,
         });
     } catch (error) {
-        console.error("Error updating study plan tempo:", error);
+        logger.error({ err: error }, "Error updating study plan tempo");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -1903,7 +1810,7 @@ export const getCourseStatistics = async (req, res) => {
             statistics: stats,
         });
     } catch (error) {
-        console.error("Error fetching course statistics:", error);
+        logger.error({ err: error }, "Error fetching course statistics");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -2022,7 +1929,7 @@ export const createCourseInstance = async (req, res) => {
             wasCreated: true,
         });
     } catch (error) {
-        console.error("Error creating course instance:", error);
+        logger.error({ err: error }, "Error creating course instance");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -2085,7 +1992,7 @@ export const updateCourseInstance = async (req, res) => {
                 return null;
             }
             
-            console.log(`[DEBUG] parseDate input:`, dateStr);
+            logger.debug({ dateStr }, "parseDate input");
             
             // Try YYYY-MM-DD format first (ISO format)
             let parts = dateStr.split('-');
@@ -2100,7 +2007,7 @@ export const updateCourseInstance = async (req, res) => {
                         const date = new Date(year, month, day);
                         // Double-check the date is valid
                         if (!isNaN(date.getTime())) {
-                            console.log(`[DEBUG] Parsed as YYYY-MM-DD: ${year}-${month + 1}-${day}`);
+                            logger.debug({ year, month: month + 1, day }, "Parsed as YYYY-MM-DD");
                             return date;
                         }
                     }
@@ -2138,7 +2045,7 @@ export const updateCourseInstance = async (req, res) => {
                     if (year >= 1900 && year <= 2100 && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
                         const date = new Date(year, month, day);
                         if (!isNaN(date.getTime())) {
-                            console.log(`[DEBUG] Parsed as MM/DD/YYYY: ${month + 1}/${day}/${year}`);
+                            logger.debug({ month: month + 1, day, year }, "Parsed as MM/DD/YYYY");
                             return date;
                         }
                     }
@@ -2148,11 +2055,11 @@ export const updateCourseInstance = async (req, res) => {
             // Fallback to standard Date parsing
             const parsed = new Date(dateStr);
             if (!isNaN(parsed.getTime())) {
-                console.log(`[DEBUG] Parsed using standard Date constructor:`, parsed);
+                logger.debug({ parsed }, "Parsed using standard Date constructor");
                 return parsed;
             }
             
-            console.log(`[WARNING] Failed to parse date: ${dateStr}`);
+            logger.warn({ dateStr }, "Failed to parse date");
             return null;
         };
 
@@ -2165,33 +2072,33 @@ export const updateCourseInstance = async (req, res) => {
         let slutprovDateExplicitlySet = false;
         
         if (slutprovDateInRequest) {
-            console.log(`[DEBUG] slutprovDate in request:`, req.body.slutprovDate, `(type: ${typeof req.body.slutprovDate})`);
+            logger.debug({ slutprovDate: req.body.slutprovDate, type: typeof req.body.slutprovDate }, "slutprovDate in request");
             const parsedDate = parseDate(req.body.slutprovDate);
-            console.log(`[DEBUG] Parsed slutprovDate:`, parsedDate);
+            logger.debug({ parsedDate }, "Parsed slutprovDate");
             if (parsedDate) {
-                console.log(`[DEBUG] Parsed date details:`, {
+                logger.debug({
                     getTime: parsedDate.getTime(),
                     toISOString: parsedDate.toISOString(),
                     toDateString: parsedDate.toDateString(),
                     isValid: !isNaN(parsedDate.getTime()),
                     year: parsedDate.getFullYear()
-                });
+                }, "Parsed date details");
             }
             
             // Only set it if it's a valid date, or explicitly set to null/empty
             if (parsedDate !== null && !isNaN(parsedDate.getTime()) && parsedDate.getFullYear() > 1970) {
                 updateData.slutprovDate = parsedDate;
                 slutprovDateExplicitlySet = true;
-                console.log(`[DEBUG] Setting slutprovDate to:`, parsedDate, `(${parsedDate.toISOString()})`);
+                logger.debug({ slutprovDate: parsedDate, isoString: parsedDate.toISOString() }, "Setting slutprovDate");
             } else if (req.body.slutprovDate === '' || req.body.slutprovDate === null) {
                 updateData.slutprovDate = null; // Explicitly clear it
                 slutprovDateExplicitlySet = true; // User explicitly cleared it
-                console.log(`[DEBUG] Clearing slutprovDate (explicitly set to empty)`);
+                logger.debug("Clearing slutprovDate (explicitly set to empty)");
             } else {
-                console.log(`[WARNING] Failed to parse slutprovDate:`, req.body.slutprovDate, `parsed result:`, parsedDate);
+                logger.warn({ slutprovDate: req.body.slutprovDate, parsedResult: parsedDate }, "Failed to parse slutprovDate");
             }
         } else {
-            console.log(`[DEBUG] slutprovDate NOT in request body`);
+            logger.debug("slutprovDate NOT in request body");
         }
 
         // Check if we need to recalculate slutprovDate
@@ -2210,9 +2117,7 @@ export const updateCourseInstance = async (req, res) => {
                 const calculatedDate = await calculateSlutprovDate(newTeacher, newEndDate);
                 if (calculatedDate) {
                     updateData.slutprovDate = calculatedDate;
-                    console.log(
-                        `📅 Auto-calculated slutprovDate on update for course "${instance.courseName}": ${calculatedDate.toDateString()}`
-                    );
+                    logger.info({ courseName: instance.courseName, slutprovDate: calculatedDate.toDateString() }, "Auto-calculated slutprovDate on update");
                 }
             }
         }
@@ -2225,13 +2130,13 @@ export const updateCourseInstance = async (req, res) => {
         
         // Store the original slutprovDate before applying updates
         const originalSlutprovDate = instanceToUpdate.slutprovDate;
-        console.log(`[DEBUG] Original slutprovDate:`, originalSlutprovDate);
+        logger.debug({ originalSlutprovDate }, "Original slutprovDate");
         
         // If we explicitly set slutprovDate, handle it separately to ensure it's preserved
         let finalSlutprovDate = updateData.slutprovDate;
         if (slutprovDateExplicitlySet) {
             finalSlutprovDate = updateData.slutprovDate; // This is already the parsed Date object
-            console.log(`[DEBUG] Will set slutprovDate to:`, finalSlutprovDate);
+            logger.debug({ finalSlutprovDate }, "Will set slutprovDate to");
             // Remove from updateData so we can set it separately
             delete updateData.slutprovDate;
         }
@@ -2239,7 +2144,7 @@ export const updateCourseInstance = async (req, res) => {
         // Apply all other updates first
         Object.keys(updateData).forEach(key => {
             if (updateData[key] !== undefined) {
-                console.log(`[DEBUG] Setting ${key} to:`, updateData[key]);
+                logger.debug({ key, value: updateData[key] }, "Setting field value");
                 instanceToUpdate[key] = updateData[key];
             }
         });
@@ -2250,46 +2155,46 @@ export const updateCourseInstance = async (req, res) => {
             instanceToUpdate.markModified('slutprovDate');
             // Set a flag to prevent pre-save hook from overriding
             instanceToUpdate._slutprovDateExplicitlySet = true;
-            console.log(`[DEBUG] Set slutprovDate directly, value:`, instanceToUpdate.slutprovDate);
-            console.log(`[DEBUG] Date object details:`, {
+            logger.debug({ slutprovDate: instanceToUpdate.slutprovDate }, "Set slutprovDate directly");
+            logger.debug({
                 value: instanceToUpdate.slutprovDate,
                 getTime: instanceToUpdate.slutprovDate?.getTime(),
                 toISOString: instanceToUpdate.slutprovDate?.toISOString(),
                 isValid: instanceToUpdate.slutprovDate && !isNaN(instanceToUpdate.slutprovDate.getTime()),
                 year: instanceToUpdate.slutprovDate?.getFullYear()
-            });
+            }, "Date object details");
         }
         
         // Save the instance (this will trigger pre-save hooks, but our hook should respect the explicit date)
         let updatedInstance;
         try {
             updatedInstance = await instanceToUpdate.save();
-            console.log(`[DEBUG] Saved instance, final slutprovDate:`, updatedInstance.slutprovDate);
+            logger.debug({ slutprovDate: updatedInstance.slutprovDate }, "Saved instance, final slutprovDate");
             if (updatedInstance.slutprovDate) {
-                console.log(`[DEBUG] Final date details:`, {
+                logger.debug({
                     value: updatedInstance.slutprovDate,
                     getTime: updatedInstance.slutprovDate.getTime(),
                     toISOString: updatedInstance.slutprovDate.toISOString(),
                     isValid: !isNaN(updatedInstance.slutprovDate.getTime()),
                     year: updatedInstance.slutprovDate.getFullYear()
-                });
+                }, "Final date details");
                 
                 // If the date was changed to 1970-01-01, force update it directly via MongoDB
                 if (updatedInstance.slutprovDate.getFullYear() === 1970 && slutprovDateExplicitlySet && finalSlutprovDate) {
-                    console.log(`[WARNING] Date was changed to 1970-01-01, forcing direct MongoDB update`);
+                    logger.warn("Date was changed to 1970-01-01, forcing direct MongoDB update");
                     await CourseInstance.updateOne(
                         { _id: instanceId },
                         { $set: { slutprovDate: finalSlutprovDate } }
                     );
                     // Reload the instance
                     updatedInstance = await CourseInstance.findById(instanceId);
-                    console.log(`[DEBUG] After force update, slutprovDate:`, updatedInstance.slutprovDate);
+                    logger.debug({ slutprovDate: updatedInstance.slutprovDate }, "After force update, slutprovDate");
                 }
             } else {
-                console.log(`[DEBUG] Final slutprovDate is null/undefined`);
+                logger.debug("Final slutprovDate is null/undefined");
             }
         } catch (error) {
-            console.error(`[ERROR] Error saving instance:`, error);
+            logger.error({ err: error }, "Error saving instance");
             throw error;
         }
         
@@ -2310,9 +2215,9 @@ export const updateCourseInstance = async (req, res) => {
                     await enrollment.save(); // This will trigger calendar sync via post-save hook
                 }
                 
-                console.log(`📅 Synced calendar events for ${enrollments.length} enrollments after course instance update`);
+                logger.debug({ count: enrollments.length }, "Synced calendar events after course instance update");
             } catch (calendarError) {
-                console.error(`❌ Error syncing calendar events after course instance update:`, calendarError);
+                logger.error({ err: calendarError }, "Error syncing calendar events after course instance update");
                 // Don't fail the request if calendar sync fails
             }
         }
@@ -2323,7 +2228,7 @@ export const updateCourseInstance = async (req, res) => {
             instance: updatedInstance,
         });
     } catch (error) {
-        console.error("Error updating course instance:", error);
+        logger.error({ err: error }, "Error updating course instance");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -2363,7 +2268,7 @@ export const addStudentsToInstance = async (req, res) => {
                 });
 
                 if (existingEnrollment) {
-                    console.log(`[SKIP] Enrollment already exists for student ${studentId} in instance ${instanceId}`);
+                    logger.debug({ studentId, instanceId }, "Enrollment already exists, skipping");
                     continue;
                 }
 
@@ -2390,7 +2295,7 @@ export const addStudentsToInstance = async (req, res) => {
                 await enrollment.save();
                 enrollments.push(enrollment);
 
-                console.log(`✅ Created enrollment for student ${student.name} in course instance ${instance.courseName}`);
+                logger.info({ studentName: student.name, courseName: instance.courseName }, "Created enrollment for student in course instance");
 
                 // Sync calendar event if enrollment has a slutprovDate
                 if (enrollment.slutprovDate) {
@@ -2398,12 +2303,12 @@ export const addStudentsToInstance = async (req, res) => {
                         const { syncCalendarEventFromEnrollment } = await import("../utils/calendarEventSync.js");
                         await syncCalendarEventFromEnrollment(enrollment._id);
                     } catch (calendarError) {
-                        console.error(`❌ Error syncing calendar event for enrollment ${enrollment._id}:`, calendarError);
+                        logger.error({ err: calendarError, enrollmentId: enrollment._id }, "Error syncing calendar event for enrollment");
                         // Don't fail the enrollment creation if calendar sync fails
                     }
                 }
             } catch (error) {
-                console.error(`❌ Error creating enrollment for student ${studentId}:`, error);
+                logger.error({ err: error, studentId }, "Error creating enrollment for student");
                 errors.push(`Failed to enroll student ${studentId}: ${error.message}`);
             }
         }
@@ -2415,7 +2320,7 @@ export const addStudentsToInstance = async (req, res) => {
             errors: errors.length > 0 ? errors : undefined,
         });
     } catch (error) {
-        console.error("Error adding students to course instance:", error);
+        logger.error({ err: error }, "Error adding students to course instance");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -2435,7 +2340,7 @@ export const deleteCourseInstance = async (req, res) => {
             message: "Course instance and related enrollments deleted",
         });
     } catch (error) {
-        console.error("Error deleting course instance:", error);
+        logger.error({ err: error }, "Error deleting course instance");
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -2443,18 +2348,16 @@ export const deleteCourseInstance = async (req, res) => {
 // Bulk delete all course instances and related enrollments
 export const deleteAllCourseInstances = async (req, res) => {
     try {
-        console.log("[API] DELETE /course-instances/all called");
+        logger.info("DELETE /course-instances/all called");
         const courseResult = await CourseInstance.deleteMany({});
         const enrollmentResult = await StudentEnrollment.deleteMany({});
-        console.log(
-            `[API] Deleted ${courseResult.deletedCount} course instances and ${enrollmentResult.deletedCount} enrollments`
-        );
+        logger.info({ courseInstancesDeleted: courseResult.deletedCount, enrollmentsDeleted: enrollmentResult.deletedCount }, "Deleted course instances and enrollments");
         res.json({
             success: true,
             message: `All course instances (${courseResult.deletedCount}) and related enrollments (${enrollmentResult.deletedCount}) deleted`,
         });
     } catch (error) {
-        console.error("Error deleting all course instances:", error);
+        logger.error({ err: error }, "Error deleting all course instances");
         res.status(500).json({ error: "Internal server error" });
     }
 };

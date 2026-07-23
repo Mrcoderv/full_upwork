@@ -53,6 +53,17 @@ vi.mock("../../src/utils/parseStudentExcel.js", async () => {
   };
 });
 
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+}));
+vi.mock("../../src/utils/logger.js", () => ({
+  __esModule: true,
+  default: loggerMock,
+}));
+
 import Student from "../../src/models/Student.js";
 import Program from "../../src/models/Program.js";
 import Course from "../../src/models/Course.js";
@@ -296,14 +307,13 @@ describe("uploadXlsx", () => {
     const req = {
       file: { buffer: Buffer.from("data"), originalname: "skip.xlsx" },
     };
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await uploadXlsx(req, res);
 
-    expect(consoleWarn).toHaveBeenCalledWith(
-      expect.stringContaining("Skipping entry with empty normalized name")
+    expect(loggerMock.debug).toHaveBeenCalledWith(
+      expect.objectContaining({ originalName: "()" }),
+      "Skipping entry with empty normalized name"
     );
     expect(Student.bulkWrite).toHaveBeenCalledTimes(1);
-    consoleWarn.mockRestore();
   });
 
   it("provides suggestions when unmatched courses are prevalidated", async () => {

@@ -34,6 +34,10 @@ vi.mock('axios', () => {
         post: vi.fn(() => Promise.resolve({ data: 'Success' })),
         put: vi.fn(() => Promise.resolve({ data: 'Success' })),
         delete: vi.fn(() => Promise.resolve({ data: 'Success' })),
+        interceptors: {
+            request: { use: vi.fn() },
+            response: { use: vi.fn() }
+        }
     };
     axiosMock.create = vi.fn(() => axiosMock);
     return {

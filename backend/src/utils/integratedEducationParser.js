@@ -3,9 +3,10 @@ import mongoose from 'mongoose';
 import Program from '../models/Program.js';
 import CoursePackage from '../models/CoursePackage.js';
 import Course from '../models/Course.js';
+import logger from "./logger.js";
 
 async function parseEducation(filePath) {
-  console.log('🔗 Connecting to MongoDB...');
+  logger.info("Connecting to MongoDB...");
   const mongoUri = process.env.MONGODB_URI;
   await mongoose.connect(mongoUri);
 
@@ -16,7 +17,7 @@ async function parseEducation(filePath) {
     const [coursesSheet, coursePackagesSheet] = workbook.worksheets;
 
     if (!coursesSheet || !coursePackagesSheet) {
-      throw new Error('❌ Missing worksheets "Kurser" and/or "Kurspaket".');
+      throw new Error('Missing worksheets "Kurser" and/or "Kurspaket".');
     }
 
 
@@ -38,7 +39,7 @@ async function parseEducation(filePath) {
         { new: true, upsert: true }
       );
       orderCounter = 1;
-      console.log(`🆕 Program processed: ${programName}`);
+      logger.info({ programName }, "Program processed");
     }
 
     if (!courseName || !currentProgram) continue;
@@ -47,10 +48,10 @@ async function parseEducation(filePath) {
     let course = await Course.findOne({ courseName, courseCode });
     if (!course) {
       course = await Course.create({ courseName, courseCode, coursePoints, courseExtent });
-      console.log(`✅ Created new course: ${courseName}`);
+      logger.info({ courseName }, "Created new course");
     } else {
       await Course.findByIdAndUpdate(course._id, { coursePoints, courseExtent });
-      console.log(`🔄 Updated existing course: ${courseName}`);
+      logger.info({ courseName }, "Updated existing course");
     }
 
     await Program.findByIdAndUpdate(currentProgram._id, {
@@ -59,7 +60,7 @@ async function parseEducation(filePath) {
       }
     });
 
-    console.log(`✅ Course linked to program: ${courseName}, order: ${orderCounter - 1}`);
+    logger.info({ courseName, order: orderCounter - 1 }, "Course linked to program");
   }
 
 
@@ -83,7 +84,7 @@ async function parseEducation(filePath) {
           { programName },
           { new: true, upsert: true }
         );
-        console.log(`🆕 Program updated: ${programName}`);
+        logger.info({ programName }, "Program updated");
       }
 
       if (isBold) {
@@ -103,7 +104,7 @@ async function parseEducation(filePath) {
           $addToSet: { programCoursePackages: currentPackage._id },
         });
 
-        console.log(`📦 Course Package processed: ${itemName}`);
+        logger.info({ itemName }, "Course Package processed");
       } else if (currentPackage) {
         const course = await Course.findOneAndUpdate(
           { courseName: itemName, courseCode: itemCode },
@@ -115,16 +116,16 @@ async function parseEducation(filePath) {
           $addToSet: { coursePackageCourses: course._id },
         });
 
-        console.log(`✅ Added course ${itemName} to package ${currentPackage.coursePackageName}`);
+        logger.info({ itemName, packageName: currentPackage.coursePackageName }, "Added course to package");
       }
     }
 
-    console.log('🎉 Education data processed successfully.');
+    logger.info("Education data processed successfully");
   } catch (error) {
-    console.error('❌ Error:', error);
+    logger.error({ err: error }, "Error processing education data");
   } finally {
     await mongoose.disconnect();
-    console.log('🔌 Disconnected from MongoDB.');
+    logger.info("Disconnected from MongoDB");
   }
 }
 

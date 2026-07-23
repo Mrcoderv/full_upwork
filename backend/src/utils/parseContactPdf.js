@@ -1,3 +1,5 @@
+import logger from "./logger.js";
+
 function parseContactPdf(text) {
     const lines = text
         .split("\n")
@@ -51,35 +53,35 @@ function parseContactPdf(text) {
         } else if (line.startsWith("Sökta kurser")) {
             result["kurser"] = [];
             i++;
-            console.log("---- DETECTED 'Sökta kurser' ----");
+            logger.debug("Detected 'Sökta kurser' section");
 
             while (i < lines.length) {
-                console.log("IM IN THE LOOP!", lines[i]);
+                logger.debug({ line: lines[i] }, "Processing line in course loop");
 
                 // Match course name and points
 
                 let courseMatch = lines[i].match(
                     /^[0-9]+\.\s(.+),\s([0-9]+)\spoäng/
                 );
-                console.log("MATCH!", courseMatch);
+                logger.debug({ courseMatch }, "Course regex match result");
                 if (courseMatch) {
                     let courseName = courseMatch[1];
-                    console.log("CourseName:", courseName);
+                    logger.debug({ courseName }, "Parsed course name");
                     let coursePoints = courseMatch[2];
-                    console.log("CoursePoints:", coursePoints);
+                    logger.debug({ coursePoints }, "Parsed course points");
 
                     // Ensure next line contains course details
                     let nextLine = lines[i + 1]?.trim();
-                    console.log("DetailsLine:", nextLine);
-                    console.log("nextLine.Match:", nextLine.match(/^[0-9]+\./));
+                    logger.debug({ nextLine }, "Details line");
+                    logger.debug({ match: nextLine.match(/^[0-9]+\./) }, "Next line match");
 
                     if (nextLine && nextLine.match(/^[0-9]+\./)) {
-                        console.log("I MATCH DETAIL!");
+                        logger.debug("Detail line matched");
                         let details = nextLine.split(",").map((d) => d.trim());
                         let Dates = details[0].slice(2).split(" ");
                         let startDate = Dates[0];
                         let endDate = Dates[2];
-                        console.log("Details:", details.length, details);
+                        logger.debug({ count: details.length, details }, "Course details parsed");
                         if (details.length >= 5) {
                             let courseObj = {
                                 namn: courseName,
@@ -92,15 +94,12 @@ function parseContactPdf(text) {
                                 kod: details[4] || "",
                             };
                             tot += Number(coursePoints);
-                            console.log(tot);
-                            console.log("Adding course:", courseObj);
+                            logger.debug({ totalPoints: tot }, "Running total");
+                            logger.debug({ course: courseObj }, "Adding course");
                             result["kurser"].push(courseObj);
                             i++; // Move past course details
                         } else {
-                            console.log(
-                                "Skipping due to missing details:",
-                                details
-                            );
+                            logger.debug({ details }, "Skipping course due to missing details");
                         }
                     }
                 }
@@ -108,7 +107,7 @@ function parseContactPdf(text) {
                 i++; // Move to the next potential course
             }
         } else if (line.startsWith("Totalt antal sökta poäng")) {
-            console.log("Tutti!");
+            logger.debug("Processed total points section");
             result["totalt_poäng"] = lines[i + 1]?.replace("poäng", "").trim();
             i++;
         }

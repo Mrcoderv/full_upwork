@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { isAuthenticated } from "../middleware/auth.js";
 import { can } from "../middleware/authorization.js";
+import logger from "../utils/logger.js";
 
 // Predefined color list for teacher profiles
 const TEACHER_COLORS = [
@@ -36,7 +37,7 @@ async function getNextAvailableColor() {
         const index = existingTeachers.length % TEACHER_COLORS.length;
         return TEACHER_COLORS[index];
     } catch (error) {
-        console.error('Error getting next available color:', error);
+        logger.error({ err: error }, "Error getting next available color")
         // Fallback to first color if there's an error
         return TEACHER_COLORS[0];
     }
@@ -97,7 +98,7 @@ router.get(
 
       res.json({ success: true, count: results.length, teachers: results });
     } catch (err) {
-      console.error("❌ DEBUG populate error:", err);
+      logger.error({ err }, "DEBUG populate error")
       res.status(500).json({ error: "Debug route failed." });
     }
   }
@@ -121,7 +122,7 @@ router.get(
             }
             res.status(200).json(teacher);
         } catch (error) {
-            console.error("Error fetching teacher profile:", error.message);
+            logger.error({ err: error.message }, "Error fetching teacher profile")
             res.status(500).json({ error: "Failed to fetch teacher profile." });
         }
     }
@@ -139,7 +140,7 @@ router.get(
                 .sort({ createdAt: -1 });
             res.status(200).json(teachers);
         } catch (error) {
-            console.error("Error fetching teachers:", error.message);
+            logger.error({ err: error.message }, "Error fetching teachers")
             res.status(500).json({ error: "Failed to fetch teachers." });
         }
     }
@@ -151,7 +152,7 @@ router.post(
     isAuthenticated,
     can("teachers:create"),
     async (req, res) => {
-        console.log("📨 Incoming teacher POST:", req.body);
+        logger.info({ payload: req.body }, "Incoming teacher POST (admin)")
 
         try {
             const { username, email, subject, colorCode, generatePassword, phoneNumbers } =
@@ -234,7 +235,7 @@ router.post(
 
             res.status(201).json(response);
         } catch (error) {
-            console.error("❌ Error in POST /admin/teacher:", error.message);
+            logger.error({ err: error.message }, "Error in POST /admin/teacher")
             res.status(500).json({ error: "Internal server error." });
         }
     }
@@ -242,7 +243,7 @@ router.post(
 
 // POST /teacher - Create a user + teacher profile (kept for backward compatibility)
 router.post("/teacher", isAuthenticated, can("teachers:create"), async (req, res) => {
-    console.log("📨 Incoming teacher POST:", req.body);
+    logger.info({ payload: req.body }, "Incoming teacher POST")
 
     try {
             const { username, email, colorCode, subject, phoneNumbers } = req.body;
@@ -289,7 +290,7 @@ router.post("/teacher", isAuthenticated, can("teachers:create"), async (req, res
             },
         });
     } catch (error) {
-        console.error("❌ Error in POST /teacher:", error.message);
+        logger.error({ err: error.message }, "Error in POST /teacher")
         res.status(500).json({ error: "Internal server error." });
     }
 });
@@ -341,7 +342,7 @@ router.put(
                 teacher: updatedTeacher,
             });
         } catch (error) {
-            console.error("❌ Error updating teacher:", error.message);
+            logger.error({ err: error.message }, "Error updating teacher")
             res.status(500).json({ error: "Internal server error." });
         }
     }
@@ -381,7 +382,7 @@ router.put(
                 message: "Password updated successfully",
             });
         } catch (error) {
-            console.error("❌ Error updating password:", error.message);
+            logger.error({ err: error.message }, "Error updating password")
             res.status(500).json({ error: "Internal server error." });
         }
     }
@@ -422,7 +423,7 @@ router.delete(
                 message: "Teacher deleted successfully",
             });
         } catch (error) {
-            console.error("❌ Error deleting teacher:", error.message);
+            logger.error({ err: error.message }, "Error deleting teacher")
             res.status(500).json({ error: "Internal server error." });
         }
     }
@@ -440,7 +441,7 @@ router.put(
             const result = await Student.updateMany({ teacherId: id }, { $set: { teacherId: null } });
             res.json({ success: true, message: `Unassigned ${result.modifiedCount} students from teacher.` });
         } catch (error) {
-            console.error("Error unassigning students from teacher:", error);
+            logger.error({ err: error }, "Error unassigning students from teacher")
             res.status(500).json({ error: "Internal server error." });
         }
     }

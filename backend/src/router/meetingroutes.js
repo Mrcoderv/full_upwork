@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateUser } from '../controllers/authController.js'; // om du har detta
 import Meeting from "../models/Meeting.js";
+import logger from "../utils/logger.js";
 
 
 const router = express.Router();
@@ -34,11 +35,7 @@ router.get('/meetings', authenticateUser, async (req, res) => {
             }
         }
 
-        console.log('🔍 GET /meetings - Query filter:', {
-            userRole: role,
-            bookedByParam: bookedBy,
-            finalQuery: query
-        });
+        logger.debug({ userRole: role, bookedByParam: bookedBy, finalQuery: query }, "GET /meetings - Query filter")
 
         // Add filtering by student name if provided
         if (studentName) {
@@ -73,7 +70,7 @@ router.get('/meetings', authenticateUser, async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('❌ Kunde inte hämta möten:', err);
+        logger.error({ err }, "Failed to fetch meetings")
         res.status(500).json({ error: 'Serverfel vid hämtning av möten' });
     }
 });
@@ -113,14 +110,7 @@ router.post('/meetings', authenticateUser, async (req, res) => {
             return res.status(400).json({ error: `Invalid bookedBy value: ${bookedBy}. Must be one of: ${validBookedByValues.join(', ')}` });
         }
 
-        console.log('📝 POST /meetings - Creating meeting:', {
-            title,
-            studentId,
-            studentName,
-            bookedBy,
-            createdBy: userId,
-            userRole: req.user.role
-        });
+        logger.info({ title, studentId, studentName, bookedBy, createdBy: userId, userRole: req.user.role }, "Creating meeting")
 
         const saved = await new Meeting({
             title,
@@ -138,15 +128,11 @@ router.post('/meetings', authenticateUser, async (req, res) => {
             createdAt: new Date()
         }).save();
 
-        console.log('✅ Meeting created:', {
-            _id: saved._id,
-            bookedBy: saved.bookedBy,
-            studentName: saved.student.name
-        });
+        logger.info({ _id: saved._id, bookedBy: saved.bookedBy, studentName: saved.student.name }, "Meeting created")
 
         res.status(201).json(saved);
     } catch (err) {
-        console.error('❌ Kunde inte spara möte:', err);
+        logger.error({ err }, "Failed to save meeting")
         res.status(500).json({ error: 'Serverfel vid sparande av möte' });
     }
 });
@@ -183,7 +169,7 @@ router.put('/meetings/:id', authenticateUser, async (req, res) => {
         }
         res.json(meeting);
     } catch (err) {
-        console.error('❌ Kunde inte uppdatera möte:', err);
+        logger.error({ err }, "Failed to update meeting")
         res.status(500).json({ error: 'Serverfel vid uppdatering av möte' });
     }
 });
@@ -211,7 +197,7 @@ router.delete('/meetings/:id', authenticateUser, async (req, res) => {
         await Meeting.findByIdAndDelete(id);
         res.status(204).send();
     } catch (err) {
-        console.error('❌ Kunde inte radera möte:', err);
+        logger.error({ err }, "Failed to delete meeting")
         res.status(500).json({ error: 'Serverfel vid radering av möte' });
     }
 });

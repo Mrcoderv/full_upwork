@@ -1,48 +1,21 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("winston", () => {
-    const logger = {
-        add: vi.fn(),
+vi.mock("../../src/utils/logger.js", () => ({
+    __esModule: true,
+    default: {
+        info: vi.fn(),
+        warn: vi.fn(),
         error: vi.fn(),
-    };
+        debug: vi.fn(),
+    },
+}));
 
-    const format = {
-        combine: (...args) => args,
-        timestamp: vi.fn(() => () => "timestamp"),
-        errors: vi.fn(() => (input) => input),
-        json: vi.fn(() => (input) => input),
-        colorize: vi.fn(() => (input) => input),
-        simple: vi.fn(() => (input) => input),
-    };
-
-    class FakeTransport {}
-    const transports = {
-        File: FakeTransport,
-        Console: FakeTransport,
-    };
-
-    const mockWinston = {
-        format,
-        transports,
-        createLogger: vi.fn(() => logger),
-    };
-
-    return {
-        __esModule: true,
-        default: mockWinston,
-    };
-});
-
-describe("errorHandler logger initialization", () => {
-    it("adds console transport when not in production", async () => {
-        const originalEnv = process.env.NODE_ENV;
-        process.env.NODE_ENV = "development";
-        vi.resetModules();
-
+describe("errorHandler logger re-export", () => {
+    it("re-exports the pino logger", async () => {
         const { logger } = await import("../../src/utils/errorHandler.js");
-
-        expect(logger.add).toHaveBeenCalled();
-
-        process.env.NODE_ENV = originalEnv;
+        expect(logger).toBeDefined();
+        expect(typeof logger.info).toBe("function");
+        expect(typeof logger.warn).toBe("function");
+        expect(typeof logger.error).toBe("function");
     });
 });

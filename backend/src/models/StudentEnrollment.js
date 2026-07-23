@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import logger from "../utils/logger.js";
 
 const studentEnrollmentSchema = new mongoose.Schema(
     {
@@ -232,7 +233,7 @@ studentEnrollmentSchema.post("save", async function (doc) {
             const { syncCalendarEventFromEnrollment } = await import("../utils/calendarEventSync.js");
             await syncCalendarEventFromEnrollment(doc._id);
         } catch (calendarError) {
-            console.error(`❌ Error syncing calendar event for enrollment ${doc._id}:`, calendarError);
+            logger.error({ err: calendarError, enrollmentId: doc._id }, "Error syncing calendar event for enrollment");
             // Don't fail the enrollment save if calendar sync fails
         }
     }

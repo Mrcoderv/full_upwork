@@ -10,6 +10,7 @@ import Provning from "../models/Provning.js";
 import Teacher from "../models/Teacher.js";
 import Notification from "../models/Notification.js";
 import mongoose from "mongoose";
+import logger from "../utils/logger.js";
 
 /**
  * Student Details Controller
@@ -69,7 +70,7 @@ export const getStudentDetails = async (req, res) => {
                     edu.refId = populatedRef;
                 }
             } catch (populateError) {
-                console.error(`Error populating ${edu.type}:`, populateError);
+                logger.error({ err: populateError, type: edu.type }, "Error populating education ref");
                 edu.refId = null;
             }
         }
@@ -124,7 +125,7 @@ export const getStudentDetails = async (req, res) => {
 
         res.json(populatedStudent);
     } catch (error) {
-        console.error("❌ Error fetching student details:", error);
+        logger.error({ err: error }, "Error fetching student details");
         res.status(500).json({ error: "Failed to fetch student details" });
     }
 };
@@ -229,10 +230,7 @@ export const updateStudentInfo = async (req, res) => {
                 );
                 await syncCalendarEventsForStudent(student._id);
             } catch (calendarError) {
-                console.error(
-                    "❌ Error syncing calendar event:",
-                    calendarError
-                );
+                logger.error({ err: calendarError }, "Error syncing calendar event");
                 // Don't fail the update if calendar sync fails
             }
         }
@@ -244,7 +242,7 @@ export const updateStudentInfo = async (req, res) => {
             changeLog,
         });
     } catch (error) {
-        console.error("❌ Error updating student information:", error);
+        logger.error({ err: error }, "Error updating student information");
         res.status(500).json({ error: "Failed to update student information" });
     }
 };
@@ -294,7 +292,7 @@ export const addComment = async (req, res) => {
             commentHistory: student.commentHistory,
         });
     } catch (error) {
-        console.error("❌ Error adding comment:", error);
+        logger.error({ err: error }, "Error adding comment");
         res.status(500).json({ error: "Failed to add comment" });
     }
 };
@@ -351,7 +349,7 @@ export const editComment = async (req, res) => {
             comment: targetComment,
         });
     } catch (error) {
-        console.error("❌ Error editing comment:", error);
+        logger.error({ err: error }, "Error editing comment");
         res.status(500).json({ error: "Failed to edit comment" });
     }
 };
@@ -410,7 +408,7 @@ export const deleteComment = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("❌ Error deleting comment:", error);
+        logger.error({ err: error }, "Error deleting comment");
         res.status(500).json({ error: "Failed to delete comment" });
     }
 };
@@ -447,7 +445,7 @@ export const markCommentSeen = async (req, res) => {
             message: "Comment marked as seen",
         });
     } catch (error) {
-        console.error("❌ Error marking comment as seen:", error);
+        logger.error({ err: error }, "Error marking comment as seen");
         res.status(500).json({ error: "Failed to mark comment as seen" });
     }
 };
@@ -476,7 +474,7 @@ export const getChangeHistory = async (req, res) => {
             changeHistory: student.changeHistory || [],
         });
     } catch (error) {
-        console.error("❌ Error fetching change history:", error);
+        logger.error({ err: error }, "Error fetching change history");
         res.status(500).json({ error: "Failed to fetch change history" });
     }
 };
@@ -504,15 +502,15 @@ export const setStudentDropout = async (req, res) => {
             return res.status(404).json({ error: "Student not found" });
         }
         
-        console.log(`🔍 Student fetched: ${student.name} (ID: ${id})`);
-        console.log(`🔍 Student.teacherId:`, student.teacherId);
-        console.log(`🔍 Student.teacher (string):`, student.teacher);
+        logger.debug({ name: student.name, id }, "Student fetched");
+        logger.debug({ teacherId: student.teacherId }, "Student teacherId");
+        logger.debug({ teacher: student.teacher }, "Student teacher string");
 
         // If already dropout, we still need to ensure notification exists
         // (in case it was deleted or teacher changed)
         const wasAlreadyDropout = student.dropout;
         if (wasAlreadyDropout) {
-            console.log(`ℹ️ Student ${student.name} is already marked as dropout, checking notification...`);
+            logger.info({ name: student.name }, "Student already marked as dropout, checking notification");
         }
 
         // Set dropout flag (only if not already set)
@@ -547,16 +545,15 @@ export const setStudentDropout = async (req, res) => {
         // Convert id to ObjectId to ensure proper matching
         const studentObjectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
         const allExamAttendance = await ExamAttendance.find({ studentId: studentObjectId });
-        console.log(`🔍 Found ${allExamAttendance.length} exam attendance records for student ${student.name} (ID: ${id})`);
-        
+        logger.debug({ count: allExamAttendance.length, name: student.name, id }, "Found exam attendance records");
         if (allExamAttendance.length > 0) {
-            console.log(`🔍 Exam attendance records details:`, allExamAttendance.map(a => ({
+            logger.debug({ records: allExamAttendance.map(a => ({
                 _id: a._id,
                 examDate: a.examDate,
                 teacherId: a.teacherId,
                 courseId: a.courseId,
                 studentId: a.studentId
-            })));
+            })) }, "Exam attendance records details");
         }
 
         // Group exams by examDate (normalized to start of day) + teacherId + courseId to identify which exams they belong to
@@ -585,14 +582,13 @@ export const setStudentDropout = async (req, res) => {
         const deletedExamAttendance = await ExamAttendance.deleteMany({
             studentId: studentObjectId,
         });
-        console.log(`🗑️ Deleted ${deletedExamAttendance.deletedCount} exam attendance records for student ${student.name} (ID: ${id})`);
-        
+        logger.info({ count: deletedExamAttendance.deletedCount, name: student.name, id }, "Deleted exam attendance records");
         // Verify deletion by checking if any records remain
         const remainingRecords = await ExamAttendance.countDocuments({ studentId: studentObjectId });
         if (remainingRecords > 0) {
-            console.warn(`⚠️ WARNING: ${remainingRecords} exam attendance records still exist for student ${student.name} after deletion attempt!`);
+            logger.warn({ remainingRecords, name: student.name }, "Exam attendance records still exist after deletion");
         } else {
-            console.log(`✅ Verified: No exam attendance records remain for student ${student.name}`);
+            logger.info({ name: student.name }, "Verified: No exam attendance records remain");
         }
 
         // Check each exam group - if no students remain, delete the entire exam
@@ -630,7 +626,7 @@ export const setStudentDropout = async (req, res) => {
                 // No students left in this exam, delete all records (should already be deleted, but double-check)
                 const deleted = await ExamAttendance.deleteMany(examQuery);
                 deletedEmptyExams++;
-                console.log(`🗑️ Deleted empty exam group: ${examKey} (${deleted.deletedCount} records)`);
+                logger.info({ examKey, count: deleted.deletedCount }, "Deleted empty exam group");
             }
         }
 
@@ -638,25 +634,25 @@ export const setStudentDropout = async (req, res) => {
         const deletedProvning = await Provning.deleteMany({
             studentId: studentObjectId,
         });
-        console.log(`🗑️ Deleted ${deletedProvning.deletedCount} exam registrations (Provning) for student ${student.name}`);
+        logger.info({ count: deletedProvning.deletedCount, name: student.name }, "Deleted exam registrations (Provning)");
 
         // Send notification to responsible teacher
         let teacherRecord = null;
         let teacherUserId = null;
         
-        console.log(`🔍 Looking for teacher for student ${student.name} (ID: ${id})`);
-        console.log(`🔍 student.teacherId:`, student.teacherId);
-        console.log(`🔍 student.teacher (string):`, student.teacher);
+        logger.debug({ name: student.name, id }, "Looking for teacher for student");
+        logger.debug({ teacherId: student.teacherId }, "Student teacherId");
+        logger.debug({ teacher: student.teacher }, "Student teacher string");
         
         if (student.teacherId) {
             // If teacherId is populated (as object), use it directly
             if (student.teacherId._id) {
                 teacherRecord = student.teacherId;
-                console.log(`✅ Found populated teacherId:`, teacherRecord._id);
+                logger.debug({ teacherRecordId: teacherRecord._id }, "Found populated teacherId");
             } else {
                 // If teacherId is just an ObjectId, fetch the teacher
                 teacherRecord = await Teacher.findById(student.teacherId);
-                console.log(`✅ Fetched teacher by ID:`, teacherRecord ? teacherRecord._id : 'NOT FOUND');
+                logger.debug({ teacherRecordId: teacherRecord ? teacherRecord._id : 'NOT FOUND' }, "Fetched teacher by ID");
             }
             
             if (teacherRecord) {
@@ -664,44 +660,46 @@ export const setStudentDropout = async (req, res) => {
                 if (teacherRecord.userId) {
                     // userId might be ObjectId or populated object
                     teacherUserId = teacherRecord.userId._id || teacherRecord.userId;
-                    console.log(`✅ Found userId from teacher record:`, teacherUserId);
+                    logger.debug({ teacherUserId }, "Found userId from teacher record");
                 } else {
                     // If userId is not populated, fetch it
                     const populatedTeacher = await Teacher.findById(teacherRecord._id).populate("userId");
                     if (populatedTeacher && populatedTeacher.userId) {
                         teacherUserId = populatedTeacher.userId._id || populatedTeacher.userId;
-                        console.log(`✅ Found userId after populate:`, teacherUserId);
+                        logger.debug({ teacherUserId }, "Found userId after populate");
                     } else {
-                        console.log(`⚠️ Could not find userId for teacher ${teacherRecord._id}`);
+                        logger.warn({ teacherRecordId: teacherRecord._id }, "Could not find userId for teacher");
                     }
                 }
             }
         } else if (student.teacher && typeof student.teacher === "string") {
             // Try to find teacher by name string
-            console.log(`🔍 Looking for teacher by name: "${student.teacher}"`);
+            logger.debug({ name: student.teacher }, "Looking for teacher by name");
             const teacherUser = await User.findOne({ name: student.teacher });
             if (teacherUser) {
-                console.log(`✅ Found user by name:`, teacherUser._id);
+                logger.debug({ userId: teacherUser._id }, "Found user by name");
                 // Find the Teacher record for this user
                 teacherRecord = await Teacher.findOne({ userId: teacherUser._id });
                 if (teacherRecord) {
                     teacherUserId = teacherUser._id;
-                    console.log(`✅ Found Teacher record for user:`, teacherRecord._id);
+                    logger.debug({ teacherRecordId: teacherRecord._id }, "Found Teacher record for user");
                 } else {
-                    console.log(`⚠️ No Teacher record found for user ${teacherUser._id}`);
+                    logger.warn({ userId: teacherUser._id }, "No Teacher record found for user");
                 }
             } else {
-                console.log(`⚠️ No user found with name "${student.teacher}"`);
+                logger.warn({ name: student.teacher }, "No user found with name");
             }
         } else {
-            console.log(`⚠️ No teacherId or teacher name found for student ${student.name}`);
+            logger.warn({ name: student.name }, "No teacherId or teacher name found for student");
         }
 
         if (teacherRecord && teacherRecord._id) {
-            console.log(`📧 Creating notification for teacher ${teacherRecord._id} (user: ${teacherUserId})`);
-            console.log(`   - Teacher record ID:`, teacherRecord._id.toString());
-            console.log(`   - Teacher user ID:`, teacherUserId ? teacherUserId.toString() : 'MISSING');
-            console.log(`   - Student ID:`, id);
+            logger.debug({ teacherRecordId: teacherRecord._id, teacherUserId }, "Creating notification for teacher");
+            logger.debug({
+                teacherRecordId: teacherRecord._id.toString(),
+                teacherUserId: teacherUserId ? teacherUserId.toString() : 'MISSING',
+                studentId: id,
+            }, "Notification details");
             
             // Check if notification already exists (regardless of resolution status)
             // We want to prevent duplicates, not check if it's resolved
@@ -711,9 +709,12 @@ export const setStudentDropout = async (req, res) => {
                 "meta.studentId": id,
             });
 
-            console.log(`🔍 Checking for existing notification...`);
-            console.log(`   - Query: { type: "dropout", teacher: ${teacherRecord._id.toString()}, "meta.studentId": ${id} }`);
-            console.log(`   - Existing notification found:`, existingNotification ? existingNotification._id : 'NONE');
+            logger.debug("Checking for existing notification");
+            logger.debug({
+                teacher: teacherRecord._id.toString(),
+                studentId: id,
+                existingNotificationId: existingNotification ? existingNotification._id : 'NONE',
+            }, "Notification query details");
 
             if (!existingNotification) {
                 // Ensure teacher._id is properly converted to ObjectId
@@ -735,29 +736,33 @@ export const setStudentDropout = async (req, res) => {
                     resolvedByUsers: [], // Initialize empty array for per-user resolution
                 });
                 await notification.save();
-                console.log(`✅ Created dropout notification:`, notification._id);
-                console.log(`   - notification.teacher (Teacher._id):`, notification.teacher ? notification.teacher.toString() : 'MISSING');
-                console.log(`   - notification.meta.teacherId (User._id):`, notification.meta.teacherId ? notification.meta.teacherId.toString() : 'MISSING');
-                console.log(`   - notification.meta.studentId:`, notification.meta.studentId ? notification.meta.studentId.toString() : 'MISSING');
-                console.log(`   - notification.type:`, notification.type);
-                console.log(`   - notification.resolved:`, notification.resolved);
+                logger.info({ notificationId: notification._id }, "Created dropout notification");
+                logger.debug({
+                    notificationTeacher: notification.teacher ? notification.teacher.toString() : 'MISSING',
+                    notificationMetaTeacherId: notification.meta.teacherId ? notification.meta.teacherId.toString() : 'MISSING',
+                    notificationMetaStudentId: notification.meta.studentId ? notification.meta.studentId.toString() : 'MISSING',
+                    notificationType: notification.type,
+                    notificationResolved: notification.resolved,
+                }, "Notification details");
                 
                 // Verify the notification was saved correctly
                 const verifyNotification = await Notification.findById(notification._id);
-                console.log(`🔍 Verification - Saved notification:`, {
+                logger.debug({
                     _id: verifyNotification._id.toString(),
                     type: verifyNotification.type,
                     teacher: verifyNotification.teacher ? verifyNotification.teacher.toString() : 'MISSING',
-                    meta_teacherId: verifyNotification.meta?.teacherId ? verifyNotification.meta.teacherId.toString() : 'MISSING',
-                    meta_studentId: verifyNotification.meta?.studentId ? verifyNotification.meta.studentId.toString() : 'MISSING',
-                    resolved: verifyNotification.resolved
-                });
+                    metaTeacherId: verifyNotification.meta?.teacherId ? verifyNotification.meta.teacherId.toString() : 'MISSING',
+                    metaStudentId: verifyNotification.meta?.studentId ? verifyNotification.meta.studentId.toString() : 'MISSING',
+                    resolved: verifyNotification.resolved,
+                }, "Verification - Saved notification");
             } else {
                 // Notification already exists - reset resolvedByUsers so all users see it again
-                console.log(`ℹ️ Dropout notification already exists:`, existingNotification._id);
-                console.log(`   - Existing notification teacher:`, existingNotification.teacher ? existingNotification.teacher.toString() : 'MISSING');
-                console.log(`   - Existing notification meta.teacherId:`, existingNotification.meta?.teacherId ? existingNotification.meta.teacherId.toString() : 'MISSING');
-                console.log(`   - Current resolvedByUsers:`, existingNotification.resolvedByUsers ? existingNotification.resolvedByUsers.map(id => id.toString()) : 'MISSING');
+                logger.info({ notificationId: existingNotification._id }, "Dropout notification already exists");
+                logger.debug({
+                    existingTeacher: existingNotification.teacher ? existingNotification.teacher.toString() : 'MISSING',
+                    existingMetaTeacherId: existingNotification.meta?.teacherId ? existingNotification.meta.teacherId.toString() : 'MISSING',
+                    resolvedByUsers: existingNotification.resolvedByUsers ? existingNotification.resolvedByUsers.map(id => id.toString()) : 'MISSING',
+                }, "Existing notification details");
                 
                 // Reset resolvedByUsers so all users see the notification again
                 // Also update createdByAdmin to the current admin
@@ -765,12 +770,11 @@ export const setStudentDropout = async (req, res) => {
                 existingNotification.resolved = false; // Also reset legacy field
                 existingNotification.createdByAdmin = userId; // Update to current admin
                 await existingNotification.save();
-                console.log(`✅ Reset notification ${existingNotification._id} - cleared resolvedByUsers and updated createdByAdmin to ${userId}`);
+                logger.info({ notificationId: existingNotification._id, userId }, "Reset notification - cleared resolvedByUsers and updated createdByAdmin");
             }
         } else {
-            console.log(`❌ No teacher found for student ${student.name}, skipping notification`);
-            console.log(`   - teacherRecord:`, teacherRecord);
-            console.log(`   - teacherUserId:`, teacherUserId);
+            logger.warn({ name: student.name }, "No teacher found for student, skipping notification");
+            logger.debug({ teacherRecord, teacherUserId }, "Teacher lookup details");
         }
 
         res.json({
@@ -782,7 +786,7 @@ export const setStudentDropout = async (req, res) => {
             deletedEmptyExams: deletedEmptyExams,
         });
     } catch (error) {
-        console.error("❌ Error setting student as dropout:", error);
+        logger.error({ err: error }, "Error setting student as dropout");
         res.status(500).json({ error: "Failed to set student as dropout" });
     }
 };
@@ -852,8 +856,8 @@ export const removeStudentDropout = async (req, res) => {
             }
         );
 
-        console.log(`✅ Removed dropout status for student ${student.name}`);
-        console.log(`   - Resolved ${resolvedNotifications.modifiedCount} dropout notifications`);
+        logger.info({ name: student.name }, "Removed dropout status for student");
+        logger.debug({ count: resolvedNotifications.modifiedCount }, "Resolved dropout notifications");
 
         res.json({
             success: true,
@@ -862,7 +866,7 @@ export const removeStudentDropout = async (req, res) => {
             resolvedNotifications: resolvedNotifications.modifiedCount,
         });
     } catch (error) {
-        console.error("❌ Error removing dropout status:", error);
+        logger.error({ err: error }, "Error removing dropout status");
         res.status(500).json({ error: "Failed to remove dropout status" });
     }
 };

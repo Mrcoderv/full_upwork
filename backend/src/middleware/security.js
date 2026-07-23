@@ -578,11 +578,15 @@ export const securityAudit = (req, res, next) => {
         },
     };
 
-    // Log suspicious activities
-    const suspiciousPatterns = [
+    // Log suspicious activities — XSS patterns
+    const suspiciousXSSPatterns = [
         /<script/i,
         /javascript:/i,
-        /on\w+=/i,
+        /\bon[a-z]+=/i,
+    ];
+
+    // SQL injection / NoSQL injection patterns apply to both body and URL
+    const suspiciousInjectionPatterns = [
         /union\s+select/i,
         /drop\s+table/i,
         /delete\s+from/i,
@@ -592,7 +596,17 @@ export const securityAudit = (req, res, next) => {
     const requestBody = req.body ? JSON.stringify(req.body).toLowerCase() : "";
     const requestUrl = req.url ? req.url.toLowerCase() : "";
 
-    for (const pattern of suspiciousPatterns) {
+    for (const pattern of suspiciousXSSPatterns) {
+        if (pattern.test(requestBody) || pattern.test(requestUrl)) {
+            logger.error("Suspicious activity detected", auditData);
+            return res.status(400).json({
+                success: false,
+                error: { message: "Invalid request detected" },
+            });
+        }
+    }
+
+    for (const pattern of suspiciousInjectionPatterns) {
         if (pattern.test(requestBody) || pattern.test(requestUrl)) {
             logger.error("Suspicious activity detected", auditData);
             return res.status(400).json({

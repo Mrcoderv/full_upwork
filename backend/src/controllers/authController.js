@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import dotenv from "dotenv";
+import logger from "../utils/logger.js";
 dotenv.config({ path: ".env.development" });
 
 if (!process.env.JWT_SECRET) {
@@ -28,9 +29,7 @@ export const register = async (req, res) => {
             roles,
         });
 
-        console.log(
-            `✅ User Registered: ${newUser.email} - Role: ${newUser.role}`
-        );
+        logger.info({ email: newUser.email, role: newUser.role }, "User registered");
 
         res.status(201).json({
             message: "User registered successfully",
@@ -43,7 +42,7 @@ export const register = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("❌ Error registering user:", error);
+        logger.error({ err: error }, "Error registering user");
         res.status(500).json({ error: "Server error" });
     }
 };
@@ -59,28 +58,28 @@ export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        console.log(`[LOGIN] Attempting login for email: ${email}`);
+        logger.info({ email }, "Attempting login");
         
         const user = await User.findOne({ email });
         if (!user) {
-            console.log(`[LOGIN] ❌ User not found for email: ${email}`);
+            logger.warn({ email }, "User not found for email");
             return res.status(401).json({ error: "Fel email eller lösenord" });
         }
 
-        console.log(`[LOGIN] ✅ User found: ${user.username || user.email} (ID: ${user._id})`);
-        console.log(`[LOGIN] User has password: ${!!user.password}`);
-        console.log(`[LOGIN] User roles: ${JSON.stringify(user.roles || [])}`);
+        logger.info({ username: user.username || user.email, userId: user._id }, "User found");
+        logger.debug({ hasPassword: !!user.password }, "User has password");
+        logger.debug({ roles: user.roles || [] }, "User roles");
 
         if (!user.password) {
-            console.log(`[LOGIN] ❌ User has no password set`);
+            logger.warn({ email }, "User has no password set");
             return res.status(401).json({ error: "Fel email eller lösenord" });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
-        console.log(`[LOGIN] Password match: ${isMatch}`);
+        logger.debug({ isMatch }, "Password match result");
         
         if (!isMatch) {
-            console.log(`[LOGIN] ❌ Password mismatch for user: ${user.username || user.email}`);
+            logger.warn({ username: user.username || user.email }, "Password mismatch");
             return res.status(401).json({ error: "Fel email eller lösenord" });
         }
 
@@ -117,7 +116,7 @@ export const login = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("❌ Error logging in:", error);
+        logger.error({ err: error }, "Error logging in");
         res.status(500).json({ error: "Server error" });
     }
 };
@@ -169,7 +168,7 @@ export const authenticateUser = (req, res, next) => {
 
         next();
     } catch (error) {
-        console.error("❌ JWT verification error:", error.message);
+        logger.error({ message: error.message }, "JWT verification error");
         return res.status(401).json({ error: "Ogiltig token." });
     }
 };
@@ -199,23 +198,23 @@ export const logout = async (req, res) => {
  * @returns {Promise<void>}
  */
 export const getSession = async (req, res) => {
-    console.log("🔹 Incoming Session Request...");
-    console.log("🔍 Cookies Received:", req.cookies);
+    logger.info("Incoming session request");
+    logger.debug({ cookies: req.cookies }, "Cookies received");
 
     const token = req.cookies.token || req.cookies.authToken;
 
     if (!token) {
-        console.log("❌ No valid token found.");
+        logger.warn("No valid token found");
         return res.status(401).json({ error: "No active session" });
     }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("✅ Decoded JWT:", decoded);
+        logger.debug({ decoded }, "Decoded JWT");
 
         const user = await User.findById(decoded.userId).select("-password");
         if (!user) {
-            console.log("❌ User not found in DB");
+            logger.warn("User not found in DB");
             return res.status(404).json({ error: "User not found" });
         }
 
@@ -232,7 +231,7 @@ export const getSession = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error("❌ Invalid session:", error);
+        logger.error({ err: error }, "Invalid session");
         res.status(403).json({ error: "Invalid session" });
     }
 };

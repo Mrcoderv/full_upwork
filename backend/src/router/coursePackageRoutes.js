@@ -1,5 +1,6 @@
 import express from "express";
 import CoursePackage from "../models/CoursePackage.js";
+import logger from "../utils/logger.js";
 // Rate limiting disabled
 // import {
 //     courseDetailRateLimiter,
@@ -19,7 +20,7 @@ router.get("/coursepackages", async (req, res) => {
             .lean();
         res.json(coursePackages);
     } catch (error) {
-        console.error("Error fetching course packages:", error);
+        logger.error({ err: error }, "Error fetching course packages");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -42,7 +43,7 @@ router.get(
             }
             res.json(coursePackage);
         } catch (error) {
-            console.error("Error fetching course package:", error);
+            logger.error({ err: error }, "Error fetching course package");
             res.status(500).json({ error: "Internal Server Error" });
         }
     }
@@ -62,7 +63,7 @@ router.get("/coursepackages/:id/courses", async (req, res) => {
         }
         res.json(coursePackage.coursePackageCourses);
     } catch (error) {
-        console.error("Error fetching courses for course package:", error);
+        logger.error({ err: error }, "Error fetching courses for course package");
         res.status(500).json({ error: "Internal Server Error" });
     }
 });

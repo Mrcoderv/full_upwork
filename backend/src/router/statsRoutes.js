@@ -2,6 +2,7 @@
 import express from "express";
 import Student from "../models/Student.js";
 import Course from "../models/Course.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -44,7 +45,7 @@ router.get("/courses-per-month", async (req, res) => {
 
     res.json(stats);
   } catch (err) {
-    console.error("❌ Error generating course stats:", err);
+    logger.error({ err }, "Error generating course stats")
     res.status(500).json({ error: "Failed to generate stats" });
   }
 });
