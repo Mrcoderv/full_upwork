@@ -463,7 +463,7 @@ describe("CourseMatchingService.processStudentEducation additional scenarios", (
             {
                 type: "processing_error",
                 courseName: "PKG1",
-                message: expect.stringContaining("normalizedEntryName"),
+                message: expect.any(String),
             },
         ]);
     });

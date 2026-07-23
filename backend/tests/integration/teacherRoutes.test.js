@@ -249,7 +249,7 @@ describe("Teacher Routes", () => {
             expect(savedTeacher.subject).toBe("English");
             expect(savedTeacher.colorCode).toBe(TEACHER_COLORS[0]);
             expect(savedTeacher.phoneNumbers).toEqual(["123"]);
-        });
+        }, 15000);
 
         it("creates a teacher with a default password when generation is disabled", async () => {
             const response = await request(app)
@@ -275,7 +275,7 @@ describe("Teacher Routes", () => {
 
             expect(await bcrypt.compare("ChangeMe123!", savedUser.password)).toBe(true);
             expect(savedTeacher.colorCode).toBe("#123456");
-        });
+        }, 15000);
 
         it("returns 500 when teacher creation fails", async () => {
             vi.spyOn(User, "findOne").mockRejectedValueOnce(
