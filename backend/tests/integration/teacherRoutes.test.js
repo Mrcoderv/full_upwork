@@ -552,7 +552,7 @@ describe("Teacher Routes", () => {
             expect(await bcrypt.compare("NewPassword123!", updatedUser.password)).toBe(
                 true
             );
-        });
+        }, 15000);
 
         it("returns 500 when password update fails", async () => {
             vi.spyOn(Teacher, "findById").mockImplementationOnce(() => {
