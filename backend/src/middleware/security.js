@@ -578,12 +578,11 @@ export const securityAudit = (req, res, next) => {
         },
     };
 
-    // Log suspicious activities — body-only XSS patterns (never check
-    // query strings, which legitimately contain things like "forecastmonths=3")
-    const suspiciousBodyPatterns = [
+    // Log suspicious activities — XSS patterns
+    const suspiciousXSSPatterns = [
         /<script/i,
         /javascript:/i,
-        /on\w+=/i,
+        /\bon[a-z]+=/i,
     ];
 
     // SQL injection / NoSQL injection patterns apply to both body and URL
@@ -597,8 +596,8 @@ export const securityAudit = (req, res, next) => {
     const requestBody = req.body ? JSON.stringify(req.body).toLowerCase() : "";
     const requestUrl = req.url ? req.url.toLowerCase() : "";
 
-    for (const pattern of suspiciousBodyPatterns) {
-        if (pattern.test(requestBody)) {
+    for (const pattern of suspiciousXSSPatterns) {
+        if (pattern.test(requestBody) || pattern.test(requestUrl)) {
             logger.error("Suspicious activity detected", auditData);
             return res.status(400).json({
                 success: false,

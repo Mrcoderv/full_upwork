@@ -39,7 +39,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE }
 })
-
 // Middleware to authorize student-specific file access
 async function checkStudentAccess(req, res, next) {
   try {

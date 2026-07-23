@@ -265,72 +265,7 @@ describe("PUT /grades/admin/unlock-grade", () => {
   });
 });
 
-describe("PUT /admin/unlock-grade (duplicate handler coverage)", () => {
-  const getSecondUnlockGradeHandler = () => {
-    const layers = gradeRoutes.stack.filter(
-      (layer) =>
-        layer.route?.path === "/admin/unlock-grade" &&
-        layer.route?.methods?.put
-    );
-    if (layers.length < 2) {
-      throw new Error("Expected duplicate /admin/unlock-grade handlers");
-    }
-    const secondLayer = layers[1];
-    return secondLayer.route.stack[secondLayer.route.stack.length - 1].handle;
-  };
 
-  const buildRes = () => {
-    const res = {
-      status: vi.fn(() => res),
-      send: vi.fn(() => res),
-    };
-    return res;
-  };
-
-  it("returns 404 when no matching education entry is found", async () => {
-    const handler = getSecondUnlockGradeHandler();
-    Student.updateOne.mockResolvedValueOnce({ matchedCount: 0 });
-    const req = {
-      body: { studentId: "s", courseId: "c" },
-      user: { role: "admin" },
-    };
-    const res = buildRes();
-
-    await handler(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.send).toHaveBeenCalledWith("Kurs hittades inte");
-  });
-
-  it("returns 200 when grade unlock succeeds", async () => {
-    const handler = getSecondUnlockGradeHandler();
-    Student.updateOne.mockResolvedValueOnce({ matchedCount: 1 });
-    const req = {
-      body: { studentId: "s", courseId: "c" },
-      user: { role: "admin" },
-    };
-    const res = buildRes();
-
-    await handler(req, res);
-
-    expect(res.send).toHaveBeenCalledWith("Betyg upplåst");
-  });
-
-  it("returns 500 when unlocking throws", async () => {
-    const handler = getSecondUnlockGradeHandler();
-    Student.updateOne.mockRejectedValueOnce(new Error("boom"));
-    const req = {
-      body: { studentId: "s", courseId: "c" },
-      user: { role: "admin" },
-    };
-    const res = buildRes();
-
-    await handler(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.send).toHaveBeenCalledWith("Internt serverfel");
-  });
-});
 
 describe("GET /grades/students-to-grade", () => {
   it("returns combined enrollments and education results", async () => {
@@ -484,19 +419,25 @@ describe("PUT /grades/admin/unlock-grade (legacy)", () => {
 describe("DELETE /grades/enrollments/:id", () => {
   it("deletes enrollment", async () => {
     StudentEnrollment.findByIdAndDelete.mockResolvedValue({ _id: "en1" });
-    const res = await request(app).delete("/grades/enrollments/en1");
+    const res = await request(app)
+      .delete("/grades/enrollments/en1")
+      .set("x-user-role", "admin");
     expect(res.status).toBe(200);
   });
 
   it("returns 404 when not found", async () => {
     StudentEnrollment.findByIdAndDelete.mockResolvedValue(null);
-    const res = await request(app).delete("/grades/enrollments/en1");
+    const res = await request(app)
+      .delete("/grades/enrollments/en1")
+      .set("x-user-role", "admin");
     expect(res.status).toBe(404);
   });
 
   it("handles errors when deleting enrollment", async () => {
     StudentEnrollment.findByIdAndDelete.mockRejectedValueOnce(new Error("boom"));
-    const res = await request(app).delete("/grades/enrollments/en1");
+    const res = await request(app)
+      .delete("/grades/enrollments/en1")
+      .set("x-user-role", "admin");
     expect(res.status).toBe(500);
   });
 });

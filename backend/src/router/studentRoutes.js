@@ -700,6 +700,9 @@ async function deleteStudentFiles(studentId) {
  */
 router.delete("/student/:id", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async (req, res) => {
     try {
+        if (!["admin", "systemadmin"].includes(req.user?.role)) {
+            return res.status(403).json({ error: "Insufficient permissions to delete a student." });
+        }
         const studentId = req.params.id;
         
         // Manual role check inside handler to support unit tests that bypass middleware
@@ -737,6 +740,7 @@ router.delete("/students", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async
             return res.status(403).json({ error: "Insufficient permissions to delete all students." });
         }
 
+        // Get all student IDs before deletion
         const allStudents = await Student.find({}, { _id: 1 }).lean();
         const studentIds = allStudents.map(s => s._id.toString());
         
