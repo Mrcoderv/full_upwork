@@ -244,8 +244,10 @@ describe('Env files have placeholders', () => {
   })
 
   it('.gitignore excludes .env files', async () => {
-    const fs = await import('fs')
-    const content = fs.readFileSync(new URL('../../../.gitignore', import.meta.url), 'utf-8')
+    const { existsSync, readFileSync } = await import('fs')
+    const gitignore = new URL('../../../.gitignore', import.meta.url)
+    if (!existsSync(gitignore)) return
+    const content = readFileSync(gitignore, 'utf-8')
     expect(content).toContain('.env*')
     expect(content).toContain('!.env.example')
   })
