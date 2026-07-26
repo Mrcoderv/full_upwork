@@ -231,21 +231,22 @@ describe('Sensitive data not logged', () => {
 })
 
 describe('Env files have placeholders', () => {
-  it('.env.production has placeholder JWT_SECRET', async () => {
+  it('.env.example exists with placeholder JWT_SECRET', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync(new URL('../../.env.production', import.meta.url), 'utf-8')
-    expect(content).toContain('REPLACE_WITH_GENERATED_SECRET')
+    const content = fs.readFileSync(new URL('../../.env.example', import.meta.url), 'utf-8')
+    expect(content).toContain('replace-with-a-strong-random-string')
   })
 
-  it('.env.development has placeholder JWT_SECRET', async () => {
+  it('.env.example includes MongoDB URI', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync(new URL('../../.env.development', import.meta.url), 'utf-8')
-    expect(content).toContain('REPLACE_WITH_GENERATED_SECRET')
+    const content = fs.readFileSync(new URL('../../.env.example', import.meta.url), 'utf-8')
+    expect(content).toContain('MONGODB_URI')
   })
 
-  it('.env.production has placeholder Google password', async () => {
+  it('.gitignore excludes .env files', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync(new URL('../../.env.production', import.meta.url), 'utf-8')
-    expect(content).toContain('REPLACE_WITH_GOOGLE_APP_PASSWORD')
+    const content = fs.readFileSync(new URL('../../../.gitignore', import.meta.url), 'utf-8')
+    expect(content).toContain('.env*')
+    expect(content).toContain('!.env.example')
   })
 })

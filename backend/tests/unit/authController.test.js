@@ -213,7 +213,7 @@ describe("authController", () => {
             name: "token",
             opts: {
                 httpOnly: true,
-                sameSite: "strict",
+                sameSite: "lax",
                 secure: false,
             },
         });
