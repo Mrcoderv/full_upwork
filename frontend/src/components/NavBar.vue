@@ -386,7 +386,8 @@
   import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
   import { useStore } from 'vuex'
   import { useRouter } from 'vue-router'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
   import { VueDatePicker as DatePicker } from '@vuepic/vue-datepicker'
   import '@vuepic/vue-datepicker/dist/main.css'
   import NotificationBox from './notificationBox.vue'
@@ -396,6 +397,7 @@
     setup() {
       const store = useStore()
       const router = useRouter()
+      const toast = useToast()
 
       const userRole = computed(() => store.getters.userRole || 'guest') // Default to 'guest' if undefined
       const canSeeNotifications = computed(() =>
@@ -459,7 +461,7 @@
 
         try {
           console.log('📬 Fetching notifications...')
-          const res = await axios.get('/api/notifications', { withCredentials: true })
+          const res = await client.get('/notifications')
           console.log('📬 Notifications received:', res.data)
           notifications.value = res.data
         } catch (error) {
@@ -525,10 +527,14 @@
       }
 
       const resolveNote = async (id) => {
-        await axios.put(`/api/notifications/${id}/resolve`, {
-          userId: store.getters.userId,
-        })
-        await fetchNotifications() // uppdatera listan
+        try {
+          await client.put(`/notifications/${id}/resolve`, {
+            userId: store.getters.userId,
+          })
+          await fetchNotifications()
+        } catch {
+          toast.error('Kunde inte avsluta notisen.')
+        }
       }
 
       const toggleNotificationPanel = (event) => {
@@ -639,12 +645,11 @@
 
           console.log(
             '🌐 Search URL:',
-            `${import.meta.env.VITE_API_URL}/api/search?${params.toString()}`
+            `/search?${params.toString()}`
           )
 
-          const res = await axios.get(
-            `${import.meta.env.VITE_API_URL}/api/search?${params.toString()}`,
-            { withCredentials: true }
+          const res = await client.get(
+            `/search?${params.toString()}`
           )
           console.log('✅ Search response:', res.data)
           searchResults.value = res.data
@@ -702,7 +707,7 @@
 
       const fetchCourses = async () => {
         try {
-          const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/courses`)
+          const res = await client.get('/courses')
           allCourses.value = res.data
         } catch (err) {
           console.error('❌ Kunde inte hämta kurser:', err)

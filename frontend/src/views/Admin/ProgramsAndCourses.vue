@@ -1,19 +1,18 @@
 <script setup>
   import { ref, onMounted } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const programs = ref([])
   const isLoading = ref(true)
   const error = ref(null)
 
-  // API Base URL - Change this if necessary
-  const API_BASE_URL = import.meta.env.VITE_API_URL
-
   const fetchPrograms = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/programs`)
+      const response = await client.get('/programs')
       programs.value = response.data
-      console.log('✅ Populated programs:', programs.value)
     } catch (err) {
       console.error('Error fetching programs:', err)
       error.value = 'Failed to load programs. Please try again.'
@@ -22,10 +21,9 @@
     }
   }
 
-  //onMounted(fetchPrograms)
   onMounted(async () => {
     await fetchPrograms()
-    window.programs = programs // ← now you can type `programs.value` in devtools
+    window.programs = programs
   })
 </script>
 

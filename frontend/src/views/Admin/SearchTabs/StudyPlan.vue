@@ -24,8 +24,10 @@
 
 <script setup>
   import { computed, reactive } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
 
+  const toast = useToast()
   const savedEducations = reactive(new Set())
 
   const props = defineProps({
@@ -69,15 +71,15 @@
     try {
       const refId = typeof education.refId === 'object' ? education.refId._id : education.refId
 
-      const res = await axios.put(
-        `${import.meta.env.VITE_API_URL}/api/students/${student.value._id}/education/${refId}/status`,
+      const res = await client.put(
+        `/students/${student.value._id}/education/${refId}/status`,
         { status: education.status }
       )
       console.log('✅ Uppdaterad:', res.data)
       savedEducations.add(education.refId)
     } catch (err) {
       console.error('❌ Fel vid uppdatering:', err.response?.data || err.message)
-      alert('Kunde inte uppdatera kursstatus.')
+      toast.error('Kunde inte uppdatera kursstatus.')
     }
   }
 </script>

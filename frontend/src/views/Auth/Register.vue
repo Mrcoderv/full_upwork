@@ -27,9 +27,14 @@
 </template>
 
 <script>
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
 
   export default {
+    setup() {
+      const toast = useToast()
+      return { toast }
+    },
     data() {
       return {
         name: '',
@@ -41,7 +46,7 @@
     methods: {
       async register() {
         try {
-          const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`, {
+          const response = await client.post('/auth/register', {
             username: this.name,
             email: this.email,
             password: this.password,
@@ -49,6 +54,7 @@
           this.message = response.data.message
         } catch (error) {
           this.message = error.response?.data?.message || 'An error occurred.'
+          this.toast.error(this.message)
           console.error('Register error:', error)
         }
       },

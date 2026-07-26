@@ -280,12 +280,15 @@ describe("Program Routes", () => {
             expect(response.body).toEqual({ error: "Program not found" });
         });
 
-        it("returns 500 for invalid ids", async () => {
+        it("returns 400 for invalid ids", async () => {
             const response = await request(app)
                 .get("/api/program/not-a-valid-id/courses")
-                .expect(500);
+                .expect(400);
 
-            expect(response.body).toEqual({ error: "Server error" });
+            expect(response.body).toEqual({
+                success: false,
+                error: { message: "Invalid programId format" },
+            });
         });
     });
 });

@@ -215,8 +215,10 @@ describe("Notification Routes", () => {
                 studentId,
             });
 
+            const token = signToken();
             const response = await request(app)
                 .put(`/api/notifications/resolve/${studentId}`)
+                .set("Authorization", `Bearer ${token}`)
                 .expect(200);
 
             expect(response.body).toEqual({ message: "Notification resolved" });
@@ -232,10 +234,12 @@ describe("Notification Routes", () => {
                 new Error("DB failure")
             );
 
+            const token = signToken();
             const response = await request(app)
                 .put(
                     `/api/notifications/resolve/${new mongoose.Types.ObjectId()}`
                 )
+                .set("Authorization", `Bearer ${token}`)
                 .expect(500);
 
             expect(response.body).toHaveProperty(

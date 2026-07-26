@@ -2,11 +2,12 @@
 import express from "express";
 import Student from "../models/Student.js";
 import Course from "../models/Course.js";
+import { authenticateUser } from "../controllers/authController.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
 
-router.get("/courses-per-month", async (req, res) => {
+router.get("/courses-per-month", authenticateUser, async (req, res) => {
   try {
     const students = await Student.find();
 

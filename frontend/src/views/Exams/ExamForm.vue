@@ -94,8 +94,11 @@
 </template>
 
 <script setup>
-  import axios from 'axios'
   import { ref, computed, onMounted, watch } from 'vue'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const students = ref([])
   const teachers = ref([])
@@ -153,9 +156,7 @@
     try {
       console.log('🔍 Fetching all students to filter them for autocomplete ...')
       const [studentsResponse] = await Promise.all([
-        await axios.get(`${import.meta.env.VITE_API_URL}/api/students`, {
-          withCredentials: true,
-        }),
+        await client.get('/students'),
       ])
 
       students.value = studentsResponse.data
@@ -237,9 +238,7 @@
 
   const fetchTeachers = async () => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/teachers`, {
-        withCredentials: true,
-      })
+      const res = await client.get('/teachers')
       teachers.value = res.data
         .filter((t) => t.userId && t.userId.username) // skip malformed ones
         .map((t) => ({
@@ -286,16 +285,14 @@
       }
 
       console.log('Skickar:', formData)
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/exams`, formData, {
-        withCredentials: true,
-      })
-      alert('Registreringen lyckades!')
+      await client.post('/exams', formData)
+      toast.success('Registreringen lyckades!')
       Object.keys(form.value).forEach(
         (key) => (form.value[key] = typeof form.value[key] === 'boolean' ? false : '')
       )
     } catch (err) {
       console.error(err)
-      alert('Fel vid registrering.')
+      toast.error('Fel vid registrering.')
     }
   }
 

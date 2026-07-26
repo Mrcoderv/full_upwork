@@ -1,8 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
-// Rate limiting disabled
-// import { exemptAdminsFromRateLimit } from "../middleware/security.js";
+import { asyncHandler } from "../utils/errorHandler.js";
 import {
     uploadStudentsForMatching,
     processStudentEducation,
@@ -33,20 +32,20 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get(
     "/course-match",
     isAuthenticated,
-    findCourseMatch
+    asyncHandler(findCourseMatch)
 );
 router.post(
     "/upload-students",
     upload.single("file"),
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    uploadStudentsForMatching
+    asyncHandler(uploadStudentsForMatching)
 );
 router.post(
     "/process-education",
     isAuthenticated,
     hasRole(["admin", "systemadmin", "teacher"]),
-    processStudentEducation
+    asyncHandler(processStudentEducation)
 );
 
 // Course instances routes
@@ -59,20 +58,20 @@ router.get(
     },
     isAuthenticated,
     hasRole(["teacher", "admin", "systemadmin"]),
-    getMyCourseInstances
+    asyncHandler(getMyCourseInstances)
 );
-router.get("/course-instances", isAuthenticated, getCourseInstances);
+router.get("/course-instances", isAuthenticated, asyncHandler(getCourseInstances));
 router.post(
     "/course-instances",
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    createCourseInstance
+    asyncHandler(createCourseInstance)
 );
 router.put(
     "/course-instances/:instanceId",
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    updateCourseInstance
+    asyncHandler(updateCourseInstance)
 );
 
 // Bulk delete all course instances
@@ -80,58 +79,58 @@ router.delete(
     "/course-instances/all",
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    deleteAllCourseInstances
+    asyncHandler(deleteAllCourseInstances)
 );
 // Delete a course instance
 router.delete(
     "/course-instances/:instanceId",
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    deleteCourseInstance
+    asyncHandler(deleteCourseInstance)
 );
 
 // Student enrollment routes
 router.get(
     "/students/:studentId/enrollments",
     isAuthenticated,
-    getStudentEnrollments
+    asyncHandler(getStudentEnrollments)
 );
 
 // Course instance enrollment routes
 router.get(
     "/course-instances/:instanceId/enrollments",
     isAuthenticated,
-    getCourseInstanceEnrollments
+    asyncHandler(getCourseInstanceEnrollments)
 );
 router.post(
     "/course-instances/:instanceId/add-students",
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    addStudentsToInstance
+    asyncHandler(addStudentsToInstance)
 );
 router.put(
     "/enrollments/:enrollmentId/status",
     isAuthenticated,
     hasRole(["admin", "systemadmin", "teacher"]),
-    updateEnrollmentStatus
+    asyncHandler(updateEnrollmentStatus)
 );
 router.put(
     "/enrollments/:enrollmentId",
     isAuthenticated,
     hasRole(["admin", "systemadmin", "teacher"]),
-    updateEnrollmentDates
+    asyncHandler(updateEnrollmentDates)
 );
 router.delete(
     "/students/:studentId/enrollments/:enrollmentId",
     isAuthenticated,
     hasRole(["admin", "systemadmin", "teacher"]),
-    deleteEnrollmentAndShift
+    asyncHandler(deleteEnrollmentAndShift)
 );
 router.put(
     "/students/:studentId/studyplan-tempo",
     isAuthenticated,
     hasRole(["admin", "systemadmin", "teacher"]),
-    updateStudyplanTempo
+    asyncHandler(updateStudyplanTempo)
 );
 
 // Statistics routes
@@ -139,7 +138,7 @@ router.get(
     "/course-statistics",
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
-    getCourseStatistics
+    asyncHandler(getCourseStatistics)
 );
 
 export default router;

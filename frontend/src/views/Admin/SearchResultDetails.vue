@@ -27,7 +27,8 @@
 <script>
 import { ref, onMounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import axios from "axios";
+import client from "@/api/client.js";
+import { useToast } from "@/composables/useToast.js";
 import AccountTab from "@/views/Admin/SearchTabs/AccountTab.vue";
 import StudyPlan from "@/views/Admin/SearchTabs/StudyPlan.vue";
 import DocumentSection from "@/views/Admin/SearchTabs/DocumentSection.vue";
@@ -41,6 +42,7 @@ export default {
   setup() {
     const route = useRoute();
     const router = useRouter();
+    const toast = useToast();
     const data = ref(null);
     const activeTab = ref("Användare");
 
@@ -68,13 +70,9 @@ export default {
     const fetchData = async () => {
       const { type, id } = route.params;
       console.log("🔍 Requesting details for:", type, id);
-      console.log("🌐 API URL:", import.meta.env.VITE_API_URL);
-      console.log("📍 Full URL:", `${import.meta.env.VITE_API_URL}/api/details/${type}/${id}`);
 
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/details/${type}/${id}`, {
-          withCredentials: true
-        });
+        const response = await client.get(`/details/${type}/${id}`);
         data.value = response.data;
         console.log("✅ Data received:", response.data);
       } catch (error) {

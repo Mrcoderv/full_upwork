@@ -206,10 +206,13 @@
 </template>
 
 <script setup>
-  import axios from 'axios'
+  import client from '@/api/client.js'
   import { VueDatePicker as Datepicker } from '@vuepic/vue-datepicker'
   import '@vuepic/vue-datepicker/dist/main.css'
   import { ref, reactive, watch, onMounted } from 'vue'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const programs = ref([])
   const allCourses = ref([])
@@ -270,9 +273,7 @@
     if (fetchState.value) return
     fetchState.value = true
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/all-programs`, {
-        withCredentials: true,
-      })
+      const res = await client.get('/all-programs')
       programs.value = res.data
     } catch (e) {
       console.error('Error fetching programs:', e)
@@ -284,8 +285,8 @@
   const fetchAllCourses = async () => {
     if (!selectedProgram.value) return
     try {
-      const res = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/program/${selectedProgram.value}/courses`
+      const res = await client.get(
+        `/program/${selectedProgram.value}/courses`
       )
       allCourses.value = res.data.map((c) => ({
         ...c,
@@ -297,12 +298,12 @@
   }
 
   function handleAddCourse() {
-    if (!selectedIndividualCourse.value) return alert('Välj en kurs först.')
+    if (!selectedIndividualCourse.value) return toast.error('Välj en kurs först.')
     if (educationCourses.value.includes(selectedIndividualCourse.value))
-      return alert('Kursen är redan tillagd.')
+      return toast.error('Kursen är redan tillagd.')
 
     const course = allCourses.value.find((c) => c._id === selectedIndividualCourse.value)
-    if (!course) return alert('Kursinformation hittades inte.')
+    if (!course) return toast.error('Kursinformation hittades inte.')
 
     educationCourses.value.push(course._id)
     addedCourses.value.push(course)
@@ -322,7 +323,7 @@
       !studentForm.startDatum ||
       !studentForm.mail
     ) {
-      return alert('Please fill in all required fields!')
+      return toast.error('Please fill in all required fields!')
     }
     const payload = {
       name: studentForm.namn,
@@ -345,8 +346,8 @@
       })),
     }
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/student`, payload)
-      alert('Eleven blev tillagd!')
+      await client.post('/student', payload)
+      toast.success('Eleven blev tillagd!')
       Object.assign(studentForm, {
         namn: '',
         personnummer: '',
@@ -366,8 +367,8 @@
       educationCourses.value = []
       addedCourses.value = []
     } catch (error) {
-      console.error('❌ Backend error:', error.response?.data || error)
-      alert('Kunde inte lägga till Elev. Något gick fel. Försök igen.')
+      console.error('❌ Backend error:', error)
+      toast.error('Kunde inte lägga till Elev. Något gick fel. Försök igen.')
     }
   }
 

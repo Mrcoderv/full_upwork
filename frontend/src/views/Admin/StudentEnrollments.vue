@@ -345,11 +345,13 @@
 
 <script>
   import { ref, computed, onMounted } from 'vue'
-  import { api } from '@/store/store.js'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
 
   export default {
     name: 'StudentEnrollments',
     setup() {
+      const toast = useToast();
       const searchQuery = ref('')
       const searchResults = ref([])
       const selectedStudent = ref(null)
@@ -388,7 +390,7 @@
         }
 
         try {
-          const response = await api.get(
+          const response = await client.get(
             `/search?type=Användare&q=${encodeURIComponent(searchQuery.value)}`
           )
           searchResults.value = response.data.filter(
@@ -415,7 +417,7 @@
           if (filters.value.startDate) params.append('startDate', filters.value.startDate)
           if (filters.value.endDate) params.append('endDate', filters.value.endDate)
 
-          const response = await api.get(
+          const response = await client.get(
             `/students/${selectedStudent.value._id}/enrollments?${params.toString()}`
           )
           enrollments.value = response.data.enrollments
@@ -442,14 +444,14 @@
       const saveEnrollment = async () => {
         isSaving.value = true
         try {
-          await api.put(`/enrollments/${editingEnrollment.value._id}/status`, enrollmentForm.value)
+          await client.put(`/enrollments/${editingEnrollment.value._id}/status`, enrollmentForm.value)
           await loadEnrollments()
 
           const modal = bootstrap.Modal.getInstance(document.getElementById('enrollmentModal'))
           modal.hide()
         } catch (error) {
           console.error('Error saving enrollment:', error)
-          alert('Ett fel uppstod när inskrivningen skulle sparas.')
+          toast.error('Ett fel uppstod när inskrivningen skulle sparas.')
         } finally {
           isSaving.value = false
         }

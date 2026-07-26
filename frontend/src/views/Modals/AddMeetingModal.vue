@@ -50,226 +50,182 @@
 
       <div class="modal-buttons">
         <button @click="submit">Spara</button>
-        <button @click="$emit('close')">Avbryt</button>
+        <button @click="emit('close')">Avbryt</button>
       </div>
     </div>
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, onMounted } from 'vue'
 import { VueDatePicker as DatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { sv } from 'date-fns/locale'
-import { api } from '@/store/store.js'
+import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
+import { useStore } from 'vuex'
 
-export default {
-  components: { DatePicker },
-  props: { // 👈 Add title prop
-    title: {
-      type: String,
-      default: 'Boka möte'
-    },
-    bookedByRole: {
-      type: String,
-      required: false,
-      default: null
-    }
+const store = useStore()
+const emit = defineEmits(['event-added', 'close'])
+const toast = useToast()
+
+const props = defineProps({
+  title: {
+    type: String,
+    default: 'Boka möte'
   },
-  data() {
-    return {
-      svLocale: sv,
-      form: {
-        date: new Date(),
-        timeFrom: new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
-        timeTo: new Date(new Date().getTime() + 60 * 60 * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
-        student: null,
-        location: '',
-        info: '' // 👈 Add info to form data
-      },
-      students: [], // Här lagras eleverna
-    };
-  },
-  computed: {
-    userRole() {
-      return this.$store.getters.userRole || 'guest';
-    },
-    username() {
-      return this.$store.state.user?.username || this.$store.state.user?.email || 'Okänd';
-    },
-    eventTitle() {
-      // Format: "Username, Role"
-      if (this.userRole === 'syv') {
-        return `${this.username}, Syv`;
-      } else if (this.userRole === 'specped') {
-        return `${this.username}, Special Pedagog`;
-      } else if (this.userRole === 'admin' || this.userRole === 'systemadmin') {
-        // For admins, use the bookedByRole prop if available, otherwise use role
-        const roleLabel = this.bookedByRole === 'syv' ? 'Syv' : 
-                         this.bookedByRole === 'specped' ? 'Special Pedagog' : 
-                         this.userRole === 'systemadmin' ? 'Systemadmin' : 'Admin';
-        return `${this.username}, ${roleLabel}`;
-      }
-      // Fallback: use bookedByRole if provided
-      if (this.bookedByRole) {
-        const roleLabel = this.bookedByRole === 'syv' ? 'Syv' : 
-                         this.bookedByRole === 'specped' ? 'Special Pedagog' : 
-                         this.bookedByRole;
-        return `${this.username}, ${roleLabel}`;
-      }
-      return 'Möte';
-    },
-    bookedByValue() {
-      // ALWAYS prioritize bookedByRole prop if provided (for route-based booking context)
-      // This ensures that when booking from specped/appointments, it's treated as specped
-      // and when booking from syv/appointments, it's treated as syv, regardless of who books it
-      if (this.bookedByRole) {
-        return this.bookedByRole;
-      }
-      // For admins creating meetings without context, default to their role
-      if (this.userRole === 'admin' || this.userRole === 'systemadmin') {
-        return this.userRole;
-      }
-      // For syv/specped, use their role
-      if (this.userRole === 'syv' || this.userRole === 'specped') {
-        return this.userRole;
-      }
-      // Fallback
-      return this.userRole;
-    }
-  },
-  mounted() {
-    this.fetchStudents();
-  },
-  methods: {
-    filterStudents(value, query, item) {
-      if (!query || !query.trim()) return true;
-      
-      const searchQuery = query.toLowerCase().trim();
-      
-      // Debug: log what we're receiving
-      console.log('🔍 Filter called:', { value, query, item, itemRaw: item?.raw });
-      
-      // In Vuetify 3 with return-object, try different ways to access the student
-      let student = item?.raw || item?.value || item || value;
-      
-      // If value is an object with name property, it might be the student itself
-      if (value && typeof value === 'object' && value.name && !student?.name) {
-        student = value;
-      }
-      
-      if (!student || !student.name) {
-        console.log('❌ No student found in filter');
-        return false;
-      }
-      
-      // Use searchText if available
-      if (student.searchText) {
-        const matches = student.searchText.includes(searchQuery);
-        console.log('✅ Using searchText:', student.searchText, 'matches:', matches);
-        return matches;
-      }
-      
-      // Fallback: search in individual fields
-      const name = (student.name || '').toLowerCase();
-      const personalNumber = (student.personalNumber || '').toLowerCase();
-      const displayName = (student.displayName || '').toLowerCase();
-      
-      const matches = name.includes(searchQuery) || 
-             personalNumber.includes(searchQuery) || 
-             displayName.includes(searchQuery);
-      
-      console.log('✅ Search result:', { name, searchQuery, matches });
-      return matches;
-    },
-    async fetchStudents() {
-      try {
-        const response = await api.get('/students');
-        console.log('📦 Elever hämtade:', response.data); // 👈 Lägg till detta
-
-        const data = response.data;
-
-        this.students = (Array.isArray(data) ? data : [])
-          .filter(s => !s.dropout) // uteslut avhoppade elever
-          .map(s => ({
-            _id: s._id,
-            name: s.name,
-            personalNumber: s.personalNumber || "",
-            // Include both name and personalNumber in displayName for better search
-            displayName: `${s.name} (${s.personalNumber || ''})`,
-            // Add searchable text that includes name parts for partial matching
-            searchText: `${s.name} ${s.personalNumber || ''}`.toLowerCase()
-          }));
-      } catch (error) {
-        console.error("Kunde inte hämta elever:", error);
-      }
-    },
-    async submit() {
-      if (!this.form.student || !this.form.student._id) {
-        alert("Välj en elev.");
-        return;
-      }
-
-      // Combine date and time
-      const [fromHours, fromMinutes] = this.form.timeFrom.split(':');
-      const [toHours, toMinutes] = this.form.timeTo.split(':');
-      const startDateTime = new Date(this.form.date);
-      startDateTime.setHours(parseInt(fromHours), parseInt(fromMinutes));
-      const endDateTime = new Date(this.form.date);
-      endDateTime.setHours(parseInt(toHours), parseInt(toMinutes));
-
-      if (endDateTime.getTime() <= startDateTime.getTime()) {
-        alert("Till tid måste vara efter från tid.");
-        return;
-      }
-
-      // Determine title based on role and context
-      let meetingTitle = this.eventTitle;
-      
-      // For admin/systemadmin booking from calendar (no specific bookedByRole), use "Möte, Student name"
-      if ((this.userRole === 'admin' || this.userRole === 'systemadmin') && 
-          !this.bookedByRole) {
-        meetingTitle = `Möte, ${this.form.student.name}`;
-      }
-
-      const bookedBy = this.bookedByValue;
-      console.log('🔍 Booking context:', {
-        userRole: this.userRole,
-        bookedByRole: this.bookedByRole,
-        bookedByValue: bookedBy,
-        context: this.bookedByRole ? `Booking from ${this.bookedByRole} view` : 'Booking from calendar'
-      });
-
-      const payload = {
-        title: meetingTitle,
-        start: startDateTime.toISOString(),
-        end: endDateTime.toISOString(),
-        location: this.form.location || '',
-        studentId: this.form.student._id,
-        studentName: this.form.student.name,
-        personalNumber: this.form.student.personalNumber || '',
-        bookedBy: bookedBy, // Use the computed value which prioritizes bookedByRole
-        info: this.form.info || '' // 👈 Add info to payload
-      };
-
-      console.log('📤 Sending payload:', payload);
-
-      try {
-        const response = await api.post('/meetings', payload, { withCredentials: true });
-        const savedMeeting = response.data;
-        console.log('✅ Möte sparat:', savedMeeting);
-
-        // Use the saved meeting data from backend to ensure proper formatting
-        this.$emit('event-added', savedMeeting);
-
-        this.$emit('close');
-      } catch (err) {
-        console.error('❌ Kunde inte spara mötet:', err);
-        const errorMessage = err.response?.data?.error || err.message || 'Okänt fel';
-        alert(`Kunde inte spara mötet: ${errorMessage}`);
-      }
-    }
+  bookedByRole: {
+    type: String,
+    required: false,
+    default: null
   }
-};
+})
+
+const svLocale = sv
+const form = ref({
+  date: new Date(),
+  timeFrom: new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
+  timeTo: new Date(new Date().getTime() + 60 * 60 * 1000).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }),
+  student: null,
+  location: '',
+  info: ''
+})
+const students = ref([])
+
+const userRole = computed(() => store.getters.userRole || 'guest')
+const username = computed(() => store.state.user?.username || store.state.user?.email || 'Okänd')
+
+const eventTitle = computed(() => {
+  if (userRole.value === 'syv') {
+    return `${username.value}, Syv`
+  } else if (userRole.value === 'specped') {
+    return `${username.value}, Special Pedagog`
+  } else if (userRole.value === 'admin' || userRole.value === 'systemadmin') {
+    const roleLabel = props.bookedByRole === 'syv' ? 'Syv' :
+                     props.bookedByRole === 'specped' ? 'Special Pedagog' :
+                     userRole.value === 'systemadmin' ? 'Systemadmin' : 'Admin';
+    return `${username.value}, ${roleLabel}`;
+  }
+  if (props.bookedByRole) {
+    const roleLabel = props.bookedByRole === 'syv' ? 'Syv' :
+                     props.bookedByRole === 'specped' ? 'Special Pedagog' :
+                     props.bookedByRole;
+    return `${username.value}, ${roleLabel}`;
+  }
+  return 'Möte';
+})
+
+const bookedByValue = computed(() => {
+  if (props.bookedByRole) {
+    return props.bookedByRole;
+  }
+  if (userRole.value === 'admin' || userRole.value === 'systemadmin') {
+    return userRole.value;
+  }
+  if (userRole.value === 'syv' || userRole.value === 'specped') {
+    return userRole.value;
+  }
+  return userRole.value;
+})
+
+function filterStudents(value, query, item) {
+  if (!query || !query.trim()) return true;
+
+  const searchQuery = query.toLowerCase().trim();
+
+  let student = item?.raw || item?.value || item || value;
+
+  if (value && typeof value === 'object' && value.name && !student?.name) {
+    student = value;
+  }
+
+  if (!student || !student.name) {
+    return false;
+  }
+
+  if (student.searchText) {
+    return student.searchText.includes(searchQuery);
+  }
+
+  const name = (student.name || '').toLowerCase();
+  const personalNumber = (student.personalNumber || '').toLowerCase();
+  const displayName = (student.displayName || '').toLowerCase();
+
+  return name.includes(searchQuery) ||
+         personalNumber.includes(searchQuery) ||
+         displayName.includes(searchQuery);
+}
+
+async function fetchStudents() {
+  try {
+    const response = await client.get('/students');
+    const data = response.data;
+
+    students.value = (Array.isArray(data) ? data : [])
+      .filter(s => !s.dropout)
+      .map(s => ({
+        _id: s._id,
+        name: s.name,
+        personalNumber: s.personalNumber || "",
+        displayName: `${s.name} (${s.personalNumber || ''})`,
+        searchText: `${s.name} ${s.personalNumber || ''}`.toLowerCase()
+      }));
+  } catch (error) {
+    console.error("Kunde inte hämta elever:", error);
+  }
+}
+
+async function submit() {
+  if (!form.value.student || !form.value.student._id) {
+    toast.error("Välj en elev.");
+    return;
+  }
+
+  const [fromHours, fromMinutes] = form.value.timeFrom.split(':');
+  const [toHours, toMinutes] = form.value.timeTo.split(':');
+  const startDateTime = new Date(form.value.date);
+  startDateTime.setHours(parseInt(fromHours), parseInt(fromMinutes));
+  const endDateTime = new Date(form.value.date);
+  endDateTime.setHours(parseInt(toHours), parseInt(toMinutes));
+
+  if (endDateTime.getTime() <= startDateTime.getTime()) {
+    toast.error("Till tid måste vara efter från tid.");
+    return;
+  }
+
+  let meetingTitle = eventTitle.value;
+
+  if ((userRole.value === 'admin' || userRole.value === 'systemadmin') &&
+      !props.bookedByRole) {
+    meetingTitle = `Möte, ${form.value.student.name}`;
+  }
+
+  const bookedBy = bookedByValue.value;
+
+  const payload = {
+    title: meetingTitle,
+    start: startDateTime.toISOString(),
+    end: endDateTime.toISOString(),
+    location: form.value.location || '',
+    studentId: form.value.student._id,
+    studentName: form.value.student.name,
+    personalNumber: form.value.student.personalNumber || '',
+    bookedBy: bookedBy,
+    info: form.value.info || ''
+  };
+
+  try {
+    const response = await client.post('/meetings', payload);
+    const savedMeeting = response.data;
+    emit('event-added', savedMeeting);
+    emit('close');
+  } catch (err) {
+    const errorMessage = err.message || 'Okänt fel';
+    toast.error(`Kunde inte spara mötet: ${errorMessage}`);
+  }
+}
+
+onMounted(fetchStudents)
 </script>
 
 
@@ -296,9 +252,9 @@ export default {
   width: 100%;
   padding: 0.5rem;
   margin-top: 0.25rem;
-  box-sizing: border-box; /* Ensures padding doesn't affect width */
-  border: 1px solid #ccc; /* Example border */
-  border-radius: 4px; /* Example border radius */
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 .modal-content input, .modal-content textarea {
   width: 100%;

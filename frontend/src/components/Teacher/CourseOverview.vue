@@ -110,135 +110,138 @@
 </template>
 
 <script>
-export default {
-  name: 'CourseOverview',
-  data() {
-    return {
-      loading: true,
-      courses: [],
-      showModal: false,
-      loadingDetails: false,
-      courseDetails: {},
-      headers: [
-        { title: 'Kursnamn', key: 'courseName', sortable: true, align: 'start' },
-        { title: 'Kurskod', key: 'courseCode', sortable: true, align: 'start' },
-        { title: 'Startdatum', key: 'startDate', sortable: true, align: 'start' },
-        { title: 'Slutdatum', key: 'endDate', sortable: true, align: 'start' },
-        { title: 'Slutprovsdatum', key: 'slutprovDate', sortable: true, align: 'start' },
-        { title: 'Antal anmälda', key: 'enrollmentCount', sortable: true, align: 'start' },
-        { title: 'Ansvarig lärare', key: 'responsibleTeacher', sortable: true, align: 'start' },
-      ],
-    };
-  },
-  async created() {
-    await this.fetchMyCourses();
-  },
-  methods: {
-    async fetchMyCourses() {
-      this.loading = true;
-      try {
-        // Use the api instance from store which has proper baseURL and credentials
-        const { api } = await import('@/store/store.js');
-        const response = await api.get('/course-instances/mine', { withCredentials: true });
-        const instances = response.data.instances || [];
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  export default {
+    name: 'CourseOverview',
+    setup() {
+      const toast = useToast()
+      return { toast }
+    },
+    data() {
+      return {
+        loading: true,
+        courses: [],
+        showModal: false,
+        loadingDetails: false,
+        courseDetails: {},
+        headers: [
+          { title: 'Kursnamn', key: 'courseName', sortable: true, align: 'start' },
+          { title: 'Kurskod', key: 'courseCode', sortable: true, align: 'start' },
+          { title: 'Startdatum', key: 'startDate', sortable: true, align: 'start' },
+          { title: 'Slutdatum', key: 'endDate', sortable: true, align: 'start' },
+          { title: 'Slutprovsdatum', key: 'slutprovDate', sortable: true, align: 'start' },
+          { title: 'Antal anmälda', key: 'enrollmentCount', sortable: true, align: 'start' },
+          { title: 'Ansvarig lärare', key: 'responsibleTeacher', sortable: true, align: 'start' },
+        ],
+      };
+    },
+    async created() {
+      await this.fetchMyCourses();
+    },
+    methods: {
+      async fetchMyCourses() {
+        this.loading = true;
+        try {
+          const response = await client.get('/course-instances/mine');
+          const instances = response.data.instances || [];
+          
+          // Debug: Log first instance to see data structure
+          if (instances.length > 0) {
+            console.log('Sample course instance:', instances[0]);
+            console.log('Responsible teacher data:', instances[0].responsibleTeacher);
+          }
+          
+          // Deduplicate by _id to prevent duplicate entries
+          const seen = new Map();
+          this.courses = instances.filter(instance => {
+            const id = instance._id?.toString() || instance.id?.toString();
+            if (!id) return false;
+            if (seen.has(id)) {
+              return false;
+            }
+            seen.set(id, true);
+            return true;
+          });
+        } catch (error) {
+          console.error('Error fetching my courses:', error);
+          this.courses = [];
+        } finally {
+          this.loading = false;
+        }
+      },
+      formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return new Date(dateString).toLocaleDateString('sv-SE', options);
+      },
+      getResponsibleTeacher(item) {
+        // Handle different possible data structures
+        const teacher = item.responsibleTeacher;
         
-        // Debug: Log first instance to see data structure
-        if (instances.length > 0) {
-          console.log('Sample course instance:', instances[0]);
-          console.log('Responsible teacher data:', instances[0].responsibleTeacher);
+        if (!teacher) {
+          return 'Ej tilldelad';
         }
         
-        // Deduplicate by _id to prevent duplicate entries
-        const seen = new Map();
-        this.courses = instances.filter(instance => {
-          const id = instance._id?.toString() || instance.id?.toString();
-          if (!id) return false;
-          if (seen.has(id)) {
-            return false;
-          }
-          seen.set(id, true);
-          return true;
+        // If userId is populated with username
+        if (teacher.userId?.username) {
+          return teacher.userId.username;
+        }
+        
+        // If userId is an object but not populated, try to get it from the object
+        if (teacher.userId && typeof teacher.userId === 'object' && teacher.userId.username) {
+          return teacher.userId.username;
+        }
+        
+        // If there's a username directly on the teacher object (fallback)
+        if (teacher.username) {
+          return teacher.username;
+        }
+        
+        // Debug: Log what we actually have
+        console.log('Teacher data structure:', {
+          teacher,
+          hasUserId: !!teacher.userId,
+          userIdType: typeof teacher.userId,
+          userIdValue: teacher.userId
         });
-      } catch (error) {
-        console.error('Error fetching my courses:', error);
-        // Handle error, e.g., show a notification
-        this.courses = [];
-      } finally {
-        this.loading = false;
-      }
-    },
-    formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      const options = { year: 'numeric', month: 'short', day: 'numeric' };
-      return new Date(dateString).toLocaleDateString('sv-SE', options);
-    },
-    getResponsibleTeacher(item) {
-      // Handle different possible data structures
-      const teacher = item.responsibleTeacher;
-      
-      if (!teacher) {
+        
         return 'Ej tilldelad';
-      }
-      
-      // If userId is populated with username
-      if (teacher.userId?.username) {
-        return teacher.userId.username;
-      }
-      
-      // If userId is an object but not populated, try to get it from the object
-      if (teacher.userId && typeof teacher.userId === 'object' && teacher.userId.username) {
-        return teacher.userId.username;
-      }
-      
-      // If there's a username directly on the teacher object (fallback)
-      if (teacher.username) {
-        return teacher.username;
-      }
-      
-      // Debug: Log what we actually have
-      console.log('Teacher data structure:', {
-        teacher,
-        hasUserId: !!teacher.userId,
-        userIdType: typeof teacher.userId,
-        userIdValue: teacher.userId
-      });
-      
-      return 'Ej tilldelad';
+      },
+      handleCourseCodeClick(item) {
+        if (item && item._id) {
+          this.showCourseDetails(item._id);
+        }
+      },
+      async showCourseDetails(instanceId) {
+        this.showModal = true;
+        this.loadingDetails = true;
+        this.courseDetails = {};
+        
+        try {
+          const response = await client.get(`/details/Kursinstans/${instanceId}`);
+          this.courseDetails = response.data;
+        } catch (error) {
+          console.error('Error fetching course details:', error);
+          this.toast.error('Kunde inte ladda kursdetaljer');
+          this.closeModal();
+        } finally {
+          this.loadingDetails = false;
+        }
+      },
+      closeModal() {
+        this.showModal = false;
+        this.courseDetails = {};
+      },
+      viewStudent(studentId) {
+        this.$router.push(`/student/${studentId}`);
+      },
+      viewTeacher(teacherId) {
+        this.$router.push(`/detaljer/Lärare/${teacherId}`);
+      },
     },
-    handleCourseCodeClick(item) {
-      if (item && item._id) {
-        this.showCourseDetails(item._id);
-      }
-    },
-    async showCourseDetails(instanceId) {
-      this.showModal = true;
-      this.loadingDetails = true;
-      this.courseDetails = {};
-      
-      try {
-        const { api } = await import('@/store/store.js');
-        const response = await api.get(`/details/Kursinstans/${instanceId}`, { withCredentials: true });
-        this.courseDetails = response.data;
-      } catch (error) {
-        console.error('Error fetching course details:', error);
-        alert('Kunde inte ladda kursdetaljer');
-        this.closeModal();
-      } finally {
-        this.loadingDetails = false;
-      }
-    },
-    closeModal() {
-      this.showModal = false;
-      this.courseDetails = {};
-    },
-    viewStudent(studentId) {
-      this.$router.push(`/student/${studentId}`);
-    },
-    viewTeacher(teacherId) {
-      this.$router.push(`/detaljer/Lärare/${teacherId}`);
-    },
-  },
-};
+  };
 </script>
 
 <style scoped>

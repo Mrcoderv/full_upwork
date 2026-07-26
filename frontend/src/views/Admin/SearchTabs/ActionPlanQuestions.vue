@@ -108,7 +108,10 @@
 
 <script setup>
   import { ref, onMounted, computed } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const questions = ref([])
   const answers = ref({})
@@ -127,7 +130,7 @@
 
   const fetchTeachers = async () => {
     try {
-      const res = await axios.get('/api/teachers')
+      const res = await client.get('/teachers')
       teachers.value = res.data
         .filter((t) => t.userId && t.userId.username)
         .map((t) => ({
@@ -141,7 +144,7 @@
 
   const fetchQuestions = async () => {
     try {
-      const response = await axios.get('/api/form-questions/ACTION_PLAN')
+      const response = await client.get('/form-questions/ACTION_PLAN')
       if (response.data && response.data.questions) {
         questions.value = response.data.questions
         questions.value.forEach((q) => {
@@ -195,12 +198,12 @@
       targetEducation.value?._id
 
     if (!studentId) {
-      alert('Ingen studentdata hittades för att spara handlingsplanen.')
+      toast.error('Ingen studentdata hittades för att spara handlingsplanen.')
       return
     }
 
     if (!educationId) {
-      alert('Kunde inte hitta någon utbildning kopplad till handlingsplanen.')
+      toast.error('Kunde inte hitta någon utbildning kopplad till handlingsplanen.')
       return
     }
 
@@ -221,13 +224,13 @@
     }
 
     try {
-      await axios.post('/api/save-actionplan', payload)
-      await axios.put(`/api/notifications/resolve/${studentId}`)
-      alert('Handlingsplan sparad!')
+      await client.post('/save-actionplan', payload)
+      await client.put(`/notifications/resolve/${studentId}`)
+      toast.success('Handlingsplan sparad!')
     } catch (error) {
       console.error('Kunde inte spara handlingsplan:', error)
-      console.error('Error response and message:', error.response || error.message)
-      alert('Kunde inte spara handlingsplan.')
+      console.error('Error response and message:', error.message)
+      toast.error('Kunde inte spara handlingsplan.')
     }
   }
 </script>

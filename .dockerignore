@@ -1,8 +1,53 @@
+# Dependencies (installed by pnpm in deps stage)
 node_modules
 backend/node_modules
-coverage
-.git
-logs
-dist
 frontend/node_modules
+.pnpm-store
+
+# Build artifacts
+dist
+frontend/dist
+coverage
+backend/coverage
+frontend/coverage
+
+# Git
+.git
+.gitignore
+
+# Docker (Docker reads these separately; no need in context)
+docker-compose.yml
+
+# Dev/editor/OS
+.vscode
+.idea
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+*.log
+
+# Docs / reports (not needed in container)
+*.md
+!backend/README.md
+!frontend/README.md
+SECURITY-HARDENING.md
+DEPLOYMENT.md
+DOCKER-OPTIMIZATION.md
+jsdoc.json
+generate-docs.js
+
+# Env files (never bake secrets into images)
+.env
+.env.*
+!.env.example
+
+# Backend uploads / logs
+logs
+backend/logs
+backend/public/uploads
+public/uploads
+
+# Lock files (pnpm-lock.yaml needed for install)
+package-lock.json

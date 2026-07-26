@@ -24,14 +24,16 @@ import {
 
 let app;
 
-const buildApp = () => {
+const buildApp = (role = "tester", extra = {}) => {
     const appInstance = express();
     appInstance.use(express.json());
     appInstance.use((req, _res, next) => {
         req.user = {
-            role: "tester",
-            email: "tester@example.com",
+            role,
+            email: `${role}@example.com`,
+            userId: new mongoose.Types.ObjectId().toString(),
             _id: new mongoose.Types.ObjectId(),
+            ...extra,
         };
         next();
     });
@@ -270,7 +272,6 @@ describe("Upload Routes", () => {
         expect(response.status).toBe(500);
         expect(response.body).toEqual({
             error: "Upload failed",
-            detail: "stream failed",
         });
     });
 
@@ -354,7 +355,7 @@ describe("Upload Routes", () => {
             .get(`/api/uploads/download/${fileId}`)
             .expect(404);
 
-        expect(response.text).toBe("File not found");
+        expect(response.body).toEqual({ error: "File not found" });
     });
 
     it("uses fallback download headers when metadata is missing", async () => {
@@ -427,12 +428,12 @@ describe("Upload Routes", () => {
         expect(response.body.toString()).toBe("download content");
     });
 
-    it("returns 500 when download fails", async () => {
+    it("returns 400 for invalid file ID on download", async () => {
         const response = await request(app)
             .get("/api/uploads/download/not-an-id")
-            .expect(500);
+            .expect(400);
 
-        expect(response.body).toEqual({ error: "Failed to download file" });
+        expect(response.body).toEqual({ error: "Invalid file ID" });
     });
 
     it("deletes a file by id", async () => {
@@ -472,12 +473,12 @@ describe("Upload Routes", () => {
             .expect(401);
     });
 
-    it("returns 500 when delete fails", async () => {
+    it("returns 400 for invalid file ID on delete", async () => {
         const response = await request(app)
             .delete("/api/uploads/not-an-id")
-            .expect(500);
+            .expect(400);
 
-        expect(response.body).toEqual({ error: "Failed to delete file" });
+        expect(response.body).toEqual({ error: "Invalid file ID" });
     });
 
     it("lists all APL files grouped by student with student name lookup", async () => {
@@ -558,5 +559,182 @@ describe("Upload Routes", () => {
             expect.objectContaining({ error: "Failed to list all APL files" })
         );
         collectionSpy.mockRestore();
+    });
+});
+
+describe("Upload Routes - Auth Enforcement", () => {
+    const noAuthApp = buildAppWithoutUser();
+    const studentApp = buildApp("student");
+    const teacherApp = buildApp("teacher");
+
+    beforeAll(async () => {
+        await connectTestDatabase();
+    }, 60000);
+
+    afterAll(async () => {
+        await disconnectTestDatabase();
+    }, 60000);
+
+    beforeEach(async () => {
+        await clearGridFs();
+        await clearStudents();
+    });
+
+    describe("POST /:studentId (upload)", () => {
+        it("returns 401 without auth token", async () => {
+            const studentId = new mongoose.Types.ObjectId().toString();
+            const { tempDir, filePath } = createTempFile("test.txt", "content");
+            const response = await request(noAuthApp)
+                .post(`/api/uploads/${studentId}`)
+                .attach("file", filePath);
+            cleanupTempDir(tempDir);
+            expect(response.status).toBe(401);
+        });
+
+        it("returns 403 for student role", async () => {
+            const studentId = new mongoose.Types.ObjectId().toString();
+            const { tempDir, filePath } = createTempFile("test.txt", "content");
+            const response = await request(studentApp)
+                .post(`/api/uploads/${studentId}`)
+                .attach("file", filePath);
+            cleanupTempDir(tempDir);
+            expect(response.status).toBe(403);
+        });
+    });
+
+    describe("GET /:studentId (list files)", () => {
+        it("returns 401 without auth token", async () => {
+            const studentId = new mongoose.Types.ObjectId().toString();
+            await request(noAuthApp)
+                .get(`/api/uploads/${studentId}`)
+                .expect(401);
+        });
+
+        it("returns 403 for student role", async () => {
+            const studentId = new mongoose.Types.ObjectId().toString();
+            await request(studentApp)
+                .get(`/api/uploads/${studentId}`)
+                .expect(403);
+        });
+    });
+
+    describe("GET /download/:fileId", () => {
+        it("returns 401 without auth token", async () => {
+            const fileId = new mongoose.Types.ObjectId().toString();
+            await request(noAuthApp)
+                .get(`/api/uploads/download/${fileId}`)
+                .expect(401);
+        });
+
+        it("returns 403 for student role", async () => {
+            const fileId = new mongoose.Types.ObjectId().toString();
+            await request(studentApp)
+                .get(`/api/uploads/download/${fileId}`)
+                .expect(403);
+        });
+
+        it("returns 400 for invalid file ID", async () => {
+            await request(teacherApp)
+                .get("/api/uploads/download/not-an-id")
+                .expect(400);
+        });
+    });
+
+    describe("DELETE /:fileId", () => {
+        it("returns 401 without auth token", async () => {
+            const fileId = new mongoose.Types.ObjectId().toString();
+            await request(noAuthApp)
+                .delete(`/api/uploads/${fileId}`)
+                .expect(401);
+        });
+
+        it("returns 403 for student role", async () => {
+            const fileId = new mongoose.Types.ObjectId().toString();
+            await request(studentApp)
+                .delete(`/api/uploads/${fileId}`)
+                .expect(403);
+        });
+
+        it("returns 400 for invalid file ID", async () => {
+            await request(teacherApp)
+                .delete("/api/uploads/not-an-id")
+                .expect(400);
+        });
+    });
+
+    describe("GET /all/apl", () => {
+        it("returns 401 without auth token", async () => {
+            await request(noAuthApp)
+                .get("/api/uploads/all/apl")
+                .expect(401);
+        });
+
+        it("returns 403 for student role", async () => {
+            await request(studentApp)
+                .get("/api/uploads/all/apl")
+                .expect(403);
+        });
+
+        it("returns 403 for teacher role", async () => {
+            await request(teacherApp)
+                .get("/api/uploads/all/apl")
+                .expect(403);
+        });
+    });
+
+    describe("DELETE /cleanup/orphaned", () => {
+        it("returns 401 without auth token", async () => {
+            await request(noAuthApp)
+                .delete("/api/uploads/cleanup/orphaned")
+                .expect(401);
+        });
+
+        it("returns 403 for student role", async () => {
+            await request(studentApp)
+                .delete("/api/uploads/cleanup/orphaned")
+                .expect(403);
+        });
+
+        it("returns 403 for teacher role", async () => {
+            await request(teacherApp)
+                .delete("/api/uploads/cleanup/orphaned")
+                .expect(403);
+        });
+    });
+});
+
+describe("Upload Routes - File Size Limit", () => {
+    beforeAll(async () => {
+        await connectTestDatabase();
+    }, 60000);
+
+    afterAll(async () => {
+        await disconnectTestDatabase();
+    }, 60000);
+
+    beforeEach(async () => {
+        await clearGridFs();
+        await clearStudents();
+    });
+
+    it("rejects uploads exceeding 10 MB with 413", async () => {
+        const oversizedApp = buildApp("tester");
+        const studentId = new mongoose.Types.ObjectId().toString();
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "upload-oversized-"));
+        const filePath = path.join(tempDir, "oversized.bin");
+        const chunk = Buffer.alloc(1024 * 1024, 0xFF);
+        const fd = fs.openSync(filePath, "w");
+        for (let i = 0; i < 11; i++) {
+            fs.writeSync(fd, chunk);
+        }
+        fs.closeSync(fd);
+
+        const response = await request(oversizedApp)
+            .post(`/api/uploads/${studentId}`)
+            .attach("file", filePath);
+
+        cleanupTempDir(tempDir);
+        expect(response.status).toBe(413);
+        expect(response.body.error).toMatch(/too large/i);
     });
 });

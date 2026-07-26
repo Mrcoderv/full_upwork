@@ -369,10 +369,11 @@
 </template>
 
 <script setup>
-  import axios from 'axios'
+  import client from '@/api/client.js'
   import { ref, reactive, watch, onMounted, computed, nextTick } from 'vue'
+  import { useToast } from '@/composables/useToast.js'
 
-  // Router (not needed; we stay on this page after submit)
+  const toast = useToast()
 
   // Reactive data
   const programs = ref([])
@@ -470,9 +471,7 @@
   const fetchPrograms = async () => {
     try {
       isLoadingPrograms.value = true
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/programs`, {
-        withCredentials: true,
-      })
+      const res = await client.get('/programs')
       programs.value = res.data
     } catch (error) {
       console.error('Error fetching programs:', error)
@@ -483,9 +482,7 @@
   const fetchTeachers = async () => {
     try {
       isLoadingTeachers.value = true
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/teachers`, {
-        withCredentials: true,
-      })
+      const res = await client.get('/teachers')
       teachers.value = res.data.filter((t) => t.userId && t.userId.username)
     } catch (error) {
       console.error('Error fetching teachers:', error)
@@ -498,9 +495,8 @@
 
     try {
       isLoadingCourses.value = true
-      const res = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/program/${programId}/courses`,
-        { withCredentials: true }
+      const res = await client.get(
+        `/program/${programId}/courses`
       )
       availableCourses.value = uniqueById(res.data).map((c) => ({
         ...c,
@@ -517,9 +513,7 @@
   const fetchAllCourses = async () => {
     try {
       isLoadingCourses.value = true
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/courses`, {
-        withCredentials: true,
-      })
+      const res = await client.get('/courses')
       availableCourses.value = uniqueById(res.data).map((c) => ({
         ...c,
         displayText: `${c.courseName} (${c.courseCode || 'Ingen kod'})`,
@@ -926,9 +920,7 @@
         education: dedupedEducation,
       }
 
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/student`, payload, {
-        withCredentials: true,
-      })
+      const response = await client.post('/student', payload)
 
       console.log('✅ Student created successfully:', response.data)
       console.log('📋 Education entries:', response.data.education)
@@ -947,9 +939,9 @@
         successMessage.value = ''
       }, 2500)
     } catch (error) {
-      console.error('❌ Backend error:', error.response?.data || error)
+      console.error('❌ Backend error:', error)
       errorMessage.value =
-        error.response?.data?.error || 'Kunde inte lägga till elev. Något gick fel. Försök igen.'
+        error.message || 'Kunde inte lägga till elev. Något gick fel. Försök igen.'
     } finally {
       // Ensure not stuck loading on any exit path
       isSubmitting.value = false

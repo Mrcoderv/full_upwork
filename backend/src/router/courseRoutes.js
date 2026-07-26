@@ -1,15 +1,16 @@
 import express from "express";
 import Course from "../models/Course.js";
 import logger from "../utils/logger.js";
-// Rate limiting disabled
-// import {
-//     courseDetailRateLimiter,
-//     exemptAdminsFromRateLimit,
-// } from "../middleware/security.js";
+import { validate, validateId } from "../middleware/validation.js";
 
 const router = express.Router();
 
-// 🔹 Fetch all courses
+const createCourseSchema = {
+    courseName: { type: "string", required: true, min: 1, max: 200, sanitize: true },
+    courseCode: { type: "string", required: true, min: 1, max: 50, sanitize: true },
+};
+
+// Fetch all courses
 router.get("/courses", async (req, res) => {
     try {
         const courses = await Course.find();
@@ -20,9 +21,10 @@ router.get("/courses", async (req, res) => {
     }
 });
 
-// 🔹 Fetch a single course by ID
+// Fetch a single course by ID
 router.get(
     "/courses/:courseId",
+    validateId("courseId"),
     async (req, res) => {
         try {
             const course = await Course.findById(req.params.courseId);
@@ -36,7 +38,7 @@ router.get(
     }
 );
 
-// 🔹 Fetch a course ID by name
+// Fetch a course ID by name
 router.get("/courses/id", async (req, res) => {
     const { name } = req.query;
     try {
@@ -55,6 +57,7 @@ router.get("/courses/id", async (req, res) => {
 
 router.get(
     "/course/:id",
+    validateId(),
     async (req, res) => {
         try {
             const course = await Course.findById(req.params.id);
@@ -67,14 +70,10 @@ router.get(
     }
 );
 
-// 🔹 Create a new course
-router.post("/course", async (req, res) => {
+// Create a new course
+router.post("/course", validate(createCourseSchema), async (req, res) => {
     try {
         const { courseName, courseCode, coursePoints, courseExtent } = req.body;
-
-        if (!courseName || !courseCode) {
-            return res.status(400).json({ error: "Missing required fields" });
-        }
 
         const created = await Course.create({
             courseName,

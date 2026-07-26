@@ -9,8 +9,10 @@ CITEST_DOCKER_TARGET := cicd
 CITEST_BACKEND_MOUNT :=
 CITEST_REPORTER:=verbose
 else
-CITEST_DOCKER_TARGET := test
-CITEST_BACKEND_MOUNT := -v $(CURDIR)/backend:/app/backend -v $(CURDIR)/frontend:/app/frontend
+# Use cicd locally too — volume mounts fail on Docker Desktop (macOS/WSL)
+# and the image build is fast with layer caching.
+CITEST_DOCKER_TARGET := cicd
+CITEST_BACKEND_MOUNT :=
 CITEST_REPORTER=dot
 endif
 
@@ -23,13 +25,13 @@ deploy:
 	git fetch origin main
 	git merge --ff-only origin/main
 	@echo "Installing backend dependencies..."
-	cd backend && npm ci
+	cd backend && pnpm install --frozen-lockfile
 	@echo "Starting or reloading backend with PM2..."
 	cd backend && pm2 startOrReload ecosystem.config.cjs --env production
 	@echo "Installing frontend dependencies..."
-	cd frontend && npm ci
+	cd frontend && pnpm install --frozen-lockfile
 	@echo "Building frontend for production..."
-	cd frontend && VITE_API_URL="" NODE_OPTIONS="--max-old-space-size=4096" npm run build
+	cd frontend && VITE_API_URL="" NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 	@echo "Deployment complete."
 
 deploy-old:
@@ -69,7 +71,7 @@ citest:
 	docker run --rm -e MONGO_URI="mongodb://mindful_mongo:27017" $(CITEST_BACKEND_MOUNT) "$(CITEST_IMAGE)"
 
 init:
-	volta run npm ci && npm ci && cd backend && npm ci && cd ../frontend && npm ci
+	pnpm install
 
 dev:
 	$(DC) up --build
@@ -77,16 +79,20 @@ dev:
 format:
 	npx eslint --no-config-lookup --fix
 
+lint:
+	cd backend && npx eslint src/ --max-warnings 50
+	cd frontend && npx eslint src/ --max-warnings 770
+
 test-backend:
-	cd backend && npx vitest run --mode test --reporter=$(CITEST_REPORTER)
+	cd backend && NODE_ENV=test npx vitest run --mode test --reporter=$(CITEST_REPORTER)
 
 test-frontend:
-	cd frontend && npx vitest run --mode test --reporter=$(CITEST_REPORTER)
+	cd frontend && NODE_ENV=test npx vitest run --mode test --reporter=$(CITEST_REPORTER)
 
 test: test-backend test-frontend
 
 stop:
 	$(DC) down
 
-npmup:
-	rm -rf node_modules package-lock.json && npm dedupe && npm install --include=dev
+pnpmup:
+	rm -rf node_modules backend/node_modules frontend/node_modules pnpm-lock.yaml && pnpm install

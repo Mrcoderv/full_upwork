@@ -4,10 +4,22 @@ import nodemailer from "nodemailer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
+import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
 
 
 const router = express.Router();
+
+const registerSchema = {
+    name: { type: "string", required: true, min: 1, max: 100, sanitize: true },
+    email: { type: "string", required: true, email: true },
+    password: { type: "string", required: true, password: true },
+};
+
+const resetPasswordSchema = {
+    token: { type: "string", required: true },
+    newPassword: { type: "string", required: true, password: true },
+};
 
 const transporter = nodemailer.createTransport({
     service: "Gmail",
@@ -17,7 +29,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-router.post("/register", async (req, res) => {
+router.post("/register", validate(registerSchema), async (req, res) => {
     try {
         const { email, password, name } = req.body;
 
@@ -47,7 +59,7 @@ router.post("/register", async (req, res) => {
     }
 });
 
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", validate(resetPasswordSchema), async (req, res) => {
     try {
         const { token, newPassword } = req.body;
 

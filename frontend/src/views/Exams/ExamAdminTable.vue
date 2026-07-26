@@ -94,7 +94,10 @@
 
 <script setup>
   import { ref, onMounted, computed } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const exams = ref([])
   const search = ref('')
@@ -114,7 +117,7 @@
 
   const fetchExams = async () => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/exams`)
+      const res = await client.get('/exams')
       exams.value = res.data.map((exam) => ({
         ...exam,
         requestedMonthFormatted: formatRequestedMonth(exam.requestedMonth),
@@ -145,32 +148,32 @@
     const submitDecision = async (id) => {
       const { decision, comment } = decisions.value[id]
       if (!decision) {
-        alert('Beslut krävs')
+        toast.error('Beslut krävs')
         return
       }
 
     try {
-      await axios.put(`${import.meta.env.VITE_API_URL}/api/exams/${id}/decision`, {
+      await client.put(`/exams/${id}/decision`, {
         decision,
         comment,
       })
-      alert('Beslut sparat')
+      toast.success('Beslut sparat')
       fetchExams()
     } catch (err) {
       console.error(err)
-      alert('Fel vid beslutssparning')
+      toast.error('Fel vid beslutssparning')
     }
   }
 
   const deleteExam = async (id) => {
     if (!confirm('Är du säker på att du vill ta bort denna prövning?')) return
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/exams/${id}`)
-      alert('Prövning borttagen')
+      await client.delete(`/exams/${id}`)
+      toast.success('Prövning borttagen')
       fetchExams()
     } catch (err) {
       console.error('Fel vid borttagning:', err)
-      alert('Kunde inte ta bort prövningen.')
+      toast.error('Kunde inte ta bort prövningen.')
     }
   }
 

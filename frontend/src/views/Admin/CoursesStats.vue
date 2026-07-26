@@ -39,7 +39,10 @@
 
 <script setup>
   import { ref, computed, onMounted } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const stats = ref({})
   const sortDescending = ref(true)
@@ -49,7 +52,7 @@
 
   onMounted(async () => {
     try {
-      const res = await axios.get('/api/stats/courses-per-month')
+      const res = await client.get('/stats/courses-per-month')
       stats.value = res.data || {}
     } catch (err) {
       console.error('Failed to load stats:', err)
@@ -76,9 +79,7 @@
 
       const filteredCourses = Object.entries(courseData)
         .filter(([course, grades]) => {
-          // Only include non-meta courses
           if (!course || course.startsWith('_')) return false
-          // If a municipality is selected, filter those too
           if (selectedMunicipality.value) {
             return grades._municipality?.includes(selectedMunicipality.value)
           }

@@ -29,7 +29,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
+
+const toast = useToast()
 
 // Initial ladda frågor
 const questions = ref([{label: '', type: 'text', options: [], required: true}])
@@ -38,7 +41,7 @@ const questions = ref([{label: '', type: 'text', options: [], required: true}])
 
 const fetchQuestions = async () => {
   try {
-    const response = await axios.get('/api/form-questions/ACTION_PLAN')
+    const response = await client.get('/form-questions/ACTION_PLAN')
     if (response.data && response.data.questions) {
       questions.value = response.data.questions
     }
@@ -85,12 +88,12 @@ const submitQuestions = async () => {
       key: q.key || generateKey(q.label)
     }));
 
-    const response = await axios.post('/api/form-questions', {
+    const response = await client.post('/form-questions', {
       type: 'ACTION_PLAN',
       questions: cleanedQuestions
     });
 
-    alert(response.data.message);
+    toast.success(response.data.message);
   } catch (error) {
     console.error('Kunde inte spara frågor:', error);
   }

@@ -157,6 +157,8 @@ describe("Document Routes", () => {
 
         const response = await request(app)
             .get(`/api/documents/${studentId.toString()}`)
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
             .expect(200);
 
         expect(response.body).toHaveLength(2);
@@ -194,6 +196,8 @@ describe("Document Routes", () => {
 
         const response = await request(app)
             .get(`/api/documents/${studentId.toString()}`)
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
             .query({ type: "REPORT", enrollmentId: enrollmentId.toString() })
             .expect(200);
 

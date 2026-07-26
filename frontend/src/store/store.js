@@ -1,5 +1,5 @@
 import { createStore } from 'vuex'
-import axios from 'axios'
+import client from '@/api/client.js'
 
 // Role hierarchy list (higher index = higher authority)
 const ROLE_HIERARCHY = [
@@ -14,11 +14,8 @@ const ROLE_HIERARCHY = [
   'systemadmin',
 ]
 
-// Create an Axios instance with credentials enabled
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL + '/api',
-  withCredentials: true, // ✅ Ensures cookies are included in requests
-})
+// Use the centralized API client (timeout, error normalization, 401 handling)
+const api = client
 
 const store = createStore({
   state: {
@@ -134,20 +131,16 @@ const store = createStore({
 
         return { success: true, message: 'Login successful' }
       } catch (error) {
-        console.error('❌ Login failed:', error.response?.data?.message || error)
-        return { success: false, message: error.response?.data?.message || 'Login failed' }
+        console.error('Login failed:', error)
+        return { success: false, message: error.message || 'Login failed' }
       }
     },
     async fetchUser({ commit }) {
       try {
-        const { data } = await api.get('/auth/session') // ← use correct endpoint
-        console.log('✅ User authenticated:', data)
-        commit('SET_USER', data.user) // must be data.user
+        const { data } = await api.get('/auth/session')
+        commit('SET_USER', data.user)
       } catch (error) {
-        console.error('❌ Failed to fetch current user:', error.response?.data?.message || error)
-        if (error.response?.status === 401) {
-          commit('LOGOUT')
-        }
+        console.error('Failed to fetch current user:', error)
       }
     },
 
@@ -155,7 +148,7 @@ const store = createStore({
       try {
         await api.post('/auth/logout')
       } catch (error) {
-        console.error('❌ Logout request failed:', error)
+        console.error('Logout request failed:', error)
       }
       commit('LOGOUT')
     },
@@ -165,12 +158,7 @@ const store = createStore({
         const { data } = await api.get('/task')
         commit('SET_TASKS', data)
       } catch (error) {
-        console.error('❌ Vuex: Failed to fetch tasks:', error.response?.data || error)
-
-        // Handle session expiration (force logout)
-        if (error.response?.status === 401) {
-          commit('LOGOUT')
-        }
+        console.error('Failed to fetch tasks:', error)
       }
     },
 
@@ -179,7 +167,7 @@ const store = createStore({
         const { data } = await api.post('/task', { description })
         commit('ADD_TASK', data)
       } catch (error) {
-        console.error('❌ Vuex: Failed to add task:', error.response?.data || error)
+        console.error('Failed to add task:', error)
       }
     },
 
@@ -188,7 +176,7 @@ const store = createStore({
         const { data } = await api.put(`/task/${task._id}`, task)
         commit('UPDATE_TASK', data)
       } catch (error) {
-        console.error('❌ Vuex: Failed to update task:', error.response?.data || error)
+        console.error('Failed to update task:', error)
       }
     },
 
@@ -197,7 +185,7 @@ const store = createStore({
         await api.delete(`/task/${taskId}`)
         commit('DELETE_TASK', taskId)
       } catch (error) {
-        console.error('❌ Vuex: Failed to delete task:', error.response?.data || error)
+        console.error('Failed to delete task:', error)
       }
     },
 
@@ -206,32 +194,12 @@ const store = createStore({
         await api.delete('/delalltasks')
         commit('DELETE_ALL_TASKS')
       } catch (error) {
-        console.error('❌ Vuex: Failed to delete all tasks:', error.response?.data || error)
+        console.error('Failed to delete all tasks:', error)
       }
     },
   },
 })
-// Global response interceptor: any 401 from the API means the session has
-// expired or was never valid, so proactively log the user out and send them
-// to the login page instead of leaving stale/broken state around.
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      store.commit('LOGOUT')
-      if (
-        typeof window !== 'undefined' &&
-        window.location.pathname !== '/login' &&
-        (typeof process === 'undefined' || process.env.NODE_ENV !== 'test')
-      ) {
-        window.location.href = '/login'
-      }
-    }
-    return Promise.reject(error)
-  }
-)
 
 export default store
 
-// add this to bottom of store.js
 export { api }

@@ -1,12 +1,12 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 
-import axios from 'axios'
+import client from '@/api/client.js'
 import router from './router/router.js'
 import store from './store/store.js'
 
 import '@mdi/font/css/materialdesignicons.css'
-import './assets/main.css'  // Tailwind-stilar
+import './assets/main.css'
 
 import { createVuetify } from 'vuetify'
 import 'vuetify/styles'
@@ -16,7 +16,6 @@ import * as directives from 'vuetify/directives'
 
 document.documentElement.lang = 'sv'
 
-// ✅ Correct Vuetify instance creation
 const vuetify = createVuetify({
   components,
   directives,
@@ -25,17 +24,10 @@ const vuetify = createVuetify({
   },
 })
 
-console.log('🚀 Initializing Vue App...')
-console.log('VITE_API_URL:', import.meta.env.VITE_API_URL)
-console.log('All env variables:', import.meta.env)
-
 async function bootstrap() {
-  // Use user from store.state, not store.state.auth
   const user = store.state.user
   if (user && user.token) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${user.token}`
-  } else {
-    console.warn('⚠️ No user token found in Vuex state.')
+    client.defaults.headers.common['Authorization'] = `Bearer ${user.token}`
   }
 
   try {
@@ -45,12 +37,15 @@ async function bootstrap() {
   }
 
   const app = createApp(App)
+
+  app.config.errorHandler = (err, instance, info) => {
+    console.error('Unhandled Vue error:', { err, info })
+  }
+
   app.use(router)
   app.use(store)
   app.use(vuetify)
   app.mount('#app')
-
-  console.log('✅ Vue App Mounted!')
 }
 
 bootstrap()

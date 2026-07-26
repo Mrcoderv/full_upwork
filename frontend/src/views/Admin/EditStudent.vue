@@ -148,12 +148,14 @@
 </template>
 
 <script>
-  import axios from 'axios'
+  import client from '@/api/client.js'
   import { ref, reactive, watch, computed, onMounted } from 'vue'
+  import { useToast } from '@/composables/useToast.js'
 
   export default {
     name: 'EditStudent',
     setup() {
+      const toast = useToast()
       const students = ref([])
       const teachers = ref([])
       const selectedId = ref('')
@@ -171,9 +173,7 @@
 
       async function loadStudents() {
         try {
-          const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/students`, {
-            withCredentials: true,
-          })
+          const res = await client.get('/students')
           students.value = res.data
         } catch (e) {
           console.error('❌ Failed to load students', e)
@@ -182,9 +182,7 @@
 
       async function loadTeachers() {
         try {
-          const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/teachers`, {
-            withCredentials: true,
-          })
+          const res = await client.get('/teachers')
           teachers.value = res.data
         } catch (e) {
           console.error('❌ Failed to load teachers', e)
@@ -195,8 +193,8 @@
         try {
           if (!id) return
           // Use lightweight endpoint to avoid populate issues
-          const url = `${import.meta.env.VITE_API_URL}/api/student/${encodeURIComponent(id)}/basic`
-          const res = await axios.get(url, { withCredentials: true })
+          const url = `/student/${encodeURIComponent(id)}/basic`
+          const res = await client.get(url)
           const s = res.data
           form.value = {
             _id: s._id,
@@ -221,10 +219,9 @@
           // Fetch exam instances
           await loadExamInstances(id)
         } catch (e) {
-          console.error('❌ Failed to load student', e?.response?.data || e)
-          const serverMsg = e?.response?.data?.error || e?.response?.data?.message
-          errorMessage.value = serverMsg
-            ? `Kunde inte ladda elev: ${serverMsg}`
+          console.error('❌ Failed to load student', e)
+          errorMessage.value = e.message
+            ? `Kunde inte ladda elev: ${e.message}`
             : 'Kunde inte ladda elev.'
         }
       }
@@ -233,11 +230,11 @@
         try {
           loadingExams.value = true
           examInstances.value = []
-          const url = `${import.meta.env.VITE_API_URL}/api/exams/student/${encodeURIComponent(id)}`
-          const res = await axios.get(url, { withCredentials: true })
+          const url = `/exams/student/${encodeURIComponent(id)}`
+          const res = await client.get(url)
           examInstances.value = Array.isArray(res.data) ? res.data : []
         } catch (e) {
-          console.error('❌ Failed to load exam instances', e?.response?.data || e)
+          console.error('❌ Failed to load exam instances', e)
         } finally {
           loadingExams.value = false
         }
@@ -262,7 +259,7 @@
             examLocation: form.value.examLocation,
             dropout: !!form.value.dropout,
           }
-          await axios.put(`${import.meta.env.VITE_API_URL}/api/student/${form.value._id}`, payload)
+          await client.put(`/student/${form.value._id}`, payload)
           successMessage.value = 'Elev sparad!'
         } catch (e) {
           console.error('❌ Failed to save student', e)

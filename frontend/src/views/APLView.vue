@@ -24,18 +24,18 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 import APLBoard from '../components/APLBoard.vue';
 import APLFileArchive from '../components/APLFileArchive.vue'; // To be created in Phase 4
 
+const toast = useToast();
 const activeTab = ref('ongoing');
 const students = ref([]);
 
 const fetchStudents = async () => {
   try {
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/students`, {
-      withCredentials: true,
-    });
+    const res = await client.get('/students');
     students.value = res.data;
   } catch (err) {
     console.error('❌ Failed to fetch students in APLView:', err);

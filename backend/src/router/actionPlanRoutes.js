@@ -179,7 +179,11 @@ router.get('/form-questions/:type', isAuthenticated, async (req, res) => {
   })
 
 router.post("/save-actionplan", isAuthenticated, async (req, res) => {
-  const plan = req.body;
+  const allowedActionPlanFields = ['studentId', 'educationId', 'teacherName', 'date', 'reason', 'schoolEfforts', 'studentEfforts', 'studyTime', 'meetings', 'notified', 'courseId'];
+  const plan = {};
+  for (const field of allowedActionPlanFields) {
+    if (req.body[field] !== undefined) plan[field] = req.body[field];
+  }
   await ActionPlan.create(plan);
   // Markera notification för eleven/kursen som klar
   await Notification.updateOne(

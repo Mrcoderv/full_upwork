@@ -1,65 +1,32 @@
 import { mount } from '@vue/test-utils'
-import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EducationEditor from '../../src/views/Admin/EducationEditor.vue'
 
-// ✅ Ensure axios is properly mocked without wrapping in `default`
-vi.mock('axios', () => {
-    const axiosMock = {
-        get: vi.fn((url) => {
-            if (url.includes('/api/students')) {
-                return Promise.resolve({
-                    data: [
-                        {
-                            _id: '1',
-                            name: 'John Doe',
-                            personalNumber: '123456789',
-                            email: 'john@example.com',
-                            courses: [{ courseId: { courseName: 'Math 101', courseCode: 'M101' } }],
-                            startDate: '2024-01-01',
-                            endDate: '2024-06-01',
-                            finalExamDate: '2024-06-10',
-                            municipality: 'Test City',
-                            phone: '1234567890',
-                            teacher: 'Mr. Smith',
-                            dropout: false,
-                        },
-                    ],
-                })
-            }
-            if (url.includes('/api/all-programs')) {
-                return Promise.resolve({
-                    data: [{ _id: '1', programName: 'Test Program' }],
-                })
-            }
-            if (url.includes('/api/program/1/courses')) {
-                return Promise.resolve({
-                    data: [
-                        {
-                            _id: '101',
-                            courseName: 'Test Course',
-                            courseCode: 'TC101',
-                            displayText: 'Test Course (TC101)',
-                        },
-                    ],
-                })
-            }
-            return Promise.reject(new Error(`404 Not Found: ${url}`))
-        }),
+vi.mock('@/api/client.js', () => ({
+    default: {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
+        interceptors: {
+            request: { use: vi.fn() },
+            response: { use: vi.fn() },
+        },
+    },
+}))
 
-        post: vi.fn(() => Promise.resolve({ data: 'Course added successfully' })),
+import client from '@/api/client.js'
 
-        put: vi.fn(() => Promise.resolve({ data: { _id: '1', dropout: true } })),
+const mockToast = vi.hoisted(() => ({
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+}))
 
-        delete: vi.fn(() => Promise.resolve({})),
-    }
-
-    axiosMock.create = vi.fn(() => axiosMock)
-
-    return {
-        default: axiosMock,
-    }
-})
+vi.mock('@/composables/useToast.js', () => ({
+    useToast: () => mockToast,
+}))
 
 describe('EducationEditor.vue', () => {
     let wrapper
@@ -90,37 +57,34 @@ describe('EducationEditor.vue', () => {
             },
         ]
 
-        axios.get.mockImplementation((url) => {
-            if (url.includes('/api/students')) return Promise.resolve({ data: mockStudents })
-            if (url.includes('/api/all-programs')) return Promise.resolve({ data: mockPrograms })
-            if (url.includes('/api/program/1/courses')) return Promise.resolve({ data: mockCourses })
+        client.get.mockImplementation((url) => {
+            if (url.includes('/students')) return Promise.resolve({ data: mockStudents })
+            if (url.includes('/all-programs')) return Promise.resolve({ data: mockPrograms })
+            if (url.includes('/program/1/courses')) return Promise.resolve({ data: mockCourses })
             return Promise.reject(new Error(`404 Not Found: ${url}`))
         })
 
-        axios.post.mockResolvedValue({ data: 'Course added successfully' })
-        axios.put.mockResolvedValue({ data: { _id: '1', dropout: true } })
-        axios.delete.mockResolvedValue({})
+        client.post.mockResolvedValue({ data: 'Course added successfully' })
+        client.put.mockResolvedValue({ data: { _id: '1', dropout: true } })
+        client.delete.mockResolvedValue({})
 
         await mountEditor()
     })
 
     it('fetches and loads students correctly', async () => {
-        console.log('MOCKED AXIOS:', axios.get.mock.calls) // ✅ Debug what axios is being called with
+        console.log('MOCKED client:', client.get.mock.calls)
 
-        await wrapper.vm.fetchInitialData() // ✅ Manually call fetchInitialData() if needed
+        await wrapper.vm.fetchInitialData()
 
-        console.log('STUDENT DATA:', wrapper.vm.students) // ✅ Debug fetched students
+        console.log('STUDENT DATA:', wrapper.vm.students)
 
-        expect(axios.get).toHaveBeenCalledWith(
-            `${import.meta.env.VITE_API_URL}/api/students`,
-            { withCredentials: true }
-        )
+        expect(client.get).toHaveBeenCalledWith('/students')
         expect(wrapper.vm.students.length).toBe(1)
     })
 
     it('handles error on fetchInitialData', async () => {
         await wrapper.unmount()
-        axios.get.mockRejectedValue(new Error('Network Error'))
+        client.get.mockRejectedValue(new Error('Network Error'))
         await mountEditor()
         expect(wrapper.vm.students.length).toBe(0)
     })
@@ -129,8 +93,8 @@ describe('EducationEditor.vue', () => {
         await wrapper.vm.fetchAllCourses();
     });
     it('handles error when fetching courses', async () => {
-        axios.get.mockImplementation((url) => {
-            if (url.includes('/api/program/1/courses')) {
+        client.get.mockImplementation((url) => {
+            if (url.includes('/program/1/courses')) {
                 return Promise.reject(new Error('Network Error'))
             }
             return Promise.resolve({ data: [] })
@@ -149,7 +113,7 @@ describe('EducationEditor.vue', () => {
         await wrapper.vm.handleAddCourse();
     });
     it('handles error when adding a course', async () => {
-        axios.post.mockRejectedValue(new Error('Network Error'));
+        client.post.mockRejectedValue(new Error('Network Error'));
         wrapper.vm.selectedStudent = { _id: '1' };
         wrapper.vm.selectedIndividualCourse = '101';
         await wrapper.vm.handleAddCourse();
@@ -185,16 +149,16 @@ describe('EducationEditor.vue', () => {
         wrapper.vm.selectedIndividualCourse = '101'
         wrapper.vm.allCourses = [{ _id: '101', displayText: 'Test Course (TC101)' }]
         await wrapper.vm.handleAddCourse()
-        expect(axios.post).toHaveBeenCalledWith(
-            `${import.meta.env.VITE_API_URL}/api/student/1/addcourse`,
+        expect(client.post).toHaveBeenCalledWith(
+            '/student/1/addcourse',
             { courseId: '101' }
         )
         expect(wrapper.vm.successMessage).toContain('John Doe has been enrolled')
     })
 
     it('fetches courses when a program is selected', async () => {
-        axios.get.mockImplementation((url) => {
-            if (url.includes('/api/program/1/courses')) {
+        client.get.mockImplementation((url) => {
+            if (url.includes('/program/1/courses')) {
                 return Promise.resolve({
                     data: [
                         {
@@ -218,11 +182,10 @@ describe('EducationEditor.vue', () => {
     })
 
     it('alerts when course data is invalid', async () => {
-        const originalAlert = globalThis.alert
-        globalThis.alert = vi.fn()
+        mockToast.error.mockClear()
 
-        axios.get.mockImplementation((url) => {
-            if (url.includes('/api/program/1/courses')) {
+        client.get.mockImplementation((url) => {
+            if (url.includes('/program/1/courses')) {
                 return Promise.resolve({ data: null })
             }
             return Promise.resolve({ data: [] })
@@ -231,9 +194,7 @@ describe('EducationEditor.vue', () => {
         wrapper.vm.selectedProgram = '1'
         await wrapper.vm.fetchAllCourses()
 
-        expect(globalThis.alert).toHaveBeenCalledWith('Invalid course data received.')
-
-        globalThis.alert = originalAlert
+        expect(mockToast.error).toHaveBeenCalledWith('Invalid course data received.')
     })
 
     it('filters students when search query is present', async () => {

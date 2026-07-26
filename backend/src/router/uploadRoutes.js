@@ -9,6 +9,7 @@ import path from 'path'
 import { uploadXlsx } from '../controllers/studentController.js'
 import { authenticateUser } from '../controllers/authController.js'
 import { hasRole } from '../middleware/auth.js'
+import { uploadRateLimiter } from '../middleware/security.js'
 import logger from "../utils/logger.js";
 
 dotenv.config()
@@ -93,10 +94,9 @@ async function checkFileAccess(req, res, next) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Handle invalid ObjectId gracefully (backward compatible with tests)
+    // Handle invalid ObjectId gracefully
     if (!mongoose.Types.ObjectId.isValid(fileId)) {
-      const errorMsg = req.method === 'DELETE' ? 'Failed to delete file' : 'Failed to download file';
-      return res.status(500).json({ error: errorMsg });
+      return res.status(400).json({ error: "Invalid file ID" });
     }
 
     const userRoles = user.roles || (user.role ? [user.role] : []);
@@ -110,7 +110,7 @@ async function checkFileAccess(req, res, next) {
     const db = mongoose.connection.db;
     const file = await db.collection("fs.files").findOne({ _id: new mongoose.Types.ObjectId(fileId) });
     if (!file) {
-      return res.status(404).send('File not found');
+      return res.status(404).json({ error: "File not found" });
     }
 
     const studentId = file.metadata?.studentId;
@@ -149,12 +149,25 @@ async function checkFileAccess(req, res, next) {
   }
 }
 
+// Middleware to handle multer errors (e.g., file too large)
+function handleMulterError(err, req, res, next) {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large. Maximum size is 10 MB.' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+  next(err);
+}
+
 // XLSX upload route (memory storage)
 router.post(
   '/upload/xlsxupload',
   authenticateUser,
   hasRole(['systemadmin', 'admin', 'coordinator', 'tester']),
+  uploadRateLimiter,
   memupload.single('file'),
+  handleMulterError,
   (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' })
@@ -169,7 +182,7 @@ router.post(
 )
 
 // Upload file to GridFS with metadata and MIME detection
-router.post('/:studentId', authenticateUser, checkStudentAccess, upload.single('file'), async (req, res) => {
+router.post('/:studentId', authenticateUser, checkStudentAccess, uploadRateLimiter, upload.single('file'), handleMulterError, async (req, res) => {
   try {
     const db = mongoose.connection.db
     const bucket = new GridFSBucket(db, { bucketName: 'fs' })
@@ -210,7 +223,7 @@ router.post('/:studentId', authenticateUser, checkStudentAccess, upload.single('
     stream.pipe(uploadStream)
       .on('error', (err) => {
         logger.error({ err }, "Upload to GridFS failed")
-        res.status(500).json({ error: 'Upload failed', detail: err.message })
+        res.status(500).json({ error: 'Upload failed' })
       })
       .on('finish', async () => {
         try {
@@ -358,7 +371,7 @@ router.get('/all/apl', authenticateUser, hasRole(['systemadmin', 'admin', 'coord
     res.json(filesByStudent)
   } catch (err) {
     logger.error({ err }, "Failed to list all APL files")
-    res.status(500).json({ error: 'Failed to list all APL files', detail: err.message })
+    res.status(500).json({ error: 'Failed to list all APL files' })
   }
 })
 
@@ -418,7 +431,7 @@ router.delete('/cleanup/orphaned', authenticateUser, hasRole(ALLOWED_ADMIN_ROLES
     })
   } catch (err) {
     logger.error({ err }, "Failed to cleanup orphaned files")
-    res.status(500).json({ error: 'Failed to cleanup orphaned files', detail: err.message })
+    res.status(500).json({ error: 'Failed to cleanup orphaned files' })
   }
 })
 

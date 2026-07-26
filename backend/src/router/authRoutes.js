@@ -9,6 +9,7 @@ import {
 } from "../controllers/authController.js";
 import { authRateLimiter } from "../middleware/security.js";
 import { validate } from "../middleware/validation.js";
+import { asyncHandler } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
@@ -49,11 +50,11 @@ router.post("/auth/register", authRateLimiter, validate(registerSchema), async (
     }
 });
 
-// ✅ Login User (delegate to controller for consistent behavior)
-router.post("/auth/login", authRateLimiter, validate(loginSchema), login);
+// Login User (delegate to controller for consistent behavior)
+router.post("/auth/login", authRateLimiter, validate(loginSchema), asyncHandler(login));
 
-// ✅ Logout (controller)
-router.post("/auth/logout", controllerLogout);
+// Logout (controller)
+router.post("/auth/logout", asyncHandler(controllerLogout));
 
 // ✅ Auth Middleware for extracting user from JWT cookie
 function requireUser(req, res, next) {
@@ -71,8 +72,8 @@ function requireUser(req, res, next) {
     }
 }
 
-// ✅ Get session (controller validates token from cookie)
-router.get("/auth/session", getSession);
+// Get session (controller validates token from cookie)
+router.get("/auth/session", asyncHandler(getSession));
 
 export { requireUser };
 export default router;

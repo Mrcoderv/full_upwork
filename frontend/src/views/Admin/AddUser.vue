@@ -209,7 +209,10 @@
 </template>
 
 <script>
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   export default {
     data() {
@@ -260,8 +263,8 @@
       },
       async submitStudentForm() {
         try {
-          const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/student`, this.studentForm)
-          alert('Student added successfully!')
+          const response = await client.post('/student', this.studentForm)
+          toast.success('Student added successfully!')
           console.log('Added student:', response.data)
 
           // Reset form after submission
@@ -283,13 +286,13 @@
           }
         } catch (error) {
           console.error('Error adding student:', error)
-          alert('Failed to add student. Please try again.')
+          toast.error('Failed to add student. Please try again.')
         }
       },
       async submitTeacherForm() {
         try {
-          const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/teacher`, this.teacherForm)
-          alert('Teacher added successfully!')
+          const response = await client.post('/teacher', this.teacherForm)
+          toast.success('Teacher added successfully!')
           console.log('Added teacher:', response.data)
 
           // Reset form after submission
@@ -299,7 +302,7 @@
           }
         } catch (error) {
           console.error('Error adding teacher:', error)
-          alert('Failed to add teacher. Please try again.')
+          toast.error('Failed to add teacher. Please try again.')
         }
       },
     },

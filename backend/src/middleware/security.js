@@ -218,8 +218,8 @@ export const authRateLimiter = createRateLimiter(
 );
 
 export const uploadRateLimiter = createRateLimiter(
-    60 * 60 * 1000, // 1 hour
-    10, // 10 uploads
+    process.env.NODE_ENV === "test" ? 60 * 1000 : 60 * 60 * 1000, // 1 hour (1 min in test)
+    process.env.NODE_ENV === "test" ? 1000 : 10, // 10 uploads (generous in test)
     "Too many file uploads, please try again later."
 );
 
@@ -281,6 +281,7 @@ export const securityHeaders = helmet({
             connectSrc: ["'self'"],
             frameSrc: ["'none'"],
             objectSrc: ["'none'"],
+            upgradeInsecureRequests: [],
         },
     },
     hsts: {
@@ -497,7 +498,12 @@ export const corsConfig = {
         ];
 
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+        if (!origin) {
+            if (process.env.NODE_ENV === "production") {
+                return callback(new Error("CORS: No Origin"));
+            }
+            return callback(null, true);
+        }
 
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);

@@ -4,7 +4,7 @@ services:
     container_name: mindful_mongo
     restart: unless-stopped
     ports:
-      - "0.0.0.0:27017:27017"
+      - "0.0.0.0:27018:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -29,8 +29,6 @@ services:
     volumes:
       - backend_uploads:/app/public/uploads
       - backend_logs:/app/logs
-      - ./backend:/app/backend
-      - ./frontend:/app/frontend
 
 volumes:
   mongo_data:

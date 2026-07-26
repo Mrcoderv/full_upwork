@@ -1,5 +1,23 @@
 import { inputValidator } from "./security.js";
 
+// 24-char hex string used by MongoDB ObjectIds
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+/**
+ * Validate a single route param is a valid MongoDB ObjectId.
+ * Usage:  router.get("/thing/:id", validateId(), handler)
+ */
+export const validateId = (paramName = "id") => (req, res, next) => {
+    const value = req.params[paramName];
+    if (!value || !OBJECT_ID_RE.test(value)) {
+        return res.status(400).json({
+            success: false,
+            error: { message: `Invalid ${paramName} format` },
+        });
+    }
+    next();
+};
+
 /**
  * Lightweight Zod-like request validator.
  * Validates req.body, req.query, or req.params against a custom schema.
@@ -87,8 +105,10 @@ export const validate = (schema, target = "body") => {
 
             return res.status(400).json({
                 success: false,
-                message: "Validering misslyckades",
-                details: errors,
+                error: {
+                    message: "Validation failed",
+                    details: errors,
+                },
             });
         }
 

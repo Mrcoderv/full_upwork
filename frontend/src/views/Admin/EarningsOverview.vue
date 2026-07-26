@@ -24,18 +24,21 @@
 
 <script setup>
   import { ref, onMounted, computed } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
   import { municipalityPricing } from '@/utils/municipalityPricing'
 
+  const toast = useToast()
   const students = ref([])
 
   onMounted(async () => {
     try {
-      const res = await axios.get('/api/students/earnings')
+      const res = await client.get('/students/earnings')
       students.value = res.data
       console.log('Loaded students:', students.value) // ✅ DEBUG
     } catch (err) {
       console.error('❌ Failed to load student data:', err)
+      toast.error('Kunde inte ladda elevdata.')
     }
   })
 

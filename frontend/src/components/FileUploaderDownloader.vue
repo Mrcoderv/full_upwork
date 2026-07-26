@@ -57,8 +57,10 @@
 
 <script setup>
   import { ref, watchEffect } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
 
+  const toast = useToast()
   const props = defineProps({
     studentId: {
       type: String,
@@ -74,14 +76,9 @@
   const uploading = ref(false)
   const files = ref([])
 
-  // API base URL - adjust as needed or inject
-  const API_BASE =
-    (import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5001') + '/api/uploads'
-
-  // Fetch files for the student
   async function fetchFiles() {
     try {
-      const res = await axios.get(`${API_BASE}/${props.studentId}`, { withCredentials: true })
+      const res = await client.get(`/uploads/${props.studentId}`)
       files.value = res.data
     } catch (e) {
       console.error('Failed to fetch files:', e)
@@ -89,7 +86,6 @@
     }
   }
 
-  // Upload selected file
   async function uploadFile() {
     if (!selectedFile.value) return
 
@@ -98,15 +94,14 @@
     formData.append('file', selectedFile.value)
 
     try {
-      await axios.post(`${API_BASE}/${props.studentId}`, formData, {
-        withCredentials: true,
+      await client.post(`/uploads/${props.studentId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       selectedFile.value = null
       await fetchFiles()
     } catch (e) {
       console.error('Upload failed:', e)
-      alert('Failed to upload file.')
+      toast.error('Failed to upload file.')
     } finally {
       uploading.value = false
     }
@@ -132,9 +127,8 @@
 
   async function downloadFile(fileId) {
     try {
-      const res = await axios.get(`${API_BASE}/download/${fileId}`, {
+      const res = await client.get(`/uploads/download/${fileId}`, {
         responseType: 'blob',
-        withCredentials: true,
       })
 
       const disposition = res.headers['content-disposition'] || ''
@@ -166,19 +160,18 @@
       window.URL.revokeObjectURL(blobUrl)
     } catch (error) {
       console.error('Download failed:', error)
-      alert('Failed to download file.')
+      toast.error('Failed to download file.')
     }
   }
 
-  // Delete file by id
   async function deleteFile(fileId) {
     if (!confirm('Are you sure you want to delete this file?')) return
     try {
-      await axios.delete(`${API_BASE}/${fileId}`, { withCredentials: true })
+      await client.delete(`/uploads/${fileId}`)
       await fetchFiles()
     } catch (e) {
       console.error('Delete failed:', e)
-      alert('Failed to delete file.')
+      toast.error('Failed to delete file.')
     }
   }
 
@@ -189,7 +182,6 @@
     }
   })
 
-  // Utility for date formatting
   function formatDate(dateStr) {
     const d = new Date(dateStr)
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString()

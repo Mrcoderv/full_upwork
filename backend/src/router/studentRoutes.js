@@ -419,7 +419,7 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
  */
 router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate(studentCreateSchema), async (req, res) => {
     try {
-        logger.debug({ body: req.body }, "Creating student with payload");
+        logger.debug({ bodyKeys: req.body ? Object.keys(req.body) : [] }, "Creating student with payload");
 
         // Required fields check inside handler for raw handler test execution bypassing middleware
         if (
@@ -431,7 +431,12 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
             return res.status(400).json({ error: "Missing required fields" });
         }
 
-        const student = new Student(req.body);
+        const allowedStudentCreateFields = ['name', 'email', 'personalNumber', 'phone', 'municipality', 'startDate', 'endDate', 'finalExamDate', 'teacher', 'dropout', 'additionalInfo', 'courses', 'education', 'createdBy', 'specialNeeds', 'teacherId', 'aplStatus', 'exam', 'attendedExam', 'paidExamFee'];
+        const studentData = {};
+        for (const field of allowedStudentCreateFields) {
+            if (req.body[field] !== undefined) studentData[field] = req.body[field];
+        }
+        const student = new Student(studentData);
         const savedStudent = await student.save();
 
         logger.info({ id: savedStudent._id, name: savedStudent.name, email: savedStudent.email, aplStatus: savedStudent.aplStatus, education: savedStudent.education }, "Student saved");
@@ -676,6 +681,41 @@ async function deleteStudentFiles(studentId) {
 }
 
 /**
+ * Helper function to delete all files for multiple students from GridFS in a single query
+ * @param {string[]} studentIds - Array of student ID strings
+ * @returns {Promise<number>} - Number of files deleted
+ */
+async function deleteAllStudentFiles(studentIds) {
+    if (!studentIds.length) return 0;
+    try {
+        const db = mongoose.connection.db;
+        const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+
+        const files = await db.collection('fs.files')
+            .find({ 'metadata.studentId': { $in: studentIds.map(String) } })
+            .toArray();
+
+        let deletedCount = 0;
+        for (const file of files) {
+            try {
+                await bucket.delete(file._id);
+                deletedCount++;
+            } catch (err) {
+                logger.error({ err, fileId: file._id }, "Failed to delete file in batch");
+            }
+        }
+
+        if (deletedCount > 0) {
+            logger.info({ deletedCount, studentCount: studentIds.length }, "Deleted files for multiple students");
+        }
+        return deletedCount;
+    } catch (error) {
+        logger.error({ err: error, studentCount: studentIds.length }, "Error batch-deleting files for students");
+        return 0;
+    }
+}
+
+/**
  * @route   DELETE /student/:id
  * @desc    Deletes a specific student and all associated files.
  * @access  Protected (Admin only)
@@ -726,11 +766,7 @@ router.delete("/students", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async
         const allStudents = await Student.find({}, { _id: 1 }).lean();
         const studentIds = allStudents.map(s => s._id.toString());
         
-        let totalDeletedFiles = 0;
-        for (const studentId of studentIds) {
-            const deletedCount = await deleteStudentFiles(studentId);
-            totalDeletedFiles += deletedCount;
-        }
+        const totalDeletedFiles = await deleteAllStudentFiles(studentIds);
         
         await Student.deleteMany({});
         
@@ -872,7 +908,7 @@ router.delete("/students/:id/comment", authenticateUser, hasRole(ALLOWED_ADMIN_R
  * @access  Protected (Staff only)
  */
 router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate(studentUpdateSchema), async (req, res) => {
-    logger.debug({ body: req.body }, "Received payload");
+    logger.debug({ bodyKeys: req.body ? Object.keys(req.body) : [] }, "Received payload");
 
     const allowedFields = [
         "name",
@@ -922,16 +958,30 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
         if (req.body.education) {
             const StudentEnrollment = mongoose.model("StudentEnrollment");
 
+            // Batch-fetch all existing enrollments for this student to avoid N+1 queries
+            const courseIds = req.body.education
+                .filter((e) => e.type === "Course")
+                .map((e) => (typeof e.refId === "object" ? e.refId._id : e.refId));
+
+            const existingEnrollments = courseIds.length > 0
+                ? await StudentEnrollment.find({
+                    studentId: student._id,
+                    mainCourseId: { $in: courseIds },
+                })
+                : [];
+
+            const enrollmentByCourse = new Map();
+            for (const enr of existingEnrollments) {
+                enrollmentByCourse.set(enr.mainCourseId.toString(), enr);
+            }
+
             for (const eduData of req.body.education) {
                 if (eduData.type === "Course") {
                     const courseId =
                         typeof eduData.refId === "object"
                             ? eduData.refId._id
                             : eduData.refId;
-                    const existingEnrollment = await StudentEnrollment.findOne({
-                        studentId: student._id,
-                        mainCourseId: courseId,
-                    });
+                    const existingEnrollment = enrollmentByCourse.get(courseId.toString());
 
                     if (existingEnrollment) {
                         if (eduData.removedAt) {
@@ -1177,31 +1227,46 @@ router.patch(
 /**
  * @route   GET /all-programs
  * @desc    Fetches all available programs.
- * @access  Public
+ * @access  Protected (Staff only)
  */
-router.get("/all-programs", async (req, res) => {
-    const programs = await Program.find().select("programName");
-    res.json(programs);
+router.get("/all-programs", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+    try {
+        const programs = await Program.find().select("programName");
+        res.json(programs);
+    } catch (err) {
+        logger.error({ err }, "Error fetching programs");
+        res.status(500).json({ error: "Failed to fetch programs" });
+    }
 });
 
 /**
  * @route   GET /all-course-packages
  * @desc    Fetches all available course packages.
- * @access  Public
+ * @access  Protected (Staff only)
  */
-router.get("/all-course-packages", async (req, res) => {
-    const packages = await CoursePackage.find().select("coursePackageName");
-    res.json(packages);
+router.get("/all-course-packages", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+    try {
+        const packages = await CoursePackage.find().select("coursePackageName");
+        res.json(packages);
+    } catch (err) {
+        logger.error({ err }, "Error fetching course packages");
+        res.status(500).json({ error: "Failed to fetch course packages" });
+    }
 });
 
 /**
  * @route   GET /all-courses
  * @desc    Fetches all available courses.
- * @access  Public
+ * @access  Protected (Staff only)
  */
-router.get("/all-courses", async (req, res) => {
-    const courses = await Course.find().select("courseName courseCode");
-    res.json(courses);
+router.get("/all-courses", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+    try {
+        const courses = await Course.find().select("courseName courseCode");
+        res.json(courses);
+    } catch (err) {
+        logger.error({ err }, "Error fetching courses");
+        res.status(500).json({ error: "Failed to fetch courses" });
+    }
 });
 
 /**

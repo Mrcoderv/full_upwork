@@ -43,7 +43,8 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     try {
       const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const filename = `${unique}-${file.originalname}`;
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 100);
+      const filename = `${unique}-${safeName}`;
       logger.debug({ filename }, "Generated filename")
       cb(null, filename);
     } catch (err) {
@@ -66,10 +67,10 @@ const handleMulterError = (err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: 'Filen är för stor. Max storlek är 10MB.' });
     }
-    return res.status(400).json({ message: 'Filuppladdningsfel', error: err.message });
+    return res.status(400).json({ message: 'Filuppladdningsfel' });
   }
   if (err) {
-    return res.status(500).json({ message: 'Fel vid filuppladdning', error: err.message });
+    return res.status(500).json({ message: 'Fel vid filuppladdning' });
   }
   next();
 };
@@ -80,7 +81,7 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
       return res.status(400).json({ message: 'File is missing in the request' });
     }
     
-    logger.info({ file: req.file, body: req.body, user: req.user }, "File upload details")
+    logger.info({ file: req.file, bodyKeys: req.body ? Object.keys(req.body) : [], user: req.user }, "File upload details")
 
     const { studentId, teacherId, type, enrollmentId } = req.body;
     const user = req.user;
@@ -177,37 +178,49 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
     }
     
     res.status(500).json({ 
-      message: 'Kunde inte ladda upp dokumentet', 
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'Kunde inte ladda upp dokumentet',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
     });
   }
 });
 
-router.get('/documents/:id', async (req, res) => {
-  const { type, enrollmentId, entityType } = req.query;
-  const id = req.params.id;
+router.get('/documents/:id', authenticateUser, async (req, res) => {
+  try {
+    const { type, enrollmentId, entityType } = req.query;
+    const id = req.params.id;
 
-  let filter = {};
+    const user = req.user;
+    const isAdmin = user.role === 'admin' || user.role === 'systemadmin';
 
-  // Determine if this is for a student or teacher
-  if (entityType === 'teacher' || entityType === 'Lärare') {
-    filter.teacher = id;
-  } else {
-    // Default to student for backward compatibility
-    filter.student = id;
+    // Students can only access their own documents; staff can access any
+    if (user.role === 'student' && String(user.userId) !== String(id)) {
+      return res.status(403).json({ message: 'Du har inte behörighet att visa denna elevs dokument' });
+    }
+
+    let filter = {};
+
+    // Determine if this is for a student or teacher
+    if (entityType === 'teacher' || entityType === 'Lärare') {
+      filter.teacher = id;
+    } else {
+      // Default to student for backward compatibility
+      filter.student = id;
+    }
+
+    if (type) {
+      filter.type = type;
+    }
+
+    if (enrollmentId) {
+      filter.enrollmentId = enrollmentId;
+    }
+
+    const docs = await Document.find(filter).sort({ createdAt: -1 });
+    res.json(docs);
+  } catch (error) {
+    logger.error({ err: error }, "Error fetching documents")
+    res.status(500).json({ message: 'Kunde inte hämta dokument', error: error.message });
   }
-
-  if (type) {
-    filter.type = type;
-  }
-
-  if (enrollmentId) {
-    filter.enrollmentId = enrollmentId;
-  }
-
-  const docs = await Document.find(filter).sort({ createdAt: -1 });
-  res.json(docs);
 });
 
 router.delete('/documents/:id', authenticateUser, async (req, res) => {
@@ -229,7 +242,7 @@ router.delete('/documents/:id', authenticateUser, async (req, res) => {
     res.json({ message: 'Raderad' });
   } catch (error) {
     logger.error({ err: error }, "Error deleting document")
-    res.status(500).json({ message: 'Kunde inte radera dokumentet', error: error.message });
+    res.status(500).json({ message: 'Kunde inte radera dokumentet' });
   }
 });
 

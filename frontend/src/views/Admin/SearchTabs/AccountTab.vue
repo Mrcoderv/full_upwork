@@ -498,8 +498,8 @@
 <script>
   import { computed, ref, watch, onMounted } from 'vue'
   import { useStore } from 'vuex'
-  import axios from 'axios'
-  import { api } from '@/store/store.js'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
   import MeetingModal from '../MeetingModal.vue'
 
   export default {
@@ -512,6 +512,7 @@
     },
     setup(props) {
       const store = useStore()
+      const toast = useToast()
       const userRole = computed(() => store.getters.userRole || 'guest')
       const isAdmin = computed(() => store.getters.isAdmin)
       const userId = computed(() => store.getters.userId)
@@ -725,14 +726,14 @@
         if (!props.userData?._id) return;
         isSavingPermissions.value = true;
         try {
-          await api.put(`/users/${props.userData._id}/permissions`, {
+          await client.put(`/users/${props.userData._id}/permissions`, {
             permissions: customPermissions.value,
           });
           originalPermissions.value = JSON.parse(JSON.stringify(customPermissions.value));
-          alert('Behörigheterna har uppdaterats!');
+          toast.success('Behörigheterna har uppdaterats!');
         } catch (error) {
           console.error('Error saving permissions:', error);
-          alert('Kunde inte spara behörigheter.');
+          toast.error('Kunde inte spara behörigheter.');
         } finally {
           isSavingPermissions.value = false;
         }
@@ -786,7 +787,7 @@
           loading.value = true
           error.value = null
 
-          const response = await api.get(`/student-details/${props.userData._id}`)
+          const response = await client.get(`/student-details/${props.userData._id}`)
           student.value = response.data
 
           // Initialize edit data
@@ -820,7 +821,7 @@
 
       const loadChangeHistory = async () => {
         try {
-          const response = await api.get(`/student-details/${props.userData._id}/history`)
+          const response = await client.get(`/student-details/${props.userData._id}/history`)
           changeHistory.value = response.data.changeHistory
         } catch (err) {
           console.error('Error loading change history:', err)
@@ -835,7 +836,7 @@
         try {
           saving.value = true
 
-          const response = await api.put(`/student-details/${props.userData._id}`, editData.value)
+          const response = await client.put(`/student-details/${props.userData._id}`, editData.value)
 
           // Update local data
           Object.assign(student.value, response.data.student)
@@ -848,7 +849,7 @@
           }
         } catch (err) {
           console.error('Error saving changes:', err)
-          alert('Kunde inte spara ändringar')
+          toast.error('Kunde inte spara ändringar')
         } finally {
           saving.value = false
         }
@@ -876,7 +877,7 @@
 
       const addComment = async () => {
         try {
-          const response = await api.post(`/student-details/${props.userData._id}/comments`, {
+          const response = await client.post(`/student-details/${props.userData._id}/comments`, {
             comment: newComment.value,
           })
 
@@ -885,7 +886,7 @@
           showCommentModal.value = false
         } catch (err) {
           console.error('Error adding comment:', err)
-          alert('Kunde inte lägga till kommentar')
+          toast.error('Kunde inte lägga till kommentar')
         }
       }
 
@@ -896,7 +897,7 @@
 
       const saveEditedComment = async () => {
         try {
-          await api.put(
+          await client.put(
             `/student-details/${props.userData._id}/comments/${editingComment.value._id}`,
             {
               comment: editingComment.value.comment,
@@ -915,7 +916,7 @@
           editingComment.value = null
         } catch (err) {
           console.error('Error editing comment:', err)
-          alert('Kunde inte redigera kommentar')
+          toast.error('Kunde inte redigera kommentar')
         }
       }
 
@@ -923,7 +924,7 @@
         if (!confirm('Är du säker på att du vill radera denna kommentar?')) return
 
         try {
-          await api.delete(`/student-details/${props.userData._id}/comments/${commentId}`)
+          await client.delete(`/student-details/${props.userData._id}/comments/${commentId}`)
 
           // Update local comment
           const commentIndex = student.value.commentHistory.findIndex((c) => c._id === commentId)
@@ -933,7 +934,7 @@
           }
         } catch (err) {
           console.error('Error deleting comment:', err)
-          alert('Kunde inte radera kommentar')
+          toast.error('Kunde inte radera kommentar')
         }
       }
 
@@ -1092,14 +1093,14 @@
         if (!props.userData?._id) return
         isSavingRoles.value = true
         try {
-          await api.put(`/users/${props.userData._id}/roles`, {
+          await client.put(`/users/${props.userData._id}/roles`, {
             roles: selectedRoles.value,
           })
           originalRoles.value = [...selectedRoles.value]
-          alert('Rollerna har uppdaterats!')
+          toast.success('Rollerna har uppdaterats!')
         } catch (error) {
           console.error('Error saving roles:', error)
-          alert('Kunde inte spara roller.')
+          toast.error('Kunde inte spara roller.')
         } finally {
           isSavingRoles.value = false
         }
@@ -1108,9 +1109,9 @@
       const toggleEdit = async (key) => {
         if (editFields.value[key]) {
           try {
-            const endpoint = `/api/update-user/${props.userData._id}`
+            const endpoint = `/update-user/${props.userData._id}`
 
-            const response = await axios.put(endpoint, {
+            const response = await client.put(endpoint, {
               [key]: editablePersonalData.value[key],
             })
 
@@ -1131,18 +1132,18 @@
 
       const resetPassword = async () => {
         if (!student.value?.user?._id) {
-          alert('Ingen användare hittades för denna elev.')
+          toast.error('Ingen användare hittades för denna elev.')
           return
         }
         
         resettingPassword.value = true
         try {
-          const response = await api.post(`/users/${student.value.user._id}/reset-password`)
+          const response = await client.post(`/users/${student.value.user._id}/reset-password`)
           studentPassword.value = response.data.tempPassword
-          alert('Lösenordet har återställts! Det nya lösenordet visas nedan.')
+          toast.success('Lösenordet har återställts! Det nya lösenordet visas nedan.')
         } catch (error) {
           console.error('Error resetting password:', error)
-          alert('Kunde inte återställa lösenord.')
+          toast.error('Kunde inte återställa lösenord.')
         } finally {
           resettingPassword.value = false
         }

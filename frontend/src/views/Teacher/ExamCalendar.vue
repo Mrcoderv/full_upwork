@@ -387,8 +387,7 @@
                   fromDate,
                   toDate,
                   courseInstanceIds,
-                },
-                { withCredentials: true }
+                }
               )
               .then(() => {
                 console.log('✅ Synced event moved successfully!')
@@ -416,10 +415,10 @@
           return
         }
 
-        import('@/store/store.js').then(({ api }) => {
+        import('@/api/client.js').then(({ default: client }) => {
           const endpoint = isMeeting ? `/meetings/${eventId}` : `/calendar-events/${eventId}`
-          api
-            .put(endpoint, updatedEvent, { withCredentials: true })
+          client
+            .put(endpoint, updatedEvent)
             .then(() => {
               console.log(isMeeting ? '✅ Möte uppdaterat!' : '✅ Event uppdaterat!')
             })
@@ -442,8 +441,8 @@
       // Get current teacher ID if user is a teacher (for filtering editable events)
       if (this.userRole === 'teacher') {
         try {
-          const { api } = await import('@/store/store.js')
-          const res = await api.get('/me/teacher', { withCredentials: true })
+          const { default: client } = await import('@/api/client.js')
+          const res = await client.get('/me/teacher')
           if (res.data && res.data._id) {
             this.currentTeacherId = res.data._id.toString()
           }

@@ -1,13 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import dotenv from "dotenv";
 import logger from "../utils/logger.js";
-dotenv.config({ path: ".env.development" });
-
-if (!process.env.JWT_SECRET) {
-    process.env.JWT_SECRET = "test-secret";
-}
 
 /**
  * Authentication Controller
@@ -183,7 +177,7 @@ export const authenticateUser = (req, res, next) => {
 export const logout = async (req, res) => {
     res.clearCookie("token", {
         httpOnly: true,
-        sameSite: "strict",
+        sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
     });
 

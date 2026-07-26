@@ -3,8 +3,11 @@ import Student from "../models/Student.js";
 import Notification from "../models/Notification.js";
 import Teacher from "../models/Teacher.js";
 import { authenticateUser } from "../controllers/authController.js";
+import { hasRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 const router = express.Router();
+
+const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped", "tester"];
 
 import { evaluateActionPlanStatusAndNotify } from "../controllers/notificationController.js";
 
@@ -171,7 +174,7 @@ router.put("/notifications/:id/resolve", async (req, res) => {
 });
 */
 
-router.put('/notifications/resolve/:studentId', async (req, res) => {
+router.put('/notifications/resolve/:studentId', authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
   try {
     const studentId = req.params.studentId;
     await Notification.updateMany(

@@ -629,12 +629,14 @@
 <script>
   import { ref, onMounted, computed, watch } from 'vue'
   import { useStore } from 'vuex'
-  import { api } from '@/store/store.js'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
 
   export default {
     name: 'CourseInstances',
     setup() {
       const store = useStore()
+      const toast = useToast()
 
       const instances = ref([])
       const courses = ref([])
@@ -767,7 +769,7 @@
 
       const loadCourses = async () => {
         try {
-          const response = await api.get('/courses')
+          const response = await client.get('/courses')
           courses.value = response.data
         } catch (error) {
           console.error('Error loading courses:', error)
@@ -782,7 +784,7 @@
           if (filters.value.endDate) params.append('endDate', filters.value.endDate)
           if (filters.value.isActive !== '') params.append('isActive', filters.value.isActive)
 
-          const response = await api.get(`/course-instances?${params.toString()}`)
+          const response = await client.get(`/course-instances?${params.toString()}`)
           instances.value = response.data.instances
           
           // Update autocomplete options with all instances
@@ -879,9 +881,9 @@
           }
 
           if (editingInstance.value) {
-            await api.put(`/course-instances/${editingInstance.value._id}`, formData)
+            await client.put(`/course-instances/${editingInstance.value._id}`, formData)
           } else {
-            await api.post('/course-instances', formData)
+            await client.post('/course-instances', formData)
           }
 
           // Reload instances to get the latest data (including updated slutprovDate)
@@ -898,7 +900,7 @@
           }
         } catch (error) {
           console.error('Error saving instance:', error)
-          alert('Ett fel uppstod när instansen skulle sparas.')
+          toast.error('Ett fel uppstod när instansen skulle sparas.')
         } finally {
           isSaving.value = false
         }
@@ -941,7 +943,7 @@
 
       const loadTeachers = async () => {
         try {
-          const response = await api.get('/teachers')
+          const response = await client.get('/teachers')
           // Backend returns array directly or wrapped in data
           teachers.value = Array.isArray(response.data)
             ? response.data
@@ -1047,17 +1049,17 @@
         if (!confirm('Är du säker på att du vill ta bort denna kursinstans?')) return
 
         try {
-          await api.delete(`/course-instances/${instanceId}`)
+          await client.delete(`/course-instances/${instanceId}`)
           await loadInstances()
         } catch (error) {
           console.error('Error deleting instance:', error)
-          alert('Ett fel uppstod när instansen skulle tas bort.')
+          toast.error('Ett fel uppstod när instansen skulle tas bort.')
         }
       }
 
       const viewEnrollments = async (instanceId) => {
         try {
-          const response = await api.get(`/course-instances/${instanceId}/enrollments`)
+          const response = await client.get(`/course-instances/${instanceId}/enrollments`)
           enrollments.value = response.data.enrollments
           selectedInstance.value = instances.value.find((i) => i._id === instanceId)
 
@@ -1109,9 +1111,7 @@
         if (allStudentsCache.value.length === 0) {
           isSearchingStudents.value = true
           try {
-            const response = await api.get('/students', {
-              withCredentials: true,
-            })
+            const response = await client.get('/students')
             allStudentsCache.value = Array.isArray(response.data) ? response.data : []
             // Add displayName for each student
             allStudentsCache.value = allStudentsCache.value.map((s) => ({
@@ -1164,16 +1164,15 @@
         isAddingStudents.value = true
         try {
           const studentIds = selectedStudentsToAdd.value.map((s) => s._id)
-          await api.post(
+          await client.post(
             `/course-instances/${selectedInstanceForAddStudent.value._id}/add-students`,
             {
               studentIds: studentIds,
-            },
-            { withCredentials: true }
+            }
           )
 
-          alert(
-            `✅ ${selectedStudentsToAdd.value.length} student(er) tillagd(e) till kursinstansen!`
+          toast.success(
+            `${selectedStudentsToAdd.value.length} student(er) tillagd(e) till kursinstansen!`
           )
           await loadInstances()
           closeAddStudentModal()
@@ -1188,7 +1187,7 @@
           }
         } catch (error) {
           console.error('Error adding students:', error)
-          alert('⚠️ Kunde inte lägga till studenter. Försök igen.')
+          toast.error('Kunde inte lägga till studenter. Försök igen.')
         } finally {
           isAddingStudents.value = false
         }
@@ -1230,23 +1229,23 @@
         )
           return
         try {
-          await api.delete('/course-instances/all')
+          await client.delete('/course-instances/all')
           await loadInstances()
-          alert('Alla kursinstanser och tillhörande data har raderats.')
+          toast.success('Alla kursinstanser och tillhörande data har raderats.')
         } catch (error) {
           console.error('Error deleting all course instances:', error)
-          alert('Ett fel uppstod när alla kursinstanser skulle tas bort.')
+          toast.error('Ett fel uppstod när alla kursinstanser skulle tas bort.')
         }
       }
 
       const deleteEnrollment = async (enrollmentId) => {
         if (!confirm('Är du säker på att du vill ta bort denna inskrivning?')) return
         try {
-          await api.delete(`/enrollments/${enrollmentId}`)
+          await client.delete(`/enrollments/${enrollmentId}`)
           await viewEnrollments(selectedInstance.value._id)
         } catch (error) {
           console.error('Error deleting enrollment:', error)
-          alert('Ett fel uppstod när inskrivningen skulle tas bort.')
+          toast.error('Ett fel uppstod när inskrivningen skulle tas bort.')
         }
       }
 
@@ -1255,12 +1254,12 @@
         try {
           const unknowns = enrollments.value.filter((e) => !e.studentId || !e.studentId._id)
           for (const e of unknowns) {
-            await api.delete(`/enrollments/${e._id}`)
+            await client.delete(`/enrollments/${e._id}`)
           }
           await viewEnrollments(selectedInstance.value._id)
         } catch (error) {
           console.error('Error deleting unknown enrollments:', error)
-          alert('Ett fel uppstod när okända elever skulle tas bort.')
+          toast.error('Ett fel uppstod när okända elever skulle tas bort.')
         }
       }
 

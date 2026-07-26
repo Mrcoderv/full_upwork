@@ -152,7 +152,7 @@ router.post(
     isAuthenticated,
     can("teachers:create"),
     async (req, res) => {
-        logger.info({ payload: req.body }, "Incoming teacher POST (admin)")
+        logger.info({ payloadKeys: req.body ? Object.keys(req.body) : [] }, "Incoming teacher POST (admin)")
 
         try {
             const { username, email, subject, colorCode, generatePassword, phoneNumbers } =
@@ -243,7 +243,7 @@ router.post(
 
 // POST /teacher - Create a user + teacher profile (kept for backward compatibility)
 router.post("/teacher", isAuthenticated, can("teachers:create"), async (req, res) => {
-    logger.info({ payload: req.body }, "Incoming teacher POST")
+    logger.info({ payloadKeys: req.body ? Object.keys(req.body) : [] }, "Incoming teacher POST")
 
     try {
             const { username, email, colorCode, subject, phoneNumbers } = req.body;

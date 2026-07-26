@@ -14,15 +14,15 @@
         "start": "node index.js",
         "lint": "eslint src/",
         "lint:fix": "eslint src/ --fix",
-        "security:audit": "npm audit",
-        "security:fix": "npm audit fix"
+        "security:audit": "pnpm audit",
+        "security:fix": "pnpm audit fix"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "volta": {
         "node": "25.2.1",
-        "npm": "11.7.0"
+        "pnpm": "11.17.0"
     },
     "dependencies": {
         "axios": "^1.13.2",
@@ -31,7 +31,7 @@
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
-        "exceljs": "^3.4.0",
+        "exceljs": "^4.4.0",
         "express": "^5.2.1",
         "express-rate-limit": "^8.2.1",
         "fastest-levenshtein": "^1.0.16",
@@ -61,7 +61,8 @@
         "tests/**/*.js"
     ],
     "devDependencies": {
-        "@vitest/coverage-v8": "^4.0.16",
+        "@vitest/coverage-v8": "4.1.10",
+        "eslint": "^8.57.1",
         "mongodb-memory-server": "^11.2.0",
         "supertest": "^7.2.2"
     }

@@ -10,6 +10,7 @@ import {
 } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 import app from "../../index.js";
 import Student from "../../src/models/Student.js";
 import Course from "../../src/models/Course.js";
@@ -17,6 +18,18 @@ import {
     connectTestDatabase,
     disconnectTestDatabase,
 } from "../helpers/mongoTest.js";
+
+const signToken = (overrides = {}) => {
+    const payload = {
+        userId: new mongoose.Types.ObjectId().toString(),
+        role: "admin",
+        name: "Test User",
+        email: "test@example.com",
+        ...overrides,
+    };
+
+    return jwt.sign(payload, process.env.JWT_SECRET || "test-secret");
+};
 
 describe("Stats Routes", () => {
     beforeAll(async () => {
@@ -102,8 +115,10 @@ describe("Stats Routes", () => {
             },
         ]);
 
+        const token = signToken();
         const response = await request(app)
             .get("/api/stats/courses-per-month")
+            .set("Authorization", `Bearer ${token}`)
             .expect(200);
 
         expect(response.body).toHaveProperty("2024-05");
@@ -126,8 +141,10 @@ describe("Stats Routes", () => {
             },
         ]);
 
+        const token = signToken();
         const response = await request(app)
             .get("/api/stats/courses-per-month")
+            .set("Authorization", `Bearer ${token}`)
             .expect(200);
 
         expect(response.body).toEqual({});
@@ -138,8 +155,10 @@ describe("Stats Routes", () => {
             new Error("Database failure")
         );
 
+        const token = signToken();
         const response = await request(app)
             .get("/api/stats/courses-per-month")
+            .set("Authorization", `Bearer ${token}`)
             .expect(500);
 
         expect(response.body).toEqual({ error: "Failed to generate stats" });

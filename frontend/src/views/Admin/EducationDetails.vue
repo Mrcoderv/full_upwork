@@ -78,13 +78,15 @@
 </template>
 
 <script>
-import axios from 'axios'
+import client from '@/api/client.js'
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useToast } from '@/composables/useToast.js'
 
 export default {
   setup() {
     const route = useRoute()
+    const toast = useToast()
     const course = ref({ courseName: '', teacher: null, teachers: [], students: [], courseInstances: [] })
 
     const formatDate = (date) => {
@@ -98,7 +100,7 @@ export default {
         // Default to CourseInstance unless explicitly told otherwise
         const courseType = route.query.type === 'course' ? 'Kurs' : 'Kursinstans'
         console.log("🔍 Fetching course with ID:", route.params.id, "Type:", courseType)
-        const { data } = await axios.get(`${import.meta.env.VITE_API_URL}/api/details/${courseType}/${route.params.id}`)
+        const { data } = await client.get(`/details/${courseType}/${route.params.id}`)
         console.log("✅ Course data received:", data)
         course.value = data
       } catch (err) {

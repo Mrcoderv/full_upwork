@@ -47,11 +47,16 @@
 </template>
 
 <script>
-import { api } from '@/store/store.js';
+import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
 import AddMeetingModal from '@/views/Modals/AddMeetingModal.vue';
 
+let toast;
 export default {
   components: { AddMeetingModal },
+  setup() {
+    toast = useToast();
+  },
   data() {
     return {
       meetings: [],
@@ -122,7 +127,7 @@ export default {
         console.log(`📍 Current route:`, this.$route.path, '| Active role:', this.activeRole);
         
         // Explicitly filter by bookedBy to ensure separate lists for syv and specped
-        const response = await api.get(url, { withCredentials: true });
+        const response = await client.get(url);
         
         const meetings = response.data.data || [];
         console.log(`📋 Fetched ${meetings.length} ${this.activeRole} appointments`);
@@ -149,11 +154,11 @@ export default {
     async deleteMeeting(id) {
       if (confirm('Är du säker på att du vill radera detta möte?')) {
         try {
-          await api.delete(`/meetings/${id}`, { withCredentials: true });
+          await client.delete(`/meetings/${id}`);
           this.fetchMeetings(); // Refresh list
         } catch (error) {
           console.error("Kunde inte radera mötet:", error);
-          alert('Kunde inte radera mötet.');
+          toast.error('Kunde inte radera mötet.');
         }
       }
     },
