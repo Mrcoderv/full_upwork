@@ -498,11 +498,16 @@ export const corsConfig = {
             "https://www.mindfullearning.se",
         ];
 
-        // Allow requests with no origin (like mobile apps or curl requests)
+        // Requests without an Origin header (curl, server-to-server, mobile apps)
+        // are only trusted in non-production environments. In production every
+        // request MUST carry a recognised Origin to prevent CSRF via no-origin
+        // tricks.
         if (!origin) {
             if (process.env.NODE_ENV === "production") {
-                return callback(new Error("CORS: No Origin"));
+                logger.warn("CORS blocked request with no Origin header");
+                return callback(new AppError("CORS: No Origin header", 403));
             }
+            logger.debug("CORS allowing request with no Origin header (non-production)");
             return callback(null, true);
         }
 

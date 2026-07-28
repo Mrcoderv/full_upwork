@@ -250,6 +250,28 @@ describe("security middleware helpers", () => {
         expect(error.message).toBe("Not allowed by CORS");
     });
 
+    it("corsConfig blocks no-origin requests in production", () => {
+        const original = process.env.NODE_ENV;
+        process.env.NODE_ENV = "production";
+        const cb = vi.fn();
+        const warnSpy = vi
+            .spyOn(logger, "warn")
+            .mockImplementation(() => {});
+        corsConfig.origin(undefined, cb);
+        expect(warnSpy).toHaveBeenCalled();
+        const error = cb.mock.calls[0][0];
+        expect(error).toBeInstanceOf(AppError);
+        expect(error.message).toBe("CORS: No Origin header");
+        expect(error.statusCode).toBe(403);
+        process.env.NODE_ENV = original;
+    });
+
+    it("corsConfig allows no-origin requests in non-production", () => {
+        const cb = vi.fn();
+        corsConfig.origin(undefined, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+    });
+
     it("securityAudit detects suspicious payloads", () => {
         const res = buildRes();
         const next = vi.fn();
