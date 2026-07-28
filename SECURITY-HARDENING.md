@@ -13,6 +13,17 @@
 | Added JWT_SECRET strength validation at startup | `index.js` | High — rejects weak/short secrets (< 32 chars), known values |
 | `.env.production` / `.env.development`: secrets replaced with placeholders | `.env.production`, `.env.development` | Medium — prevents accidental commit of real secrets |
 
+### Centralized Cookie Management
+
+| Change | File | Risk |
+|--------|------|------|
+| Created `backend/src/config/cookies.js` — single source of truth for auth cookie config | `cookies.js` | High — eliminates scattered hardcoded cookie options |
+| `AUTH_COOKIE_NAME` constant replaces all hardcoded `"token"` cookie names | All auth files | Medium — prevents name mismatches between set/clear |
+| `setAuthCookie(res, token)` and `clearAuthCookie(res)` helpers enforce consistent options | `authController.js` | High — guarantees httpOnly, secure, sameSite, path are identical |
+| `sameSite` unified to `"strict"` across all set/clear paths | `authController.js` | High — resolved lax/strict mismatch that weakened CSRF protection |
+| All `req.cookies?.token` reads use `AUTH_COOKIE_NAME` constant | `authController.js`, `authRoutes.js`, `index.js`, `security.js` | Low — DRY; cookie rename requires one-line change |
+| Added 11 tests for cookie module config and helper behavior | `cookies.test.js` | N/A — verifies httpOnly=true, sameSite="strict", secure flag, maxAge |
+
 ### Input Validation & Injection
 
 | Change | File | Risk |
@@ -55,7 +66,8 @@
 
 - 21 new security-focused unit tests (`tests/unit/securityHardening.test.js`)
 - 16 new regex escaping tests (`tests/unit/escapeRegExp.test.js`)
-- Full test suite: **817 backend tests** across 51 files, **121 frontend tests** across 8 files
+- 11 new cookie management tests (`tests/unit/cookies.test.js`)
+- Full test suite: **864 backend tests** across 53 files, **121 frontend tests** across 8 files
 
 ## Recommendations for Follow-up
 

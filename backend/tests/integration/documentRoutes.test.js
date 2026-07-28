@@ -17,6 +17,7 @@ import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import Document from "../../src/models/Document.js";
 import documentRoutes from "../../src/router/documentRoutes.js";
+import { AUTH_COOKIE_NAME } from "../../src/config/cookies.js";
 import {
     connectTestDatabase,
     disconnectTestDatabase,
@@ -42,7 +43,7 @@ describe("Document Routes", () => {
             process.env.JWT_SECRET || "test-secret"
         );
         authHeader = `Bearer ${token}`;
-        authCookie = `token=${token}`;
+        authCookie = `${AUTH_COOKIE_NAME}=${token}`;
     }, 60000);
 
     afterAll(async () => {

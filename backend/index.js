@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import jwtLib from "jsonwebtoken";
+import { AUTH_COOKIE_NAME } from "./src/config/cookies.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -195,7 +196,7 @@ logger.info("Router mounted");
 app.options(/.*/, cors());
 
 app.use("/uploads", (req, res, next) => {
-    const token = req.cookies?.token;
+    const token = req.cookies?.[AUTH_COOKIE_NAME];
     if (!token) {
         return res.status(401).json({ error: "Authentication required" });
     }

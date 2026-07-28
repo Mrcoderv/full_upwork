@@ -11,6 +11,7 @@ import { authRateLimiter } from "../middleware/security.js";
 import { validate } from "../middleware/validation.js";
 import { asyncHandler } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
+import { AUTH_COOKIE_NAME } from "../config/cookies.js";
 
 const router = express.Router();
 
@@ -58,7 +59,7 @@ router.post("/auth/logout", asyncHandler(controllerLogout));
 
 // ✅ Auth Middleware for extracting user from JWT cookie
 function requireUser(req, res, next) {
-    const token = req.cookies?.token;
+    const token = req.cookies?.[AUTH_COOKIE_NAME];
     if (!token) {
         return res.status(401).json({ message: "Not authenticated" });
     }

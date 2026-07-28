@@ -5,6 +5,9 @@ webcrypto.getRandomValues = webcrypto.getRandomValues.bind(webcrypto);
 
 export default defineConfig({
     test: {
+        env: {
+            NODE_ENV: "test",
+        },
         coverage: {
             enabled: true,
             provider: 'v8',

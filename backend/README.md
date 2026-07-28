@@ -12,6 +12,7 @@ A comprehensive Node.js/Express backend for the Mindful Learning platform with e
 -   **Input Validation & Sanitization** - Prevents XSS and injection attacks
 -   **CORS Protection** - Configurable cross-origin resource sharing
 -   **JWT Authentication** - Secure token-based authentication
+-   **Centralized Cookie Management** - Single source of truth for auth cookie config (`src/config/cookies.js`)
 -   **Security Audit Logging** - Tracks suspicious activities
 
 ### ⚡ Performance
@@ -238,7 +239,7 @@ Each role has specific permissions for different resources:
 
 ### Unit Tests
 
--   **Authentication** - Login, logout, token validation
+-   **Authentication** - Login, logout, token validation, cookie management
 -   **Input Validation** - Email, password, ObjectId validation
 -   **Role-Based Access Control** - Permission checking and role hierarchy
 -   **Error Handling** - Custom error classes and error monitoring
@@ -253,6 +254,7 @@ Each role has specific permissions for different resources:
 ### Test Coverage
 
 -   **Minimum 80%** code coverage requirement
+-   **864 tests** across 53 test files
 -   **Critical paths** must have 100% coverage
 -   **Security features** require comprehensive testing
 
@@ -261,6 +263,10 @@ Each role has specific permissions for different resources:
 ```
 backend/
 ├── src/
+│   ├── config/              # Centralized configuration
+│   │   ├── cookies.js       # Auth cookie name, options, and helpers
+│   │   ├── permissions.js   # Permission definitions
+│   │   └── roles.js         # Role hierarchy
 │   ├── controllers/          # Request handlers
 │   ├── middleware/           # Custom middleware
 │   │   ├── auth.js          # Authentication middleware

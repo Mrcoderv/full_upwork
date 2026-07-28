@@ -3,6 +3,7 @@ import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import { logger } from "../utils/errorHandler.js";
 import { AppError, AuthorizationError } from "../utils/errorHandler.js";
+import { AUTH_COOKIE_NAME } from "../config/cookies.js";
 
 // Security configuration
 const securityConfig = {
@@ -143,7 +144,7 @@ const isAdminUser = (req) => {
         }
 
         // Check JWT token from cookie if user is not yet attached
-        const token = req.cookies?.token;
+        const token = req.cookies?.[AUTH_COOKIE_NAME];
         if (token) {
             try {
                 if (!process.env.JWT_SECRET) {
