@@ -208,7 +208,7 @@ Each role has specific permissions for different resources:
 
 ### Rate Limiting
 
--   **General API**: 100 requests per 15 minutes per IP
+-   **General API**: 1000 requests per 15 minutes per IP
 -   **Authentication**: 5 login attempts per 15 minutes per IP
 -   **File Uploads**: 10 uploads per hour per IP
 -   **API Endpoints**: 60 requests per minute per IP
