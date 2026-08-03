@@ -42,6 +42,13 @@ The server validates at boot:
 | `GET /health` | Full diagnostic payload |
 | `GET /metrics` | Error stats, DB state, memory usage |
 
+> **Access control assumption**: `/health*` and `/metrics` are intentionally left
+> unauthenticated. They expose internal diagnostics (memory, DB state, error
+> stats) and MUST only be reachable from trusted networks. Restrict them to the
+> internal network / VPN / firewalled subnet in production (e.g. via a reverse
+> proxy allowlist or firewall rules). Do not expose these endpoints directly to
+> the public internet.
+
 ## Docker Deployment
 
 ```sh

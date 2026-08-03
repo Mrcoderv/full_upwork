@@ -2,6 +2,7 @@ import express from "express";
 import Course from "../models/Course.js";
 import logger from "../utils/logger.js";
 import { validate, validateId } from "../middleware/validation.js";
+import { courseDetailRateLimiter } from "../middleware/security.js";
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ router.get("/courses", async (req, res) => {
 router.get(
     "/courses/:courseId",
     validateId("courseId"),
+    courseDetailRateLimiter,
     async (req, res) => {
         try {
             const course = await Course.findById(req.params.courseId);

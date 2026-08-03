@@ -52,6 +52,8 @@ describe("Health & Infrastructure", () => {
             expect(res.body).toHaveProperty("system");
             expect(res.body.system).toHaveProperty("nodeVersion");
             expect(res.body.system).toHaveProperty("memory");
+            expect(res.body.cache).toHaveProperty("size");
+            expect(res.body.cache).toHaveProperty("keys");
         });
     });
 });

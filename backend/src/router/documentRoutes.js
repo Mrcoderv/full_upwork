@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import mime from 'mime-types';
 import Document from '../models/Document.js';
 import { authenticateUser } from '../controllers/authController.js';
 import logger from "../utils/logger.js";
@@ -26,6 +27,25 @@ try {
 } catch (err) {
   logger.error({ err: err }, "Error creating uploads directory")
 }
+
+const DANGEROUS_EXTENSIONS = [
+  '.exe', '.dll', '.bat', '.sh', '.js', '.py', '.html', '.htm', '.xhtml', '.php',
+  '.jsp', '.asp', '.aspx', '.vbs', '.cmd', '.pl', '.cgi', '.msi', '.jar', '.scr'
+];
+
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const contentType = file.mimetype || mime.lookup(file.originalname) || 'application/octet-stream';
+  if (
+    DANGEROUS_EXTENSIONS.includes(ext) ||
+    contentType.startsWith('text/html') ||
+    contentType.startsWith('application/x-msdownload')
+  ) {
+    req.rejectedFileType = true;
+    return cb(null, false);
+  }
+  cb(null, true);
+};
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -56,6 +76,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
+  fileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   }
@@ -77,6 +98,10 @@ const handleMulterError = (err, req, res, next) => {
 
 router.post('/documents/upload', authenticateUser, upload.single('file'), handleMulterError, async (req, res) => {
   try {
+    if (req.rejectedFileType) {
+      return res.status(400).json({ message: 'Ogiltigt filformat. Denna filtyp är inte tillåten av säkerhetsskäl.' });
+    }
+    
     if (!req.file) {
       return res.status(400).json({ message: 'File is missing in the request' });
     }
@@ -161,11 +186,10 @@ router.post('/documents/upload', authenticateUser, upload.single('file'), handle
     
     // Handle validation errors specifically
     if (error.name === 'ValidationError' || error instanceof mongoose.Error.ValidationError || error.message?.includes('must be specified')) {
-      const errorMessages = error.errors ? Object.values(error.errors).map(e => e.message || e).join(', ') : error.message;
+      const errorMessages = error.errors ? Object.values(error.errors).map(e => e.message || e).join(', ') : '';
       return res.status(400).json({ 
         message: 'Valideringsfel', 
-        error: errorMessages,
-        details: error.errors || { message: error.message }
+        ...(errorMessages && { error: errorMessages })
       });
     }
     
@@ -219,7 +243,7 @@ router.get('/documents/:id', authenticateUser, async (req, res) => {
     res.json(docs);
   } catch (error) {
     logger.error({ err: error }, "Error fetching documents")
-    res.status(500).json({ message: 'Kunde inte hämta dokument', error: error.message });
+    res.status(500).json({ message: 'Kunde inte hämta dokument' });
   }
 });
 

@@ -269,8 +269,8 @@ router.get("/search", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req
             }
         }
 
-        // Add pagination
-        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        // Pagination: per-route cap (50) overrides the shared requestOptimizer cap (100)
+        const limit = Math.min(parseInt(req.query?.limit) || 50, 50);
         const page = req.query.page ? parseInt(req.query.page) : 1;
         const skip = (page - 1) * limit;
 

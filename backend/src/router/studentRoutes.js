@@ -154,8 +154,8 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
             logger.debug({ email: req.user.email }, "Coordinator/Admin fetching all students");
         }
 
-        // Pagination parameters (default limit 500 to avoid unbounded query)
-        const limit = req.query?.limit ? parseInt(req.query.limit) : 500;
+        // Pagination: per-route cap (500) overrides the shared requestOptimizer cap (100)
+        const limit = Math.min(parseInt(req.query?.limit) || 500, 500);
         const page = req.query?.page ? parseInt(req.query.page) : 1;
         const skip = (page - 1) * limit;
 

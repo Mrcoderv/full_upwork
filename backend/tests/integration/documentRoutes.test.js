@@ -105,6 +105,52 @@ describe("Document Routes", () => {
         });
     });
 
+    it("rejects dangerous file extensions", async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "doc-upload-"));
+        const tempFile = path.join(tempDir, "payload.exe");
+        fs.writeFileSync(tempFile, "MZ fake executable");
+
+        const response = await request(app)
+            .post("/api/documents/upload")
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
+            .field("studentId", new mongoose.Types.ObjectId().toString())
+            .attach("file", tempFile)
+            .expect(400);
+
+        expect(response.body).toMatchObject({
+            message: "Ogiltigt filformat. Denna filtyp är inte tillåten av säkerhetsskäl.",
+        });
+
+        const remainingFiles = await Document.find({});
+        expect(remainingFiles).toHaveLength(0);
+        fs.unlinkSync(tempFile);
+        fs.rmdirSync(tempDir);
+    });
+
+    it("rejects html content-types", async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "doc-upload-"));
+        const tempFile = path.join(tempDir, "payload.png");
+        fs.writeFileSync(tempFile, "<script>alert(1)</script>");
+
+        const response = await request(app)
+            .post("/api/documents/upload")
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
+            .field("studentId", new mongoose.Types.ObjectId().toString())
+            .attach("file", tempFile, {
+                filename: "payload.png",
+                contentType: "text/html",
+            })
+            .expect(400);
+
+        expect(response.body).toMatchObject({
+            message: "Ogiltigt filformat. Denna filtyp är inte tillåten av säkerhetsskäl.",
+        });
+        fs.unlinkSync(tempFile);
+        fs.rmdirSync(tempDir);
+    });
+
     it("defaults document type when not provided", async () => {
         const studentId = new mongoose.Types.ObjectId();
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "doc-upload-"));

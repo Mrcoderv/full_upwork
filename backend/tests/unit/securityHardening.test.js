@@ -234,7 +234,7 @@ describe('Env files have placeholders', () => {
   it('.env.example exists with placeholder JWT_SECRET', async () => {
     const fs = await import('fs')
     const content = fs.readFileSync(new URL('../../.env.example', import.meta.url), 'utf-8')
-    expect(content).toContain('replace-with-a-strong-random-string')
+    expect(content).toContain('REPLACE_WITH_GENERATED_SECRET_MIN_32_CHARS')
   })
 
   it('.env.example includes MongoDB URI', async () => {

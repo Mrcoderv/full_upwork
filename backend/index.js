@@ -71,7 +71,7 @@ import {
     errorMonitor,
 } from "./src/utils/errorHandler.js";
 
-import { dbOptimizer, requestOptimizer } from "./src/utils/performance.js";
+import { cacheManager, dbOptimizer, requestOptimizer } from "./src/utils/performance.js";
 
 // Apply security headers
 app.use(securityHeaders);
@@ -173,7 +173,7 @@ app.get("/health", (_req, res) => {
 app.get("/metrics", (_req, res) => {
     res.status(200).json({
         errors: errorMonitor.getErrorStats(),
-        cache: { size: 0, keys: [] },
+        cache: cacheManager.getStats(),
         database: {
             readyState: mongoose.connection.readyState,
             host: mongoose.connection.host,
@@ -272,7 +272,7 @@ async function shutdown(signal) {
     }
 
     try {
-        await mongoose.connection.close();
+        await dbOptimizer.shutdown();
         logger.info("Database connection closed");
     } catch (err) {
         logger.error({ err }, "Error closing database connection");
