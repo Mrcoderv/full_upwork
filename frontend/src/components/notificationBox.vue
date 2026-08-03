@@ -14,9 +14,14 @@
 </template>
 
 <script>
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
 
   export default {
+    setup() {
+      const toast = useToast()
+      return { toast }
+    },
     data() {
       return {
         error: null,
@@ -31,7 +36,7 @@
     methods: {
       async dismissNotification(id) {
         try {
-          await axios.put(`${import.meta.env.VITE_API_URL}/api/notifications/${id}/resolve`)
+          await client.put(`/notifications/${id}/resolve`)
           this.$emit('notification-dismissed', id)
         } catch (error) {
           this.error = 'Kunde inte ta bort notisen.'

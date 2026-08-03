@@ -11,7 +11,7 @@
 </template>
 
 <script>
-import axios from "axios";
+import client from "@/api/client.js";
 
 export default {
   data() {
@@ -26,18 +26,16 @@ export default {
       if (!this.token) {
         this.message = "Ogiltig eller saknad token.";
         return;
-      } else {
-        console.log(this.token);
       }
 
       try {
-        const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/reset-password`, {
+        const response = await client.post("/reset-password", {
           token: this.token,
           newPassword: this.newPassword,
         });
         this.message = response.data.message;
       } catch (error) {
-        this.message = error;
+        this.message = error.message || "Ett fel uppstod. Försök igen.";
       }
     },
   },

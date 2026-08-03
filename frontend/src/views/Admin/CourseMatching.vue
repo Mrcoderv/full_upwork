@@ -192,13 +192,15 @@
 
 <script>
   import { ref, onMounted, computed } from 'vue'
-  import { api } from '@/store/store.js'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
   import { useStore } from 'vuex'
 
   export default {
     name: 'CourseMatching',
     setup() {
       const store = useStore()
+      const toast = useToast()
       const selectedFile = ref(null) // Store file here
       const uploadedStudents = ref([]) // Populated from backend response
       const isProcessing = ref(false)
@@ -227,7 +229,7 @@
         try {
           const formData = new FormData()
           formData.append('file', selectedFile.value)
-          const response = await api.post('/upload-students', formData, {
+          const response = await client.post('/upload-students', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
           })
           // Populate students and results from backend
@@ -235,45 +237,7 @@
           processingResults.value = response.data.results || null
         } catch (error) {
           console.error('Error processing students:', error)
-          if (error.response?.status === 422 && Array.isArray(error.response?.data?.reasons)) {
-            const reasons = error.response.data.reasons
-              .map((r) => {
-                let msg = `${r.studentName || r.student || ''}: ${r.message || ''}`
-                if (r.suggestion) {
-                  msg += `\n  → ${r.suggestion}`
-                }
-                // Show suggestions if available
-                if (r.suggestions && Array.isArray(r.suggestions) && r.suggestions.length > 0) {
-                  const suggestionList = r.suggestions
-                    .map((s) => `${s.code} (${s.name})`)
-                    .join(', ')
-                  msg += `\n  💡 Förslag: ${suggestionList}`
-                }
-                return msg
-              })
-              .join('\n\n')
-            const errorMsg =
-              error.response?.data?.detailedMessage ||
-              error.response?.data?.message ||
-              'Uppladdning avbröts p.g.a. valideringsfel'
-            alert(`${errorMsg}:\n\n${reasons}`)
-          } else {
-            alert(
-              'Ett fel uppstod vid bearbetning av studenter.\n' +
-                'message: ' +
-                error.response?.data?.message +
-                '\n' +
-                'error: ' +
-                error.response?.data?.error +
-                '\n' +
-                'details: ' +
-                error.response?.data?.details +
-                '\n' +
-                'reasons: ' +
-                error.response?.data?.reasons +
-                '\n'
-            )
-          }
+          toast.error(error.message || 'Ett fel uppstod vid bearbetning av studenter.')
         } finally {
           isProcessing.value = false
         }
@@ -281,7 +245,7 @@
 
       const loadCourses = async () => {
         try {
-          const response = await api.get('/courses')
+          const response = await client.get('/courses')
           courses.value = response.data
         } catch (error) {
           console.error('Error loading courses:', error)
@@ -349,7 +313,6 @@
         isLoggedIn,
         userRole,
         isAdmin,
-        api,
         studentFileInput,
         selectedFile,
         uploadedStudents,

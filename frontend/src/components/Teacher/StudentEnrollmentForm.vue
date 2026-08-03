@@ -65,8 +65,11 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue';
-import { api } from '@/store/store.js';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 import debounce from 'lodash.debounce';
+
+const toast = useToast();
 
 const props = defineProps({
   mode: {
@@ -95,9 +98,7 @@ const searchStudents = debounce(async (query) => {
   if (allStudents.value.length === 0 && (!query || query.length >= 2)) {
     loadingStudents.value = true;
     try {
-      const { data } = await api.get('/students', { 
-        withCredentials: true
-      });
+      const { data } = await client.get('/students');
       allStudents.value = Array.isArray(data) ? data : [];
     } catch (error) {
       console.error('Error fetching students:', error);
@@ -154,7 +155,7 @@ const filteredCourseInstances = ref([]);
 const fetchCourseInstances = async () => {
   loadingCourseInstances.value = true;
   try {
-    const { data } = await api.get('/course-instances', { withCredentials: true });
+    const { data } = await client.get('/course-instances');
     if (data.success && Array.isArray(data.instances)) {
       courseInstances.value = data.instances.map(instance => ({
         ...instance,
@@ -262,9 +263,9 @@ const submitForm = async () => {
   };
 
   try {
-      await api.post('/course-matching/process-education', payload, { withCredentials: true });
+      await client.post('/course-matching/process-education', payload);
       // Handle success
-      alert('Eleven har anmälts till kursen framgångsrikt!');
+      toast.success('Eleven har anmälts till kursen framgångsrikt!');
       
       // Reset form
       selectedStudent.value = null;
@@ -279,12 +280,12 @@ const submitForm = async () => {
       courseInstanceSearchQuery.value = '';
       
       if (aplStatus.value !== 'GRAY') {
-        await api.patch(`/students/${selectedStudent.value._id}`, { aplStatus: aplStatus.value }, { withCredentials: true });
+        await client.patch(`/students/${selectedStudent.value._id}`, { aplStatus: aplStatus.value });
       }
 
   } catch (error) {
       console.error('Error submitting enrollment:', error);
-      alert('Kunde inte anmäla eleven till kursen. ' + (error.response?.data?.error || error.message));
+      toast.error('Kunde inte anmäla eleven till kursen. ' + error.message);
   } finally {
       submitting.value = false;
   }

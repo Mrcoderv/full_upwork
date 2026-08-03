@@ -525,8 +525,15 @@
 </template>
 
 <script>
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
   export default {
     name: 'TeacherManagement',
+    setup() {
+      const toast = useToast()
+      return { toast }
+    },
     data() {
       return {
         teachers: [],
@@ -610,12 +617,11 @@
       async loadTeachers() {
         try {
           this.isLoading = true
-          const { api } = await import('@/store/store.js')
-          const response = await api.get('/teachers', { withCredentials: true })
+          const response = await client.get('/teachers')
           this.teachers = response.data
         } catch (error) {
           console.error('Error loading teachers:', error)
-          alert('Kunde inte ladda lärare')
+          this.toast.error('Kunde inte ladda lärare')
         } finally {
           this.isLoading = false
         }
@@ -674,9 +680,8 @@
       async saveTeacherChanges() {
         try {
           this.isSaving = true
-          const { api } = await import('@/store/store.js')
 
-          await api.put(`/teachers/${this.editingTeacher._id}`, {
+          await client.put(`/teachers/${this.editingTeacher._id}`, {
             username: this.editingTeacher.username,
             email: this.editingTeacher.email,
             subject: this.editingPermissions.join(', '),
@@ -707,10 +712,10 @@
           const modal = bootstrap.Modal.getInstance(this.$refs.editTeacherModal)
           modal.hide()
 
-          alert('Lärare uppdaterad!')
+          this.toast.success('Lärare uppdaterad!')
         } catch (error) {
           console.error('Error updating teacher:', error)
-          alert('Kunde inte uppdatera lärare')
+          this.toast.error('Kunde inte uppdatera lärare')
         } finally {
           this.isSaving = false
         }
@@ -776,7 +781,7 @@
       async copyPassword() {
         try {
           await navigator.clipboard.writeText(this.newPassword)
-          alert('Lösenord kopierat!')
+          this.toast.success('Lösenord kopierat!')
         } catch (error) {
           console.error('Could not copy password:', error)
           const textArea = document.createElement('textarea')
@@ -785,26 +790,25 @@
           textArea.select()
           document.execCommand('copy')
           document.body.removeChild(textArea)
-          alert('Lösenord kopierat!')
+          this.toast.success('Lösenord kopierat!')
         }
       },
 
       async saveNewPassword() {
         try {
           this.isChangingPassword = true
-          const { api } = await import('@/store/store.js')
 
-          await api.put(`/teachers/${this.changingPasswordTeacher._id}/password`, {
+          await client.put(`/teachers/${this.changingPasswordTeacher._id}/password`, {
             password: this.newPassword,
           })
 
           const modal = bootstrap.Modal.getInstance(this.$refs.changePasswordModal)
           modal.hide()
 
-          alert('Lösenord ändrat!')
+          this.toast.success('Lösenord ändrat!')
         } catch (error) {
           console.error('Error changing password:', error)
-          alert('Kunde inte ändra lösenord')
+          this.toast.error('Kunde inte ändra lösenord')
         } finally {
           this.isChangingPassword = false
         }
@@ -816,16 +820,15 @@
         }
 
         try {
-          const { api } = await import('@/store/store.js')
-          await api.delete(`/teachers/${teacher._id}`)
+          await client.delete(`/teachers/${teacher._id}`)
 
           // Remove from local data
           this.teachers = this.teachers.filter((t) => t._id !== teacher._id)
 
-          alert('Lärare borttagen!')
+          this.toast.success('Lärare borttagen!')
         } catch (error) {
           console.error('Error deleting teacher:', error)
-          alert('Kunde inte ta bort lärare')
+          this.toast.error('Kunde inte ta bort lärare')
         }
       },
 
@@ -838,12 +841,11 @@
           return
         }
         try {
-          const { api } = await import('@/store/store.js')
-          await api.put(`/teachers/${teacher._id}/unassign-all-students`)
-          alert('Alla kopplingar till elever har tagits bort!')
+          await client.put(`/teachers/${teacher._id}/unassign-all-students`)
+          this.toast.success('Alla kopplingar till elever har tagits bort!')
         } catch (error) {
           console.error('Error unassigning students:', error)
-          alert('Kunde inte ta bort kopplingar till elever')
+          this.toast.error('Kunde inte ta bort kopplingar till elever')
         }
       },
 
@@ -904,15 +906,14 @@
 
       async createNewTeacher() {
         if (!this.newTeacher.username || !this.newTeacher.email || !this.newTeacher.subject) {
-          alert('Fyll i alla obligatoriska fält')
+          this.toast.error('Fyll i alla obligatoriska fält')
           return
         }
 
         try {
           this.isCreatingTeacher = true
-          const { api } = await import('@/store/store.js')
 
-          const response = await api.post('/admin/teacher', {
+          const response = await client.post('/admin/teacher', {
             username: this.newTeacher.username,
             email: this.newTeacher.email,
             subject: this.newTeacher.subject,
@@ -935,8 +936,8 @@
             })
 
             // Show success modal with credentials
-            alert(
-              `Lärare skapad!\n\nLösenord: ${response.data.password}\n\nDela lösenordet säkert med läraren.`
+            this.toast.success(
+              `Lärare skapad! Lösenord: ${response.data.password}. Dela lösenordet säkert med läraren.`
             )
 
             // Reset form
@@ -959,7 +960,7 @@
           } else if (error.response?.data?.error) {
             errorMessage = error.response.data.error
           }
-          alert(errorMessage)
+          this.toast.error(errorMessage)
         } finally {
           this.isCreatingTeacher = false
         }

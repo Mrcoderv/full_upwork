@@ -289,7 +289,7 @@ describe("performance utilities", () => {
         expect(result).toEqual([{ id: 2 }]);
     });
 
-    it("configures database pool listeners and handles shutdown", async () => {
+    it("configures database pool listeners and exposes shutdown for the app handler", async () => {
         const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {});
         const onSpy = vi.spyOn(process, "on");
         const originalPool = process.env.MAX_CONCURRENT_REQUESTS;
@@ -309,7 +309,7 @@ describe("performance utilities", () => {
             "disconnected",
             expect.any(Function)
         );
-        expect(onSpy).toHaveBeenCalledWith("SIGINT", expect.any(Function));
+        expect(onSpy).not.toHaveBeenCalledWith("SIGINT", expect.any(Function));
 
         connectionHandlers.connected();
         expect(logger.info).toHaveBeenCalledWith(
@@ -326,15 +326,12 @@ describe("performance utilities", () => {
         connectionHandlers.disconnected();
         expect(logger.warn).toHaveBeenCalledWith("MongoDB disconnected");
 
-        const sigintHandler = onSpy.mock.calls.find(
-            (call) => call[0] === "SIGINT"
-        )[1];
-        await sigintHandler();
+        await dbOptimizer.shutdown();
         expect(mongoose.connection.close).toHaveBeenCalled();
         expect(logger.info).toHaveBeenCalledWith(
             "MongoDB connection closed through app termination"
         );
-        expect(exitSpy).toHaveBeenCalledWith(0);
+        expect(exitSpy).not.toHaveBeenCalled();
 
         process.env.MAX_CONCURRENT_REQUESTS = originalPool;
     });

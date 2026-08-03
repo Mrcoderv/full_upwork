@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import * as authController from "../../src/controllers/authController.js";
 import User from "../../src/models/User.js";
+import { AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS } from "../../src/config/cookies.js";
 
 const buildRes = () => {
     const res = {
@@ -101,7 +102,7 @@ describe("authController", () => {
 
         await authController.login(req, res);
 
-        expect(res.cookies.token.value).toBe(token);
+        expect(res.cookies[AUTH_COOKIE_NAME].value).toBe(token);
         expect(res.body).toEqual({
             message: "Login successful",
             user: {
@@ -153,7 +154,7 @@ describe("authController", () => {
         const decoded = { userId: "id", role: "user" };
         vi.spyOn(jwt, "verify").mockReturnValueOnce(decoded);
 
-        const req = { cookies: { token }, headers: {} };
+        const req = { cookies: { [AUTH_COOKIE_NAME]: token }, headers: {} };
         const res = buildRes();
         const next = vi.fn();
 
@@ -179,7 +180,7 @@ describe("authController", () => {
 
     it("returns 401 when token missing userId", () => {
         vi.spyOn(jwt, "verify").mockReturnValueOnce({});
-        const req = { cookies: { token: "t" }, headers: {} };
+        const req = { cookies: { [AUTH_COOKIE_NAME]: "t" }, headers: {} };
         const res = buildRes();
         const next = vi.fn();
 
@@ -196,7 +197,7 @@ describe("authController", () => {
         vi.spyOn(jwt, "verify").mockImplementation(() => {
             throw new Error("bad");
         });
-        const req = { cookies: { token: "t" }, headers: {} };
+        const req = { cookies: { [AUTH_COOKIE_NAME]: "t" }, headers: {} };
         const res = buildRes();
         const next = vi.fn();
 
@@ -210,12 +211,8 @@ describe("authController", () => {
         const res = buildRes();
         await authController.logout({}, res);
         expect(res.cleared).toEqual({
-            name: "token",
-            opts: {
-                httpOnly: true,
-                sameSite: "strict",
-                secure: false,
-            },
+            name: AUTH_COOKIE_NAME,
+            opts: AUTH_COOKIE_OPTIONS,
         });
         expect(res.body).toEqual({ message: "Logout successful" });
     });
@@ -234,7 +231,7 @@ describe("authController", () => {
             select: vi.fn().mockResolvedValueOnce(user),
         });
 
-        const req = { cookies: { token: "t" } };
+        const req = { cookies: { [AUTH_COOKIE_NAME]: "t" } };
         const res = buildRes();
 
         await authController.getSession(req, res);
@@ -267,7 +264,7 @@ describe("authController", () => {
             select: vi.fn().mockResolvedValueOnce(null),
         });
 
-        const req = { cookies: { token: "t" } };
+        const req = { cookies: { [AUTH_COOKIE_NAME]: "t" } };
         const res = buildRes();
 
         await authController.getSession(req, res);
@@ -280,7 +277,7 @@ describe("authController", () => {
         vi.spyOn(jwt, "verify").mockImplementation(() => {
             throw new Error("boom");
         });
-        const req = { cookies: { token: "t" } };
+        const req = { cookies: { [AUTH_COOKIE_NAME]: "t" } };
         const res = buildRes();
 
         await authController.getSession(req, res);

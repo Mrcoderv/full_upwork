@@ -39,9 +39,14 @@
 </template>
 
 <script>
-import { api } from '@/store/store.js';
+import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
 
+let toast;
 export default {
+  setup() {
+    toast = useToast();
+  },
   props: {
     event: Object // från kalendern, ex: event.extendedProps
   },
@@ -149,12 +154,12 @@ export default {
       }
       
       try {
-        await api.delete(`/meetings/${this.event.id}`, { withCredentials: true });
+        await client.delete(`/meetings/${this.event.id}`);
         this.$emit('deleted');
         this.$emit('close');
       } catch (error) {
         console.error('❌ Kunde inte radera mötet:', error);
-        alert('Kunde inte radera mötet.');
+        toast.error('Kunde inte radera mötet.');
       }
     }
   }

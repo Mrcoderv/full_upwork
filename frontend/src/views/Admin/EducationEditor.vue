@@ -67,11 +67,13 @@
 </template>
 
 <script>
-  import axios from 'axios'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
   import { ref, computed, onMounted } from 'vue'
 
   export default {
     setup() {
+      const toast = useToast()
       const students = ref([])
       const programs = ref([])
       const allCourses = ref([])
@@ -90,12 +92,8 @@
         try {
           console.log('🔍 Fetching students and programs...')
           const [studentsResponse, programsResponse] = await Promise.all([
-            await axios.get(`${import.meta.env.VITE_API_URL}/api/students`, {
-              withCredentials: true,
-            }),
-            await axios.get(`${import.meta.env.VITE_API_URL}/api/all-programs`, {
-              withCredentials: true,
-            }),
+            await client.get('/students'),
+            await client.get('/all-programs'),
           ])
 
           students.value = studentsResponse.data
@@ -119,13 +117,13 @@
 
         try {
           console.log(`🔍 Fetching courses for Program ID: ${selectedProgram.value}`)
-          const response = await axios.get(
-            `${import.meta.env.VITE_API_URL}/api/program/${selectedProgram.value}/courses`
+          const response = await client.get(
+            `/program/${selectedProgram.value}/courses`
           )
 
           if (!response.data || !Array.isArray(response.data)) {
             console.error('❌ Invalid response structure:', response)
-            alert('Invalid course data received.')
+            toast.error('Invalid course data received.')
             return
           }
 
@@ -137,7 +135,7 @@
           console.log('✅ Courses loaded:', allCourses.value)
         } catch (error) {
           console.error('❌ Error fetching courses:', error)
-          alert('Failed to fetch courses for the selected program.')
+          toast.error('Failed to fetch courses for the selected program.')
         }
       }
 
@@ -157,8 +155,8 @@
           console.log(
             `🔍 Adding course ${selectedIndividualCourse.value} to student ${selectedStudent.value._id}`
           )
-          await axios.post(
-            `${import.meta.env.VITE_API_URL}/api/student/${selectedStudent.value._id}/addcourse`,
+          await client.post(
+            `/student/${selectedStudent.value._id}/addcourse`,
             { courseId: selectedIndividualCourse.value }
           )
           console.log('✅ Course added successfully')

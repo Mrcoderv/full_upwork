@@ -604,11 +604,15 @@
 </template>
 
 <script>
-  import axios from 'axios'
-  import { api } from '../../store/store.js'
+  import client from '@/api/client.js'
   import { mapGetters } from 'vuex'
+  import { useToast } from '@/composables/useToast.js'
 
+  let toast;
   export default {
+    setup() {
+      toast = useToast();
+    },
     data() {
       return {
         file: null,
@@ -777,8 +781,8 @@
 
       async saveGrade(studentId, courseId, grade) {
         try {
-          const response = await axios.put(
-            `${import.meta.env.VITE_API_URL}/api/student/${studentId}/education/${courseId}/grade`,
+          const response = await client.put(
+            `/student/${studentId}/education/${courseId}/grade`,
             { grade }
           )
           console.log('✅ Grade updated:', response.data)
@@ -915,7 +919,7 @@
               return
             }
 
-            const response = await api.post(`/student-details/${this.editingStudent._id}/dropout`)
+            const response = await client.post(`/student-details/${this.editingStudent._id}/dropout`)
             this.editingStudent.dropout = true
             this.dropoutHandledViaEndpoint = true
 
@@ -927,7 +931,7 @@
               this.students.splice(index, 1, response.data.student)
             }
 
-            alert('Eleven har markerats som avbrott (inaktiv).')
+            toast.success('Eleven har markerats som avbrott (inaktiv).')
           } else {
             // Unchecking (setting to false) - use update endpoint
             const confirmed = confirm(
@@ -943,7 +947,7 @@
               return
             }
 
-            const response = await api.delete(`/student-details/${this.editingStudent._id}/dropout`)
+            const response = await client.delete(`/student-details/${this.editingStudent._id}/dropout`)
             this.editingStudent.dropout = false
             this.dropoutHandledViaEndpoint = false // Reset flag so it can be saved normally
 
@@ -955,12 +959,12 @@
               this.students.splice(index, 1, response.data.student)
             }
 
-            alert('Avbrott-status har tagits bort för eleven.')
+            toast.success('Avbrott-status har tagits bort för eleven.')
           }
         } catch (error) {
           console.error('Error updating dropout status:', error)
           const action = checked ? 'markera elev som avbrott' : 'ta bort avbrott-status'
-          alert(`Kunde inte ${action}. ` + (error.response?.data?.error || ''))
+          toast.error(`Kunde inte ${action}.`)
           // Revert checkbox to original state
           event.target.checked = this.originalDropoutState
           this.editingStudent.dropout = this.originalDropoutState
@@ -1008,8 +1012,8 @@
           })
 
           // 1. Save the edited student
-          const response = await axios.put(
-            `${import.meta.env.VITE_API_URL}/api/student/${this.editingStudent._id}`,
+          const response = await client.put(
+            `/student/${this.editingStudent._id}`,
             studentData
           )
 
@@ -1067,8 +1071,7 @@
         formData.append('file', this.file)
 
         try {
-          // ✅ Use api instance so cookies (JWT) are sent!
-          const response = await api.post('uploads/upload/xlsxupload', formData, {
+          const response = await client.post('/uploads/upload/xlsxupload', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
@@ -1113,8 +1116,8 @@
 
       async updateDropOut(student) {
         try {
-          const response = await axios.put(
-            `${import.meta.env.VITE_API_URL}/api/student/${student._id}`,
+          const response = await client.put(
+            `/student/${student._id}`,
             { dropout: !student.dropout }
           )
 
@@ -1133,7 +1136,7 @@
         if (!confirm('Are you sure you want to delete this student?')) return
 
         try {
-          await axios.delete(`${import.meta.env.VITE_API_URL}/api/student/${studentId}`)
+          await client.delete(`/student/${studentId}`)
           console.log(`🚨 Student deleted!: ${studentId}`)
           this.students = this.students.filter((s) => s._id !== studentId)
         } catch (error) {
@@ -1147,7 +1150,7 @@
           return
 
         try {
-          await axios.delete(`${import.meta.env.VITE_API_URL}/api/students`)
+          await client.delete('/students')
           console.log('🚨 All students deleted!')
           this.students = []
         } catch (error) {
@@ -1160,9 +1163,7 @@
         console.log('📡 fetchStudents called')
 
         try {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/students`, {
-            withCredentials: true,
-          })
+          const response = await client.get('/students')
           console.log('✅ Students fetched:', response.data)
 
           // Get student data and populate this.students
@@ -1181,13 +1182,9 @@
       async fetchEducationOptions() {
         try {
           const [programsRes, packagesRes, coursesRes] = await Promise.all([
-            axios.get(`${import.meta.env.VITE_API_URL}/api/all-programs`, {
-              withCredentials: true,
-            }),
-            axios.get(`${import.meta.env.VITE_API_URL}/api/all-course-packages`, {
-              withCredentials: true,
-            }),
-            axios.get(`${import.meta.env.VITE_API_URL}/api/all-courses`, { withCredentials: true }),
+            client.get('/all-programs'),
+            client.get('/all-course-packages'),
+            client.get('/all-courses'),
           ])
 
           this.educationOptions = [

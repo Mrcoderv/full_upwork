@@ -8,6 +8,7 @@ import {
     beforeAll,
     afterAll,
 } from "vitest";
+import { AUTH_COOKIE_NAME } from "../../src/config/cookies.js";
 
 vi.mock("express-rate-limit", () => ({
     __esModule: true,
@@ -249,6 +250,28 @@ describe("security middleware helpers", () => {
         expect(error.message).toBe("Not allowed by CORS");
     });
 
+    it("corsConfig blocks no-origin requests in production", () => {
+        const original = process.env.NODE_ENV;
+        process.env.NODE_ENV = "production";
+        const cb = vi.fn();
+        const warnSpy = vi
+            .spyOn(logger, "warn")
+            .mockImplementation(() => {});
+        corsConfig.origin(undefined, cb);
+        expect(warnSpy).toHaveBeenCalled();
+        const error = cb.mock.calls[0][0];
+        expect(error).toBeInstanceOf(AppError);
+        expect(error.message).toBe("CORS: No Origin header");
+        expect(error.statusCode).toBe(403);
+        process.env.NODE_ENV = original;
+    });
+
+    it("corsConfig allows no-origin requests in non-production", () => {
+        const cb = vi.fn();
+        corsConfig.origin(undefined, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+    });
+
     it("securityAudit detects suspicious payloads", () => {
         const res = buildRes();
         const next = vi.fn();
@@ -339,7 +362,7 @@ describe("security middleware helpers", () => {
             const token = jwt.sign({ role: "admin" }, process.env.JWT_SECRET);
             const skip = rateLimiter.options?.skip;
             expect(skip).toBeDefined();
-            const allowed = skip(buildReq({ cookies: { token } }));
+            const allowed = skip(buildReq({ cookies: { [AUTH_COOKIE_NAME]: token } }));
             expect(allowed).toBe(true);
         });
 
@@ -350,7 +373,7 @@ describe("security middleware helpers", () => {
                 .mockImplementation(() => {});
             const skip = rateLimiter.options?.skip;
             expect(skip).toBeDefined();
-            const allowed = skip(buildReq({ cookies: { token: "bad" } }));
+            const allowed = skip(buildReq({ cookies: { [AUTH_COOKIE_NAME]: "bad" } }));
             expect(allowed).toBe(false);
             expect(debugSpy).toHaveBeenCalled();
         });
@@ -359,7 +382,7 @@ describe("security middleware helpers", () => {
             const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
             const skip = rateLimiter.options?.skip;
             expect(skip).toBeDefined();
-            const allowed = skip(buildReq({ cookies: { token: "abc" } }));
+            const allowed = skip(buildReq({ cookies: { [AUTH_COOKIE_NAME]: "abc" } }));
             expect(allowed).toBe(false);
             expect(errorSpy).toHaveBeenCalled();
         });
@@ -445,7 +468,7 @@ describe("rate limiter behavior", () => {
         vi.spyOn(jwt, "verify").mockReturnValueOnce(decoded);
         const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
         const skipResult = rateLimiter.options.skip(
-            buildReq({ cookies: { token } })
+            buildReq({ cookies: { [AUTH_COOKIE_NAME]: token } })
         );
         expect(skipResult).toBe(true);
         expect(infoSpy).toHaveBeenCalledWith(
@@ -459,7 +482,7 @@ describe("rate limiter behavior", () => {
         });
         const debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
         const skipResult = rateLimiter.options.skip(
-            buildReq({ cookies: { token: "bad" } })
+            buildReq({ cookies: { [AUTH_COOKIE_NAME]: "bad" } })
         );
         expect(skipResult).toBe(false);
         expect(debugSpy).toHaveBeenCalled();
@@ -470,7 +493,7 @@ describe("rate limiter behavior", () => {
         delete process.env.JWT_SECRET;
         const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
         const skipResult = rateLimiter.options.skip(
-            buildReq({ cookies: { token: "token" } })
+            buildReq({ cookies: { [AUTH_COOKIE_NAME]: "token" } })
         );
         expect(skipResult).toBe(false);
         expect(errorSpy).toHaveBeenCalledWith("❌ JWT_SECRET is not defined!");

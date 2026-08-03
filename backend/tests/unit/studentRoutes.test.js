@@ -18,6 +18,7 @@ vi.mock("../../src/utils/calendarEventSync.js", () => calendarEventSyncMock);
 vi.mock("../../src/models/Student.js", () => {
     const StudentMock = vi.fn(function (doc) {
         Object.assign(this, doc);
+        if (!this._id) this._id = "mock-id-" + Math.random().toString(36).slice(2, 8);
         this.save = vi.fn().mockResolvedValue(this);
     });
     Object.assign(StudentMock, {
@@ -692,9 +693,17 @@ describe("POST /student", () => {
 
         await handler(req, res);
 
-        expect(Student).toHaveBeenCalledWith(req.body);
+        expect(Student).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: "New Student",
+                email: "test@example.com",
+                personalNumber: "20000101-0000",
+                education: [{ type: "Course", refId: "course-1" }],
+                createdBy: "creator-1",
+            })
+        );
         expect(CourseMatchingServiceMock.default.processStudentEducation).toHaveBeenCalledWith(
-            "student-123",
+            expect.any(String),
             req.body.education,
             "creator-1"
         );
@@ -726,7 +735,7 @@ describe("POST /student", () => {
         await handler(req, res);
 
         expect(calendarEventSyncMock.syncCalendarEventsForStudent).toHaveBeenCalledWith(
-            "student-789"
+            expect.any(String)
         );
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(
@@ -1666,14 +1675,15 @@ describe("PUT /student/:id", () => {
             },
         };
         Student.findById.mockResolvedValue(studentDoc);
-        const enrollment = { _id: "enroll-remove" };
-        StudentEnrollmentMock.findOne.mockResolvedValue(enrollment);
+        const enrollment = { _id: "enroll-remove", mainCourseId: "course-rem" };
+        StudentEnrollmentMock.find
+            .mockReturnValueOnce([enrollment])
+            .mockReturnValue({
+                populate: vi.fn().mockReturnThis(),
+                sort: vi.fn().mockResolvedValue([]),
+            });
         StudentEnrollmentMock.findByIdAndDelete.mockResolvedValue(enrollment);
         Student.findByIdAndUpdate.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.find.mockReturnValue({
-            populate: vi.fn().mockReturnThis(),
-            sort: vi.fn().mockResolvedValue([]),
-        });
         TeacherMock.findOne.mockResolvedValue(null);
 
         const res = createRes();
@@ -1710,12 +1720,13 @@ describe("PUT /student/:id", () => {
             },
         };
         Student.findById.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.findOne.mockResolvedValue(null);
+        StudentEnrollmentMock.find
+            .mockReturnValueOnce([])
+            .mockReturnValue({
+                populate: vi.fn().mockReturnThis(),
+                sort: vi.fn().mockResolvedValue([]),
+            });
         Student.findByIdAndUpdate.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.find.mockReturnValue({
-            populate: vi.fn().mockReturnThis(),
-            sort: vi.fn().mockResolvedValue([]),
-        });
         TeacherMock.findOne.mockResolvedValue(null);
 
         const res = createRes();
@@ -1751,12 +1762,13 @@ describe("PUT /student/:id", () => {
             },
         };
         Student.findById.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.findOne.mockResolvedValue(null);
+        StudentEnrollmentMock.find
+            .mockReturnValueOnce([])
+            .mockReturnValue({
+                populate: vi.fn().mockReturnThis(),
+                sort: vi.fn().mockResolvedValue([]),
+            });
         Student.findByIdAndUpdate.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.find.mockReturnValue({
-            populate: vi.fn().mockReturnThis(),
-            sort: vi.fn().mockResolvedValue([]),
-        });
         TeacherMock.findOne.mockResolvedValue(null);
         CourseMatchingServiceMock.default.processStudentEducation.mockResolvedValue({ enrollments: [] });
 
@@ -1800,12 +1812,13 @@ describe("PUT /student/:id", () => {
             },
         };
         Student.findById.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.findOne.mockResolvedValue(null);
+        StudentEnrollmentMock.find
+            .mockReturnValueOnce([])
+            .mockReturnValue({
+                populate: vi.fn().mockReturnThis(),
+                sort: vi.fn().mockResolvedValue([]),
+            });
         Student.findByIdAndUpdate.mockResolvedValue(studentDoc);
-        StudentEnrollmentMock.find.mockReturnValue({
-            populate: vi.fn().mockReturnThis(),
-            sort: vi.fn().mockResolvedValue([]),
-        });
         TeacherMock.findOne.mockResolvedValue(null);
         CourseMatchingServiceMock.default.processStudentEducation.mockRejectedValueOnce(
             new Error("enroll-fail")

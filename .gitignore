@@ -30,5 +30,14 @@ backend/coverage/
 
 # Environment variables
 .env*
+!.env.example
+
+# Uploads (user-generated content)
+backend/public/uploads/
+
+# E2E test artifacts
+e2e/test-results/
+e2e/playwright-report/
+e2e/screenshots/
 
 

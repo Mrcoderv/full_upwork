@@ -245,10 +245,12 @@
 
 <script setup>
   import { ref, computed, onMounted, nextTick, watch } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
   import { useStore } from 'vuex'
+  import { useToast } from '@/composables/useToast.js'
   import FileUploaderDownloader from '../components/FileUploaderDownloader.vue'
 
+  const toast = useToast()
   const props = defineProps({
     students: {
       type: Array,
@@ -428,10 +430,9 @@
   const handleDrop = async (e, newStatus) => {
     if (!draggedStudent.value || draggedStudent.value.aplStatus === newStatus) return
     try {
-      await axios.patch(
-        `${import.meta.env.VITE_API_URL}/api/students/${draggedStudent.value._id}`,
-        { aplStatus: newStatus },
-        { withCredentials: true }
+      await client.patch(
+        `/students/${draggedStudent.value._id}`,
+        { aplStatus: newStatus }
       )
       fetchStudents()
       draggedStudent.value = null
@@ -448,10 +449,9 @@
     scrollToLatest()
 
     try {
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/students/${student._id}/mark-comments-seen`,
-        {},
-        { withCredentials: true }
+      await client.post(
+        `/students/${student._id}/mark-comments-seen`,
+        {}
       )
       fetchStudents()
     } catch (err) {
@@ -485,20 +485,18 @@
       isSearching.value = true
       
       try {
-        const apiUrl = `${import.meta.env.VITE_API_URL}/api/search`
-        const { data } = await axios.get(apiUrl, {
+        const { data } = await client.get('/search', {
           params: { q, type: 'Användare' },
-          withCredentials: true,
         })
         
         const studentResults = (data || []).filter((r) => r.type === 'Elev')
         suggestions.value = studentResults
         showSuggestions.value = true
       } catch (e) {
-        if (e.response?.status === 429) {
+        if (e.status === 429) {
           searchError.value = 'För många förfrågningar. Vänta lite och försök igen.'
         } else {
-          searchError.value = `Sökfel: ${e.response?.data?.message || e.message || 'Okänt fel'}`
+          searchError.value = `Sökfel: ${e.message || 'Okänt fel'}`
         }
         showSuggestions.value = false
         suggestions.value = []
@@ -633,10 +631,9 @@
   const submitComment = async () => {
     if (!newComment.value) return
     try {
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/students/${selectedStudent.value._id}/comment`,
-        { comment: newComment.value },
-        { withCredentials: true }
+      await client.post(
+        `/students/${selectedStudent.value._id}/comment`,
+        { comment: newComment.value }
       )
       newComment.value = ''
       fetchStudents()
@@ -647,9 +644,9 @@
 
   const deleteComment = async (index) => {
     try {
-      await axios.delete(
-        `${import.meta.env.VITE_API_URL}/api/students/${selectedStudent.value._id}/comment`,
-        { data: { index }, withCredentials: true }
+      await client.delete(
+        `/students/${selectedStudent.value._id}/comment`,
+        { data: { index } }
       )
       fetchStudents()
     } catch (err) {
@@ -684,10 +681,9 @@
         ...getSortedComments.value[index],
         comment: editedComment.value,
       }
-      await axios.put(
-        `${import.meta.env.VITE_API_URL}/api/students/${selectedStudent.value._id}/comment`,
-        { index, updatedEntry },
-        { withCredentials: true }
+      await client.put(
+        `/students/${selectedStudent.value._id}/comment`,
+        { index, updatedEntry }
       )
       editingIndex.value = null
       editedComment.value = ''

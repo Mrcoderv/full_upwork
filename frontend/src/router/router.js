@@ -286,11 +286,27 @@ const routes = [
   },
   // Remove duplicate /betyg route
   // { path: '/betyg', name: 'Betyg', component: GradeStudent, meta: { title: 'Grade Student', role: 'teacher' } },
+
+  // 404 catch-all — must be last
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/NotFound.vue'),
+    meta: { title: 'Sidan hittades inte' },
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+router.onError((error, to) => {
+  if (/Failed to fetch dynamically imported module/.test(error.message) ||
+      /Loading chunk .* failed/.test(error.message)) {
+    console.error('Chunk load failed, reloading page:', error)
+    window.location.href = to.fullPath
+  }
 })
 
 // Global Navigation Guards

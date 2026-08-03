@@ -276,35 +276,35 @@ describe('Vuex Store', () => {
             it('logs when logout API fails', async () => {
                 api.post.mockRejectedValue(new Error('logout failed'))
                 await store.dispatch('logout')
-                expect(consoleErrorSpy).toHaveBeenCalledWith('❌ Logout request failed:', expect.any(Error))
+                expect(consoleErrorSpy).toHaveBeenCalledWith('Logout request failed:', expect.any(Error))
             })
 
             it('logs when addTask API fails', async () => {
-                const error = { response: { data: 'boom' } }
+                const error = new Error('boom')
                 api.post.mockRejectedValue(error)
                 await store.dispatch('addTask', 'not sent')
-                expect(consoleErrorSpy).toHaveBeenCalledWith('❌ Vuex: Failed to add task:', 'boom')
+                expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to add task:', expect.any(Error))
             })
 
             it('logs when updateTask API fails', async () => {
-                const error = { response: { data: 'nope' } }
+                const error = new Error('nope')
                 api.put.mockRejectedValue(error)
                 await store.dispatch('updateTask', { _id: 1 })
-                expect(consoleErrorSpy).toHaveBeenCalledWith('❌ Vuex: Failed to update task:', 'nope')
+                expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to update task:', expect.any(Error))
             })
 
             it('logs when deleteTask API fails', async () => {
-                const error = { response: { data: 'gone' } }
+                const error = new Error('gone')
                 api.delete.mockRejectedValue(error)
                 await store.dispatch('deleteTask', 1)
-                expect(consoleErrorSpy).toHaveBeenCalledWith('❌ Vuex: Failed to delete task:', 'gone')
+                expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to delete task:', expect.any(Error))
             })
 
             it('logs when deleteAllTasks API fails', async () => {
-                const error = { response: { data: 'all gone' } }
+                const error = new Error('all gone')
                 api.delete.mockRejectedValue(error)
                 await store.dispatch('deleteAllTasks')
-                expect(consoleErrorSpy).toHaveBeenCalledWith('❌ Vuex: Failed to delete all tasks:', 'all gone')
+                expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to delete all tasks:', expect.any(Error))
             })
         })
     })

@@ -33,7 +33,8 @@
 
 <script>
 import { ref, watch, onMounted, computed } from 'vue';
-import { api } from '@/store/store.js';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 import { useStore } from 'vuex';
 
 export default {
@@ -61,6 +62,7 @@ export default {
   },
   setup(props) {
     const store = useStore();
+    const toast = useToast();
     const documents = ref([]);
     const selectedFile = ref(null);
     const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -132,7 +134,7 @@ export default {
         if (isTeacher.value) {
           params.entityType = 'teacher';
         }
-        const res = await api.get(`/documents/${id}`, { params });
+        const res = await client.get(`/documents/${id}`, { params });
         documents.value = res.data;
       } catch (error) {
         console.error('Error fetching documents:', error);
@@ -146,7 +148,7 @@ export default {
     const uploadFile = async () => {
       const id = entityId.value;
       if (!selectedFile.value || !id) {
-        alert('Välj en fil och kontrollera att användar-ID är korrekt');
+        toast.error('Välj en fil och kontrollera att användar-ID är korrekt');
         return;
       }
 
@@ -174,7 +176,7 @@ export default {
       }
 
       try {
-        const response = await api.post('/documents/upload', formData, {
+        const response = await client.post('/documents/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -186,23 +188,22 @@ export default {
         if(inputFile) inputFile.value = '';
 
         await fetchDocuments();
-        alert('✅ Filen laddades upp framgångsrikt!');
+        toast.success('Filen laddades upp framgångsrikt!');
       } catch (error) {
         console.error('Error uploading file:', error);
         console.error('Error response:', error.response?.data);
-        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
-        alert('⚠️ Kunde inte ladda upp filen: ' + errorMessage);
+        toast.error('Kunde inte ladda upp filen: ' + error.message);
       }
     };
 
     const deleteFile = async (id) => {
       if (!confirm('Är du säker på att du vill radera detta dokument?')) return;
       try {
-        await api.delete(`/documents/${id}`);
+        await client.delete(`/documents/${id}`);
         await fetchDocuments();
       } catch (error) {
         console.error('Error deleting document:', error);
-        alert('Kunde inte radera dokumentet: ' + (error.response?.data?.message || error.message));
+        toast.error('Kunde inte radera dokumentet: ' + error.message);
       }
     };
 

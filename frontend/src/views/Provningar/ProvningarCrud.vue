@@ -46,50 +46,51 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { ref, onMounted } from 'vue'
+import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
 
-const exams = ref([]);
-const showForm = ref(false);
-const currentExam = ref({});
+const toast = useToast()
+
+const exams = ref([])
+const showForm = ref(false)
+const currentExam = ref({})
 
 const fetchExams = async () => {
   try {
-    const { data } = await axios.get('/api/admin/exams'); // Use the new admin route
-    exams.value = data;
+    const { data } = await client.get('/admin/exams')
+    exams.value = data
   } catch (error) {
-    console.error('Failed to fetch exams', error);
+    console.error('Failed to fetch exams', error)
   }
-};
+}
 
 const openForm = (exam = {}) => {
-  currentExam.value = { ...exam };
-  showForm.value = true;
-};
+  currentExam.value = { ...exam }
+  showForm.value = true
+}
 
 const closeForm = () => {
-  showForm.value = false;
-  currentExam.value = {};
-};
+  showForm.value = false
+  currentExam.value = {}
+}
 
 const saveExam = async () => {
   if (currentExam.value._id) {
-    // Update
-    await axios.put(`/api/exams/${currentExam.value._id}`, currentExam.value);
+    await client.put(`/exams/${currentExam.value._id}`, currentExam.value)
   } else {
-    // Create
-    await axios.post('/api/exams', currentExam.value);
+    await client.post('/exams', currentExam.value)
   }
-  closeForm();
-  fetchExams();
-};
+  closeForm()
+  fetchExams()
+}
 
 const deleteExam = async (id) => {
   if (confirm('Är du säker?')) {
-    await axios.delete(`/api/exams/${id}`);
-    fetchExams();
+    await client.delete(`/exams/${id}`)
+    fetchExams()
   }
-};
+}
 
-onMounted(fetchExams);
+onMounted(fetchExams)
 </script>

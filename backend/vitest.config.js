@@ -5,16 +5,25 @@ webcrypto.getRandomValues = webcrypto.getRandomValues.bind(webcrypto);
 
 export default defineConfig({
     test: {
+        env: {
+            NODE_ENV: "test",
+        },
         coverage: {
             enabled: true,
-            provider: 'v8'
+            provider: 'v8',
+            thresholds: {
+                statements: 78.5,
+                branches: 65,
+                functions: 83,
+                lines: 78.5,
+            },
         },
         envDir: __dirname,
         environment: 'node',
         setupFiles: ["./tests/setup.js"],
         exclude: ["node_modules/**", "dist/**"],
         include: ["tests/**/*.test.js"],
-        maxWorkers: 12,
+        maxWorkers: 2,
         silent: true
     },
 });

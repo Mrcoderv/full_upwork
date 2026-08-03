@@ -90,14 +90,21 @@ vi.mock("../../src/utils/logger.js", () => ({
 const dbOptimizer = {
   configurePool: vi.fn(),
   createIndexes: vi.fn(() => Promise.resolve()),
+  shutdown: vi.fn(async () => {
+    await mongooseMock.connection.close();
+  }),
 };
 const requestOptimizer = {
   optimizeQuery: vi.fn(),
+};
+const cacheManager = {
+  getStats: vi.fn(() => ({ size: 0, keys: [] })),
 };
 vi.mock("../../src/utils/performance.js", () => ({
   __esModule: true,
   dbOptimizer,
   requestOptimizer,
+  cacheManager,
 }));
 
 const routerMock = {};

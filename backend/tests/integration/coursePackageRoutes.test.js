@@ -125,13 +125,14 @@ describe("Course Package Routes", () => {
             });
         });
 
-        it("returns 500 for invalid ids", async () => {
+        it("returns 400 for invalid ids", async () => {
             const response = await request(app)
                 .get("/api/coursepackages/not-a-valid-id")
-                .expect(500);
+                .expect(400);
 
             expect(response.body).toEqual({
-                error: "Internal Server Error",
+                success: false,
+                error: { message: "Invalid id format" },
             });
         });
     });
@@ -161,13 +162,14 @@ describe("Course Package Routes", () => {
             });
         });
 
-        it("returns 500 for invalid ids", async () => {
+        it("returns 400 for invalid ids", async () => {
             const response = await request(app)
                 .get("/api/coursepackages/not-a-valid-id/courses")
-                .expect(500);
+                .expect(400);
 
             expect(response.body).toEqual({
-                error: "Internal Server Error",
+                success: false,
+                error: { message: "Invalid id format" },
             });
         });
     });

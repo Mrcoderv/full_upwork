@@ -171,9 +171,9 @@
 </template>
 
 <script>
-  import axios from 'axios'
-  import { api } from '@/store/store.js'
-  
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
   export default {
     props: { event: { type: Object, required: true } },
     emits: ['close', 'update'],
@@ -244,7 +244,7 @@
           } else {
             console.warn('🟠 Inga students i extendedProps – försöker hämta manuellt...')
             try {
-              const response = await axios.get('/api/calendar-events/syncable')
+              const response = await client.get('/calendar-events/syncable')
               const allEvents = response.data
               const match = allEvents.find((e) => e._id === newEvent.id || e.id === newEvent.id)
 
@@ -267,7 +267,7 @@
       const currentUser = this.$store?.state?.user
       if (currentUser && currentUser.role === 'teacher') {
         try {
-          const res = await api.get('/me/teacher', { withCredentials: true })
+          const res = await client.get('/me/teacher')
           if (res.data && res.data._id) {
             this.currentTeacherId = res.data._id.toString()
           }
@@ -284,7 +284,7 @@
         if (!this.event) return
 
         try {
-          const response = await axios.get('/api/calendar-events/syncable')
+          const response = await client.get('/calendar-events/syncable')
           const allEvents = response.data
 
           const teacherId = (
@@ -331,7 +331,7 @@
         
         this.loadingCourses[student._id] = true;
         try {
-          const studentDetails = await api.get(`/student-details/${student._id}`, { withCredentials: true });
+          const studentDetails = await client.get(`/student-details/${student._id}`);
           const education = studentDetails.data?.education || [];
           
           // Format course instances for dropdown - use courseInstance from enrollment data
@@ -424,12 +424,12 @@
           });
 
           // Update the calendar event
-          await api.put(`/calendar-events/${this.event.id}`, {
+          await client.put(`/calendar-events/${this.event.id}`, {
             extendedProps: {
               ...this.event.extendedProps,
               students: formattedStudents
             }
-          }, { withCredentials: true });
+          });
 
           // Update local event
           this.event.extendedProps.students = formattedStudents;
@@ -468,8 +468,8 @@
           const teacherId = exProps.teacherId
 
           if (eventDate && teacherId && baseStudents.length > 0) {
-            const response = await axios.get(
-              `/api/calendar-events/attendance/${encodeURIComponent(eventDate)}/${teacherId}`
+            const response = await client.get(
+              `/calendar-events/attendance/${encodeURIComponent(eventDate)}/${teacherId}`
             )
             const attendanceData = response.data
 
@@ -572,6 +572,7 @@
         this.$emit('close')
       },
       async saveAttendance(student) {
+        const toast = useToast()
         try {
           // Use the student's exam date if available, otherwise use the event date
           const examDate = student.finalExamDate || this.event.start
@@ -583,8 +584,8 @@
             examDate: examDate,
           })
 
-          await axios.post(
-            `${import.meta.env.VITE_API_URL}/api/calendar-events/mark-attendance`,
+          await client.post(
+            '/calendar-events/mark-attendance',
             {
               date: examDate,
               teacherId: this.event.extendedProps?.teacherId || this.event.teacherId,
@@ -601,19 +602,19 @@
               examTime: this.examTime,
               examMunicipality: this.examMunicipality,
               examLocation: this.examLocation,
-            },
-            { withCredentials: true }
+            }
           )
           // Refresh the event data to show the updated information
           await this.refreshEventData()
         } catch (error) {
           console.error('❌ Kunde inte spara närvaro:', error.response?.data || error.message)
-          alert('Kunde inte spara närvaro, försök igen.')
+          toast.error('Kunde inte spara närvaro, försök igen.')
         }
       },
       async submitExam() {
+        const toast = useToast()
         if (!this.examTime || !this.examMunicipality || !this.examLocation) {
-          alert('Välj tid, kommun och plats för provet.')
+          toast.error('Välj tid, kommun och plats för provet.')
           return
         }
 
@@ -632,7 +633,7 @@
           if (studentIds.length === 0) {
             this.isSaving = false
             console.error('❌ Inga student-ID:n tillgängliga för uppdatering.')
-            alert(
+            toast.error(
               'Inga studenter kopplade till detta prov kunde hittas. Försök ladda om sidan eller öppna eventet igen.'
             )
             return
@@ -649,8 +650,8 @@
             examDate: examDate,
           })
 
-          await axios.post(
-            `${import.meta.env.VITE_API_URL}/api/calendar-events/mark-attendance`,
+          await client.post(
+            '/calendar-events/mark-attendance',
             {
               date: examDate,
               teacherId,
@@ -665,19 +666,17 @@
               examTime: this.examTime,
               examMunicipality: this.examMunicipality,
               examLocation: this.examLocation,
-            },
-            { withCredentials: true }
+            }
           )
 
-          await axios.post(
-            `${import.meta.env.VITE_API_URL}/api/examtime-location`,
+          await client.post(
+            '/examtime-location',
             {
               studentIds,
               examTime: this.examTime,
               examMunicipality: this.examMunicipality,
               examLocation: this.examLocation,
-            },
-            { withCredentials: true }
+            }
           )
           this.event.extendedProps.examTime = this.examTime
           this.event.extendedProps.examMunicipality = this.examMunicipality
@@ -693,7 +692,7 @@
           }, 2000)
         } catch (error) {
           console.error('❌ Fel vid uppdatering:', error.response?.data || error.message)
-          alert('Ett fel uppstod vid sparande av provet. Försök igen.')
+          toast.error('Ett fel uppstod vid sparande av provet. Försök igen.')
         } finally {
           this.isSaving = false
         }

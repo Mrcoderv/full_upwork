@@ -141,7 +141,8 @@
 <script>
 import { ref, watch, computed } from 'vue';
 import { useStore } from 'vuex';
-import { api } from '@/store/store.js';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 import draggable from 'vuedraggable';
 
 export default {
@@ -157,6 +158,7 @@ export default {
   },
   setup(props, { emit }) {
     const store = useStore();
+    const toast = useToast();
     const sortedEducation = ref([]);
     const localStudent = ref(props.student);
     const updatingStatus = ref({});
@@ -251,7 +253,7 @@ export default {
         localStudent.value.education = updatedEducation;
 
         for (const edu of updatedEducation.filter((edu) => edu.enrollmentId)) {
-          await api.put(`/enrollments/${edu.enrollmentId}`, {
+          await client.put(`/enrollments/${edu.enrollmentId}`, {
             startDate: edu.startDate,
             endDate: edu.endDate,
           });
@@ -260,7 +262,7 @@ export default {
         console.log('Education dates updated successfully');
       } catch (err) {
         console.error('Error updating education dates:', err);
-        alert('Kunde inte uppdatera utbildningsdatum');
+        toast.error('Kunde inte uppdatera utbildningsdatum');
         // Optionally emit an event to reload student data from parent
       }
     };
@@ -384,7 +386,7 @@ export default {
       
       updatingStatus.value[element.enrollmentId] = true;
       try {
-        const response = await api.put(`/enrollments/${element.enrollmentId}/status`, {
+        const response = await client.put(`/enrollments/${element.enrollmentId}/status`, {
           status: element.status,
         });
         
@@ -413,7 +415,7 @@ export default {
         console.error('Error updating enrollment status:', err);
         console.error('Error response:', err.response?.data);
         const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Kunde inte uppdatera status';
-        alert(`Kunde inte uppdatera status: ${errorMessage}`);
+        toast.error(`Kunde inte uppdatera status: ${errorMessage}`);
         
         // Revert the change
         const index = sortedEducation.value.findIndex(e => e.enrollmentId === element.enrollmentId);
@@ -435,11 +437,11 @@ export default {
 
       removingEnrollment.value[element.enrollmentId] = true;
       try {
-        await api.delete(
+        await client.delete(
           `/students/${props.student._id}/enrollments/${element.enrollmentId}`
         );
 
-        const refreshed = await api.get(`/student-details/${props.student._id}`);
+        const refreshed = await client.get(`/student-details/${props.student._id}`);
         emit('student-updated', refreshed.data);
       } catch (err) {
         console.error('Error removing enrollment:', err);
@@ -447,7 +449,7 @@ export default {
           err.response?.data?.message ||
           err.response?.data?.error ||
           'Kunde inte ta bort kursen';
-        alert(`Kunde inte ta bort kursen: ${errorMessage}`);
+        toast.error(`Kunde inte ta bort kursen: ${errorMessage}`);
       } finally {
         removingEnrollment.value[element.enrollmentId] = false;
       }
@@ -471,10 +473,10 @@ export default {
 
       updatingTempo.value = true;
       try {
-        await api.put(`/students/${props.student._id}/studyplan-tempo`, {
+        await client.put(`/students/${props.student._id}/studyplan-tempo`, {
           tempoWeeks: nextTempo,
         });
-        const refreshed = await api.get(`/student-details/${props.student._id}`);
+        const refreshed = await client.get(`/student-details/${props.student._id}`);
         emit('student-updated', refreshed.data);
       } catch (err) {
         console.error('Error updating study plan tempo:', err);
@@ -482,7 +484,7 @@ export default {
           err.response?.data?.message ||
           err.response?.data?.error ||
           'Kunde inte uppdatera studietakten';
-        alert(`Kunde inte uppdatera studietakten: ${errorMessage}`);
+        toast.error(`Kunde inte uppdatera studietakten: ${errorMessage}`);
         selectedTempo.value = currentTempo;
       } finally {
         updatingTempo.value = false;

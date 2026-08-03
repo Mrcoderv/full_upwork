@@ -3,13 +3,14 @@ import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import { logger } from "../utils/errorHandler.js";
 import { AppError, AuthorizationError } from "../utils/errorHandler.js";
+import { AUTH_COOKIE_NAME } from "../config/cookies.js";
 
 // Security configuration
 const securityConfig = {
     // Rate limiting
     rateLimit: {
         windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-        max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+        max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // limit each IP to 1000 requests per windowMs
         message: "Too many requests from this IP, please try again later.",
         standardHeaders: true,
         legacyHeaders: false,
@@ -143,7 +144,7 @@ const isAdminUser = (req) => {
         }
 
         // Check JWT token from cookie if user is not yet attached
-        const token = req.cookies?.token;
+        const token = req.cookies?.[AUTH_COOKIE_NAME];
         if (token) {
             try {
                 if (!process.env.JWT_SECRET) {
@@ -218,8 +219,8 @@ export const authRateLimiter = createRateLimiter(
 );
 
 export const uploadRateLimiter = createRateLimiter(
-    60 * 60 * 1000, // 1 hour
-    10, // 10 uploads
+    process.env.NODE_ENV === "test" ? 60 * 1000 : 60 * 60 * 1000, // 1 hour (1 min in test)
+    process.env.NODE_ENV === "test" ? 1000 : 10, // 10 uploads (generous in test)
     "Too many file uploads, please try again later."
 );
 
@@ -281,6 +282,7 @@ export const securityHeaders = helmet({
             connectSrc: ["'self'"],
             frameSrc: ["'none'"],
             objectSrc: ["'none'"],
+            upgradeInsecureRequests: [],
         },
     },
     hsts: {
@@ -496,8 +498,18 @@ export const corsConfig = {
             "https://www.mindfullearning.se",
         ];
 
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+        // Requests without an Origin header (curl, server-to-server, mobile apps)
+        // are only trusted in non-production environments. In production every
+        // request MUST carry a recognised Origin to prevent CSRF via no-origin
+        // tricks.
+        if (!origin) {
+            if (process.env.NODE_ENV === "production") {
+                logger.warn("CORS blocked request with no Origin header");
+                return callback(new AppError("CORS: No Origin header", 403));
+            }
+            logger.debug("CORS allowing request with no Origin header (non-production)");
+            return callback(null, true);
+        }
 
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);

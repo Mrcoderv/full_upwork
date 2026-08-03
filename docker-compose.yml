@@ -4,7 +4,7 @@ services:
     container_name: mindful_mongo
     restart: unless-stopped
     ports:
-      - "0.0.0.0:27017:27017"
+      - "0.0.0.0:27018:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -23,14 +23,18 @@ services:
     restart: unless-stopped
     ports:
       - "5010:5010"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/mindfullearning
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me-please-0123456789}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      NODE_ENV: development
+      PORT: 5010
     depends_on:
       mongo:
         condition: service_healthy
     volumes:
       - backend_uploads:/app/public/uploads
       - backend_logs:/app/logs
-      - ./backend:/app/backend
-      - ./frontend:/app/frontend
 
 volumes:
   mongo_data:

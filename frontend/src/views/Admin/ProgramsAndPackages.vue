@@ -65,7 +65,7 @@
 </template>
 
 <script>
-  import axios from 'axios'
+  import client from '@/api/client.js'
 
   export default {
     data() {
@@ -76,19 +76,14 @@
     },
     async mounted() {
       try {
-        console.log('Calling URL: ', `${import.meta.env.VITE_API_URL}/api/programs`)
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/programs`)
+        const response = await client.get('/programs')
 
-        console.log('API response:', response)
         let fetchedPrograms = response.data
 
-        // No need to fetch course packages or courses again; backend already populates them
         this.programs = fetchedPrograms.filter(
           (program) =>
             Array.isArray(program.programCoursePackages) && program.programCoursePackages.length > 0
         )
-
-        console.log('Programs after filtering:', this.programs)
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {

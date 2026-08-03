@@ -363,8 +363,15 @@
 </template>
 
 <script>
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
   export default {
     name: 'AddTeacher',
+    setup() {
+      const toast = useToast()
+      return { toast }
+    },
     data() {
       return {
         isSubmitting: false,
@@ -407,8 +414,7 @@
     methods: {
       async loadTeachers() {
         try {
-          const { api } = await import('@/store/store.js')
-          const response = await api.get('/teachers', { withCredentials: true })
+          const response = await client.get('/teachers')
           this.teachers = response.data
         } catch (error) {
           console.error('Error loading teachers:', error)
@@ -466,15 +472,12 @@
         try {
           // Check if user is logged in
           if (!this.$store.getters.isLoggedIn) {
-            alert('Du är inte inloggad. Logga in igen.')
+            this.toast.error('Du är inte inloggad. Logga in igen.')
             this.isSubmitting = false
             return
           }
 
-          // Use the api instance from store which includes credentials
-          const { api } = await import('@/store/store.js')
-
-          const response = await api.post('/admin/teacher', {
+          const response = await client.post('/admin/teacher', {
             username: this.teacherForm.username,
             email: this.teacherForm.email,
             subject: this.teacherForm.permissions.join(', '),
@@ -509,7 +512,7 @@
             errorMessage = error.response.data.error
           }
 
-          alert(errorMessage)
+          this.toast.error(errorMessage)
         } finally {
           this.isSubmitting = false
         }
@@ -519,23 +522,23 @@
         const { username, email, permissions } = this.teacherForm
 
         if (!username || !username.trim()) {
-          alert('Namn är obligatoriskt.')
+          this.toast.error('Namn är obligatoriskt.')
           return false
         }
 
         if (!email || !email.trim()) {
-          alert('E-postadress är obligatorisk.')
+          this.toast.error('E-postadress är obligatorisk.')
           return false
         }
 
         if (!permissions || permissions.length === 0) {
-          alert('Minst en behörighet är obligatorisk.')
+          this.toast.error('Minst en behörighet är obligatorisk.')
           return false
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(email.trim())) {
-          alert('Ange en giltig e-postadress.')
+          this.toast.error('Ange en giltig e-postadress.')
           return false
         }
 
@@ -564,7 +567,7 @@
       async copyPassword() {
         try {
           await navigator.clipboard.writeText(this.generatedPassword)
-          alert('Lösenord kopierat!')
+          this.toast.success('Lösenord kopierat!')
         } catch (error) {
           console.error('Could not copy password:', error)
           const textArea = document.createElement('textarea')
@@ -573,7 +576,7 @@
           textArea.select()
           document.execCommand('copy')
           document.body.removeChild(textArea)
-          alert('Lösenord kopierat!')
+          this.toast.success('Lösenord kopierat!')
         }
       },
 

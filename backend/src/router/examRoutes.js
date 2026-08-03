@@ -109,7 +109,12 @@ router.post("/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), async 
 
 router.put("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), async (req, res) => {
     try {
-        const updatedExam = await Exam.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const allowedExamFields = ['title', 'course', 'courseInstance', 'date', 'time', 'location', 'teacherId', 'teacherName', 'paymentDate', 'examType', 'status', 'notes', 'maxStudents', 'type', 'courseInstanceIds'];
+        const examUpdates = {};
+        for (const field of allowedExamFields) {
+            if (req.body[field] !== undefined) examUpdates[field] = req.body[field];
+        }
+        const updatedExam = await Exam.findByIdAndUpdate(req.params.id, examUpdates, { new: true });
         if (!updatedExam) {
             return res.status(404).json({ error: "Prövning not found." });
         }
@@ -2153,7 +2158,7 @@ router.put("/update-exam/:id", isAuthenticated, async (req, res) => {
 });
 
 router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res) => {
-    logger.debug({ body: req.body }, "API /mark-attendance called");
+    logger.debug({ bodyKeys: req.body ? Object.keys(req.body) : [] }, "API /mark-attendance called");
     try {
         const { personalNumber } = req.params;
 
@@ -2282,7 +2287,7 @@ router.delete("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), 
 // PATCH: Batch update attendance for a specific event (date + teacher)
 router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res) => {
     logger.info("mark-attendance endpoint called");
-    logger.debug({ body: req.body }, "mark-attendance request body");
+    logger.debug({ bodyKeys: req.body ? Object.keys(req.body) : [] }, "mark-attendance request body");
     logger.debug({ method: req.method }, "mark-attendance request method");
     logger.debug({ url: req.url }, "mark-attendance request URL");
     logger.debug({ headers: req.headers }, "mark-attendance request headers");

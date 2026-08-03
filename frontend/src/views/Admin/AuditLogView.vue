@@ -37,7 +37,7 @@
 
 <script setup>
   import { ref, computed, watch } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
 
   const props = defineProps({
     studentId: { type: String, required: true },
@@ -57,9 +57,6 @@
     { label: 'Uploads', value: 'upload' },
     { label: 'Deletes', value: 'delete' },
   ]
-
-  const API_BASE =
-    (import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5001') + '/api/auditlogs'
 
   const totalPages = computed(() => Math.ceil(total.value / limit.value))
 
@@ -117,9 +114,8 @@
         limit: limit.value,
         ...(filterAction.value ? { action: filterAction.value } : {}),
       }
-      const res = await axios.get(`${API_BASE}/${props.studentId}`, {
+      const res = await client.get(`/auditlogs/${props.studentId}`, {
         params,
-        withCredentials: true,
       })
       logs.value = res.data.logs || []
       total.value = res.data.total || 0

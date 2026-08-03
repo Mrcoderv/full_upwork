@@ -111,7 +111,7 @@ describe("courseRoutes", () => {
                 .send({ courseName: "No Code" })
                 .expect(400);
 
-            expect(response.body).toEqual({ error: "Missing required fields" });
+            expect(response.body).toEqual({ message: "Alla fält är obligatoriska!" });
         });
 
         it("returns 500 when course creation fails", async () => {

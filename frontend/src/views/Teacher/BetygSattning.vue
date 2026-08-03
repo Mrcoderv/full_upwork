@@ -92,10 +92,12 @@
 
 <script setup>
   import { ref, onMounted, computed } from 'vue'
-  import axios from 'axios'
+  import client from '@/api/client.js'
   import { useStore } from 'vuex'
   import { useRouter } from 'vue-router'
+  import { useToast } from '@/composables/useToast.js'
 
+  const toast = useToast()
   const store = useStore()
   const router = useRouter()
   const isAdmin = computed(() => store.getters.isAdmin)
@@ -131,9 +133,7 @@
 
   const loadStudents = async () => {
     try {
-      const { data } = await axios.get(`${import.meta.env.VITE_API_URL}/api/students-to-grade`, {
-        withCredentials: true,
-      })
+      const { data } = await client.get('/students-to-grade')
 
       console.log('📦 Mottagna elever från backend:', data)
 
@@ -243,7 +243,7 @@
       console.log('✅ Transformerade elever:', studentsToGrade.value)
     } catch (err) {
       console.error('❌ Kunde inte hämta elever:', err)
-      alert('Kunde inte ladda elever.')
+      toast.error('Kunde inte ladda elever.')
     }
   }
 
@@ -287,26 +287,25 @@
         // Use the new StudentEnrollment endpoint
         console.log('💾 Saving grade for enrollment:', course.enrollmentId, course)
         
-        await axios.put(
-          `${import.meta.env.VITE_API_URL}/api/update-grade/${course.enrollmentId}`,
+        await client.put(
+          `/update-grade/${course.enrollmentId}`,
           {
             grade: course.grade,
             motivation: course.reason || '',
             comments: course.comments || '',
             nationalTestPoints: course.npScore || null,
-          },
-          { withCredentials: true }
+          }
         )
 
-        alert('✅ Betyg sparat!')
+        toast.success('Betyg sparat!')
         await loadStudents()
       } else {
         // Legacy: Use old Student.education endpoint
         const courseId = course.refId
         console.log('💾 Saving grade for legacy education entry:', courseId, course)
         
-        await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/teacher/save-grade/`,
+        await client.post(
+          '/teacher/save-grade/',
           {
             studentId,
             courseId,
@@ -315,53 +314,50 @@
             comments: course.comments,
             npScore: course.npScore,
             type: course.type,
-          },
-          { withCredentials: true }
+          }
         )
 
-        alert('✅ Betyg sparat!')
+        toast.success('Betyg sparat!')
         await loadStudents()
       }
     } catch (err) {
-      console.error('❌ Spara betyg misslyckades:', err.response?.data || err.message)
-      alert('⚠️ Kunde inte spara betyg: ' + (err.response?.data?.error || err.message))
+      console.error('❌ Spara betyg misslyckades:', err)
+      toast.error('Kunde inte spara betyg: ' + (err.message || 'Okänt fel'))
     }
   }
 
   const toggleLock = async (studentId, courseId, isLocked) => {
     if (!isAdmin.value) {
-      alert('Endast administratörer kan låsa eller låsa upp betyg.')
+      toast.error('Endast administratörer kan låsa eller låsa upp betyg.')
       return
     }
 
     try {
       if (!isLocked) {
-        await axios.post(
-          `${import.meta.env.VITE_API_URL}/api/teacher/lock-grade`,
+        await client.post(
+          '/teacher/lock-grade',
           {
             studentId,
             courseId,
-          },
-          { withCredentials: true }
+          }
         )
 
-        alert('✅ Betyg låst!')
+        toast.success('Betyg låst!')
       } else if (isAdmin.value) {
-        await axios.put(
-          `${import.meta.env.VITE_API_URL}/api/admin/unlock-grade`,
+        await client.put(
+          '/admin/unlock-grade',
           {
             studentId,
             courseId,
-          },
-          { withCredentials: true }
+          }
         )
 
-        alert('✅ Betyg upplåst!')
+        toast.success('Betyg upplåst!')
       }
       await loadStudents()
     } catch (err) {
       console.error('Låsning/upplåsning misslyckades:', err)
-      alert('⚠️ Kunde inte ändra låsstatus.')
+      toast.error('Kunde inte ändra låsstatus.')
     }
   }
 

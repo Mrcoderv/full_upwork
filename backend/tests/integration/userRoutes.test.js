@@ -62,7 +62,7 @@ describe("User Routes", () => {
                 .send({
                     name: "Existing User",
                     email: "user@example.com",
-                    password: "Secret123",
+                    password: "Secret123!",
                 })
                 .expect(409);
 
@@ -78,7 +78,7 @@ describe("User Routes", () => {
                 .send({
                     name: "New User",
                     email: "new@example.com",
-                    password: "Secret123",
+                    password: "Secret123!",
                 })
                 .expect(201);
 
@@ -89,7 +89,7 @@ describe("User Routes", () => {
             const savedUser = await User.findOne({ email: "new@example.com" });
             expect(savedUser).not.toBeNull();
             expect(savedUser?.name).toBe("New User");
-            expect(savedUser?.password).not.toBe("Secret123");
+            expect(savedUser?.password).not.toBe("Secret123!");
         });
 
         it("returns 500 when registration fails", async () => {
@@ -102,7 +102,7 @@ describe("User Routes", () => {
                 .send({
                     name: "New User",
                     email: "new@example.com",
-                    password: "Secret123",
+                    password: "Secret123!",
                 })
                 .expect(500);
 
@@ -120,7 +120,7 @@ describe("User Routes", () => {
                 .expect(400);
 
             expect(response.body).toEqual({
-                message: "Token och nytt lösenord krävs",
+                message: "Alla fält är obligatoriska!",
             });
         });
 
@@ -138,7 +138,7 @@ describe("User Routes", () => {
 
             const response = await request(app)
                 .post("/api/reset-password")
-                .send({ token, newPassword: "NewSecret123" })
+                .send({ token, newPassword: "NewSecret123!" })
                 .expect(200);
 
             expect(response.body).toEqual({
@@ -148,7 +148,7 @@ describe("User Routes", () => {
             const updatedUser = await User.findById(user._id);
             expect(updatedUser).not.toBeNull();
             const passwordMatches = await bcrypt.compare(
-                "NewSecret123",
+                "NewSecret123!",
                 updatedUser?.password || ""
             );
             expect(passwordMatches).toBe(true);
@@ -163,7 +163,7 @@ describe("User Routes", () => {
 
             const response = await request(app)
                 .post("/api/reset-password")
-                .send({ token: "expired-token", newPassword: "NewSecret123" })
+                .send({ token: "expired-token", newPassword: "NewSecret123!" })
                 .expect(401);
 
             expect(response.body).toEqual({ message: "Token har löpt ut." });
@@ -176,7 +176,7 @@ describe("User Routes", () => {
 
             const response = await request(app)
                 .post("/api/reset-password")
-                .send({ token: "bad-token", newPassword: "NewSecret123" })
+                .send({ token: "bad-token", newPassword: "NewSecret123!" })
                 .expect(500);
 
             expect(response.body).toEqual({

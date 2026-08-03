@@ -59,8 +59,10 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useStore } from 'vuex';
-import axios from 'axios';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 
+const toast = useToast();
 const store = useStore();
 const studentsWithFiles = ref([]);
 const loading = ref(true);
@@ -77,17 +79,15 @@ const handleSearchInput = () => {
   // The computed property will automatically update, but this ensures the UI refreshes
 };
 
-const API_BASE = `${import.meta.env.VITE_API_URL?.replace(/\/$/, '') || 'http://localhost:5001'}/api/uploads`;
-
 const fetchAllFiles = async () => {
   loading.value = true;
   try {
-    const { data } = await axios.get(`${API_BASE}/all/apl`, { withCredentials: true });
+    const { data } = await client.get('/uploads/all/apl');
     console.log(`✅ Fetched ${data?.length || 0} students with APL files:`, data);
     studentsWithFiles.value = data || [];
   } catch (err) {
     console.error('❌ Failed to fetch all APL files:', err);
-    alert('Kunde inte ladda filer. Kontrollera konsolen för mer information.');
+    toast.error('Kunde inte ladda filer. Kontrollera konsolen för mer information.');
     studentsWithFiles.value = [];
   } finally {
     loading.value = false;
@@ -127,9 +127,8 @@ const filteredStudents = computed(() => {
 
 const downloadFile = async (fileId, filename) => {
     try {
-        const res = await axios.get(`${API_BASE}/download/${fileId}`, {
+        const res = await client.get(`/uploads/download/${fileId}`, {
             responseType: 'blob',
-            withCredentials: true,
         });
         const blobUrl = window.URL.createObjectURL(res.data);
         const link = document.createElement('a');
@@ -141,7 +140,7 @@ const downloadFile = async (fileId, filename) => {
         window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
         console.error('Download failed:', error);
-        alert('Failed to download file.');
+        toast.error('Failed to download file.');
     }
 };
 
@@ -157,7 +156,7 @@ const cleanupOrphanedFiles = async () => {
   
   cleaningUp.value = true;
   try {
-    const { data } = await axios.delete(`${API_BASE}/cleanup/orphaned`, { withCredentials: true });
+    const { data } = await client.delete('/uploads/cleanup/orphaned');
     console.log('✅ Cleanup result:', data);
     
     const message = `Rensning klar!\n` +
@@ -165,14 +164,14 @@ const cleanupOrphanedFiles = async () => {
       `Hittade föräldralösa filer: ${data.orphanedFilesFound}\n` +
       `Raderade filer: ${data.filesDeleted}`;
     
-    alert(message);
+    toast.success(message);
     
     // Refresh the file list
     await fetchAllFiles();
   } catch (err) {
     console.error('❌ Failed to cleanup orphaned files:', err);
-    const errorMsg = err.response?.data?.error || err.message || 'Okänt fel';
-    alert(`Kunde inte rensa filer: ${errorMsg}`);
+    const errorMsg = err.message || 'Okänt fel';
+    toast.error(`Kunde inte rensa filer: ${errorMsg}`);
   } finally {
     cleaningUp.value = false;
   }

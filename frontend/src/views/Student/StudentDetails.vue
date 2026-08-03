@@ -58,7 +58,8 @@
 import { ref, onMounted, onUnmounted, computed, shallowRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
-import { api } from '@/store/store.js';
+import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
 
 import GeneralTab from './tabs/GeneralTab.vue';
 import StudyPlanTab from './tabs/StudyPlanTab.vue';
@@ -80,6 +81,7 @@ export default {
   setup() {
     const route = useRoute();
     const store = useStore();
+    const toast = useToast();
     const student = ref(null);
     const loading = ref(true);
     const error = ref(null);
@@ -269,7 +271,7 @@ export default {
       try {
         loading.value = true;
         error.value = null;
-        const response = await api.get(`/student-details/${route.params.id}`);
+        const response = await client.get(`/student-details/${route.params.id}`);
         student.value = response.data;
         if (isAdmin.value) {
           await loadChangeHistory();
@@ -284,7 +286,7 @@ export default {
 
     const loadChangeHistory = async () => {
       try {
-        const response = await api.get(`/student-details/${route.params.id}/history`);
+        const response = await client.get(`/student-details/${route.params.id}/history`);
         changeHistory.value = response.data.changeHistory;
       } catch (err) {
         console.error('Error loading change history:', err);
@@ -330,13 +332,11 @@ export default {
       if (!confirmed) return;
 
       try {
-        await api.delete(`/student/${student.value._id}`, {
-          withCredentials: true,
-        });
+        await client.delete(`/student/${student.value._id}`);
         window.history.back();
       } catch (err) {
         console.error('Error deleting student:', err);
-        alert('Kunde inte radera elev.');
+        toast.error('Kunde inte radera elev.');
       }
     };
 

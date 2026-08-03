@@ -119,6 +119,10 @@
 <script setup>
   import { ref, computed, onMounted } from 'vue'
   import { useRouter } from 'vue-router'
+  import client from '@/api/client.js'
+  import { useToast } from '@/composables/useToast.js'
+
+  const toast = useToast()
 
   const headers = ref([
     { title: 'Namn', key: 'name' },
@@ -129,8 +133,6 @@
     { title: 'Datum', key: 'examDate' },
     { title: 'Åtgärder', key: 'actions', sortable: false },
   ])
-
-  import axios from 'axios'
 
   const students = ref([])
   const loading = ref(true)
@@ -160,7 +162,7 @@
 
   const fetchUngraded = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/students/ungraded`)
+      const response = await client.get('/students/ungraded')
       students.value = response.data
     } catch (err) {
       console.error('Fel vid hämtning:', err)
@@ -199,9 +201,7 @@
       const { studentId, courseId, grade, reason, comments, npScore } = gradeData.value
 
       // Sending the grade data to the backend
-              await axios.post(`${import.meta.env.VITE_API_URL}/api/teacher/save-grade`, gradeData.value, {
-        withCredentials: true,
-      })
+      await client.post('/teacher/save-grade', gradeData.value)
 
       // ✅ Update only the affected entry in the frontend's student data
       const student = students.value.find((s) => s.studentId === studentId)
@@ -223,19 +223,18 @@
       showGradeModal.value = false // Close the grade modal after the update
     } catch (error) {
       console.error('❌ Error saving grade:', error)
-      // Optionally, add user-facing error handling, e.g., alert or UI feedback
+      toast.error('Kunde inte spara betyg.')
     }
   }
 
   const lockGrade = async (row) => {
     try {
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/teacher/lock-grade`,
+      await client.post(
+        '/teacher/lock-grade',
         {
           studentId: row.studentId,
           courseId: row.refId,
-        },
-        { withCredentials: true }
+        }
       )
 
       const student = students.value.find((s) => s.studentId === row.studentId)
@@ -261,6 +260,7 @@
       students.value = [...students.value]
     } catch (error) {
       console.error('❌ Error locking grade:', error)
+      toast.error('Kunde inte låsa betyg.')
     }
   }
 

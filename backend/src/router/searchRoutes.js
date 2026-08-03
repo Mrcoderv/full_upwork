@@ -11,6 +11,7 @@ import Teacher from "../models/Teacher.js";
 import { authenticateUser } from "../controllers/authController.js";
 import { hasRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
+import { escapeRegExp } from '../utils/escapeRegExp.js';
 
 const router = express.Router();
 
@@ -154,13 +155,13 @@ router.get("/search", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req
             const [students, users] = await Promise.all([
                 Student.find({
                     ...studentQuery,
-                    name: { $regex: q, $options: "i" },
+                    name: { $regex: escapeRegExp(q), $options: "i" },
                 }).select("_id name email"),
                 User.find({
                     $or: [
-                        { username: { $regex: q, $options: "i" } },
-                        { email: { $regex: q, $options: "i" } },
-                        { name: { $regex: q, $options: "i" } },
+                        { username: { $regex: escapeRegExp(q), $options: "i" } },
+                        { email: { $regex: escapeRegExp(q), $options: "i" } },
+                        { name: { $regex: escapeRegExp(q), $options: "i" } },
                     ],
                 }).select("_id username name email role roles"),
             ]);
@@ -240,7 +241,7 @@ router.get("/search", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req
                         courseId = enrollment.programId._id.toString();
                     }
 
-                    if (name && name.match(new RegExp(q, "i"))) {
+                    if (name && name.match(new RegExp(escapeRegExp(q), "i"))) {
                         if (!courseMap.has(courseId)) {
                             courseMap.set(courseId, {
                                 id: courseId,
@@ -268,8 +269,8 @@ router.get("/search", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req
             }
         }
 
-        // Add pagination
-        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        // Pagination: per-route cap (50) overrides the shared requestOptimizer cap (100)
+        const limit = Math.min(parseInt(req.query?.limit) || 50, 50);
         const page = req.query.page ? parseInt(req.query.page) : 1;
         const skip = (page - 1) * limit;
 
@@ -611,11 +612,12 @@ router.get("/details/:type/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES),
 
 router.put("/update-student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
-        const updatedStudent = await Student.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true }
-        );
+        const allowedStudentFields = ['name', 'email', 'personalNumber', 'phone', 'municipality', 'startDate', 'endDate', 'finalExamDate', 'teacher', 'dropout', 'additionalInfo', 'courses', 'education'];
+        const updates = {};
+        for (const field of allowedStudentFields) {
+            if (req.body[field] !== undefined) updates[field] = req.body[field];
+        }
+        const updatedStudent = await Student.findByIdAndUpdate(req.params.id, updates, { new: true });
         res.json(updatedStudent);
     } catch (error) {
         logger.error({ err: error }, "Error updating student")
@@ -625,13 +627,12 @@ router.put("/update-student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES)
 
 router.put("/update-user/:id", authenticateUser, hasRole(ALLOWED_ADMIN_ROLES), async (req, res) => {
     try {
-        const updatedUser = await User.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            {
-                new: true,
-            }
-        );
+        const allowedUserFields = ['name', 'email', 'role', 'roles', 'username'];
+        const updates = {};
+        for (const field of allowedUserFields) {
+            if (req.body[field] !== undefined) updates[field] = req.body[field];
+        }
+        const updatedUser = await User.findByIdAndUpdate(req.params.id, updates, { new: true });
         res.json(updatedUser);
     } catch (error) {
         logger.error({ err: error }, "Error updating user")

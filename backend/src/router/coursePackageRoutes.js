@@ -1,16 +1,12 @@
 import express from "express";
 import CoursePackage from "../models/CoursePackage.js";
 import logger from "../utils/logger.js";
-// Rate limiting disabled
-// import {
-//     courseDetailRateLimiter,
-//     exemptAdminsFromRateLimit,
-// } from "../middleware/security.js";
+import { validateId } from "../middleware/validation.js";
 
 const router = express.Router();
 
 /**
- * ✅ GET all course packages with courses populated
+ * GET all course packages with courses populated
  * Route: GET /api/coursepackages
  */
 router.get("/coursepackages", async (req, res) => {
@@ -26,11 +22,12 @@ router.get("/coursepackages", async (req, res) => {
 });
 
 /**
- * ✅ GET a single course package by ID (includes courses)
+ * GET a single course package by ID (includes courses)
  * Route: GET /api/coursepackages/:id
  */
 router.get(
     "/coursepackages/:id",
+    validateId(),
     async (req, res) => {
         try {
             const coursePackage = await CoursePackage.findById(req.params.id)
@@ -50,10 +47,10 @@ router.get(
 );
 
 /**
- * ✅ GET all courses belonging to a specific course package
+ * GET all courses belonging to a specific course package
  * Route: GET /api/coursepackages/:id/courses
  */
-router.get("/coursepackages/:id/courses", async (req, res) => {
+router.get("/coursepackages/:id/courses", validateId(), async (req, res) => {
     try {
         const coursePackage = await CoursePackage.findById(req.params.id)
             .populate("coursePackageCourses")

@@ -76,7 +76,8 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useStore } from 'vuex';
-import { api } from '@/store/store.js';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 import { useRoute } from 'vue-router';
 
 // Permission matrix based on requirements
@@ -177,6 +178,7 @@ export default {
   setup(props) {
     const store = useStore();
     const route = useRoute();
+    const toast = useToast();
     const isSavingPermissions = ref(false);
     const isCreatingUser = ref(false);
     const createdUserPassword = ref(null);
@@ -268,13 +270,13 @@ export default {
 
     const createUserForStudent = async () => {
       if (!props.student || !props.student._id) {
-        alert('Student information saknas.');
+        toast.error('Student information saknas.');
         return;
       }
 
       isCreatingUser.value = true;
       try {
-        const response = await api.post('/users/create-for-student', {
+        const response = await client.post('/users/create-for-student', {
           studentId: props.student._id,
           email: props.student.email,
           name: props.student.name,
@@ -287,7 +289,7 @@ export default {
         window.location.reload(); // Simple reload for now
       } catch (error) {
         console.error('Error creating user:', error);
-        alert('Kunde inte skapa användare. ' + (error.response?.data?.message || error.message));
+        toast.error('Kunde inte skapa användare. ' + error.message);
       } finally {
         isCreatingUser.value = false;
       }
@@ -295,19 +297,19 @@ export default {
 
     const savePermissions = async () => {
       if (!props.student || !props.student.user || !props.student.user._id) {
-        alert('Ingen användare hittades för denna elev. Kan inte spara behörigheter.');
+        toast.error('Ingen användare hittades för denna elev. Kan inte spara behörigheter.');
         return;
       }
       isSavingPermissions.value = true;
       try {
-        await api.put(`/users/${props.student.user._id}/permissions`, {
+        await client.put(`/users/${props.student.user._id}/permissions`, {
           permissions: customPermissions.value,
         });
         originalPermissions.value = JSON.parse(JSON.stringify(customPermissions.value));
-        alert('Behörigheterna har uppdaterats!');
+        toast.success('Behörigheterna har uppdaterats!');
       } catch (error) {
         console.error('Error saving permissions:', error);
-        alert('Kunde inte spara behörigheter.');
+        toast.error('Kunde inte spara behörigheter.');
       } finally {
         isSavingPermissions.value = false;
       }

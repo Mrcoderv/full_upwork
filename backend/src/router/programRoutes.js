@@ -1,6 +1,7 @@
 import express from "express";
 import Program from "../models/Program.js";
 import logger from "../utils/logger.js";
+import { validateId } from "../middleware/validation.js";
 
 const router = express.Router();
 
@@ -73,8 +74,8 @@ router.get("/programs", async (req, res) => {
     }
 });
 
-// ✅ Get only the programCourses for a given program ID
-router.get("/program/:programId/courses", async (req, res) => {
+// Get only the programCourses for a given program ID
+router.get("/program/:programId/courses", validateId("programId"), async (req, res) => {
     try {
         const program = await Program.findById(req.params.programId)
             .populate({

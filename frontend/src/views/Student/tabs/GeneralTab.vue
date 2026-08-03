@@ -348,7 +348,8 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
-import { api } from '@/store/store.js';
+import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 
 export default {
   name: 'GeneralTab',
@@ -366,6 +367,7 @@ export default {
   setup(props, { emit }) {
     const route = useRoute();
     const store = useStore();
+    const toast = useToast();
 
     const editMode = ref(false);
     const saving = ref(false);
@@ -429,12 +431,12 @@ export default {
     const saveChanges = async () => {
       try {
         saving.value = true;
-        const response = await api.put(`/student-details/${route.params.id}`, editData.value);
+        const response = await client.put(`/student-details/${route.params.id}`, editData.value);
         emit('student-updated', response.data.student);
         editMode.value = false;
       } catch (err) {
         console.error('Error saving changes:', err);
-        alert('Kunde inte spara ändringar');
+        toast.error('Kunde inte spara ändringar');
       } finally {
         saving.value = false;
       }
@@ -447,7 +449,7 @@ export default {
 
     const addComment = async () => {
       try {
-        const response = await api.post(`/student-details/${route.params.id}/comments`, {
+        const response = await client.post(`/student-details/${route.params.id}/comments`, {
           comment: newComment.value,
         });
         localStudent.value.commentHistory = response.data.commentHistory;
@@ -455,7 +457,7 @@ export default {
         showCommentModal.value = false;
       } catch (err) {
         console.error('Error adding comment:', err);
-        alert('Kunde inte lägga till kommentar');
+        toast.error('Kunde inte lägga till kommentar');
       }
     };
 
@@ -466,7 +468,7 @@ export default {
 
     const saveEditedComment = async () => {
       try {
-        const response = await api.put(
+        const response = await client.put(
           `/student-details/${route.params.id}/comments/${editingComment.value._id}`,
           { comment: editingComment.value.comment }
         );
@@ -479,21 +481,21 @@ export default {
         editingComment.value = null;
       } catch (err) {
         console.error('Error editing comment:', err);
-        alert('Kunde inte redigera kommentar');
+        toast.error('Kunde inte redigera kommentar');
       }
     };
 
     const deleteComment = async (commentId) => {
       if (!confirm('Är du säker på att du vill radera denna kommentar?')) return;
       try {
-        await api.delete(`/student-details/${route.params.id}/comments/${commentId}`);
+        await client.delete(`/student-details/${route.params.id}/comments/${commentId}`);
         const comment = localStudent.value.commentHistory.find((c) => c._id === commentId);
         if (comment) {
             comment.isDeleted = true;
         }
       } catch (err) {
         console.error('Error deleting comment:', err);
-        alert('Kunde inte radera kommentar');
+        toast.error('Kunde inte radera kommentar');
       }
     };
 
@@ -592,18 +594,18 @@ export default {
 
     const resetPassword = async () => {
       if (!props.student?.user?._id) {
-        alert('Ingen användare hittades för denna elev.');
+        toast.error('Ingen användare hittades för denna elev.');
         return;
       }
       
       resettingPassword.value = true;
       try {
-        const response = await api.post(`/users/${props.student.user._id}/reset-password`);
+        const response = await client.post(`/users/${props.student.user._id}/reset-password`);
         studentPassword.value = response.data.tempPassword;
-        alert('Lösenordet har återställts! Det nya lösenordet visas nedan.');
+        toast.success('Lösenordet har återställts! Det nya lösenordet visas nedan.');
       } catch (error) {
         console.error('Error resetting password:', error);
-        alert('Kunde inte återställa lösenord.');
+        toast.error('Kunde inte återställa lösenord.');
       } finally {
         resettingPassword.value = false;
       }
@@ -631,7 +633,7 @@ export default {
           }
 
           console.log('📤 Sending dropout request for student:', route.params.id);
-          const response = await api.post(`/student-details/${route.params.id}/dropout`);
+          const response = await client.post(`/student-details/${route.params.id}/dropout`);
           console.log('✅ Dropout response:', response.data);
           
           // Update local student with the response
@@ -662,7 +664,7 @@ export default {
             emit('student-updated', { dropout: true });
           }
           
-          alert('Eleven har markerats som avbrott (inaktiv).');
+          toast.success('Eleven har markerats som avbrott (inaktiv).');
         } else {
           // Unchecking (setting to false) - use update endpoint
           const confirmed = confirm(
@@ -677,15 +679,15 @@ export default {
             return;
           }
 
-          const response = await api.delete(`/student-details/${route.params.id}/dropout`);
+          const response = await client.delete(`/student-details/${route.params.id}/dropout`);
           localStudent.value.dropout = false;
           emit('student-updated', response.data.student);
-          alert('Avbrott-status har tagits bort för eleven.');
+          toast.success('Avbrott-status har tagits bort för eleven.');
         }
       } catch (error) {
         console.error('Error updating dropout status:', error);
         const action = checked ? 'markera elev som avbrott' : 'ta bort avbrott-status';
-        alert(`Kunde inte ${action}. ` + (error.response?.data?.error || ''));
+        toast.error(`Kunde inte ${action}. ` + (error.response?.data?.error || ''));
         // Revert checkbox to original state
         event.target.checked = localStudent.value.dropout;
       } finally {

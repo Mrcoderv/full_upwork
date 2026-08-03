@@ -17,6 +17,7 @@ import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import Document from "../../src/models/Document.js";
 import documentRoutes from "../../src/router/documentRoutes.js";
+import { AUTH_COOKIE_NAME } from "../../src/config/cookies.js";
 import {
     connectTestDatabase,
     disconnectTestDatabase,
@@ -42,7 +43,7 @@ describe("Document Routes", () => {
             process.env.JWT_SECRET || "test-secret"
         );
         authHeader = `Bearer ${token}`;
-        authCookie = `token=${token}`;
+        authCookie = `${AUTH_COOKIE_NAME}=${token}`;
     }, 60000);
 
     afterAll(async () => {
@@ -104,6 +105,52 @@ describe("Document Routes", () => {
         });
     });
 
+    it("rejects dangerous file extensions", async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "doc-upload-"));
+        const tempFile = path.join(tempDir, "payload.exe");
+        fs.writeFileSync(tempFile, "MZ fake executable");
+
+        const response = await request(app)
+            .post("/api/documents/upload")
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
+            .field("studentId", new mongoose.Types.ObjectId().toString())
+            .attach("file", tempFile)
+            .expect(400);
+
+        expect(response.body).toMatchObject({
+            message: "Ogiltigt filformat. Denna filtyp är inte tillåten av säkerhetsskäl.",
+        });
+
+        const remainingFiles = await Document.find({});
+        expect(remainingFiles).toHaveLength(0);
+        fs.unlinkSync(tempFile);
+        fs.rmdirSync(tempDir);
+    });
+
+    it("rejects html content-types", async () => {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "doc-upload-"));
+        const tempFile = path.join(tempDir, "payload.png");
+        fs.writeFileSync(tempFile, "<script>alert(1)</script>");
+
+        const response = await request(app)
+            .post("/api/documents/upload")
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
+            .field("studentId", new mongoose.Types.ObjectId().toString())
+            .attach("file", tempFile, {
+                filename: "payload.png",
+                contentType: "text/html",
+            })
+            .expect(400);
+
+        expect(response.body).toMatchObject({
+            message: "Ogiltigt filformat. Denna filtyp är inte tillåten av säkerhetsskäl.",
+        });
+        fs.unlinkSync(tempFile);
+        fs.rmdirSync(tempDir);
+    });
+
     it("defaults document type when not provided", async () => {
         const studentId = new mongoose.Types.ObjectId();
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "doc-upload-"));
@@ -157,6 +204,8 @@ describe("Document Routes", () => {
 
         const response = await request(app)
             .get(`/api/documents/${studentId.toString()}`)
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
             .expect(200);
 
         expect(response.body).toHaveLength(2);
@@ -194,6 +243,8 @@ describe("Document Routes", () => {
 
         const response = await request(app)
             .get(`/api/documents/${studentId.toString()}`)
+            .set("Authorization", authHeader)
+            .set("Cookie", authCookie)
             .query({ type: "REPORT", enrollmentId: enrollmentId.toString() })
             .expect(200);
 

@@ -14,6 +14,7 @@
 
 ## Repo layout
 - `backend/`: Node/Express API (ESM, Mongoose); entrypoint `backend/index.js`
+- `backend/src/config/cookies.js`: Centralized auth cookie config (`AUTH_COOKIE_NAME`, `setAuthCookie`, `clearAuthCookie`)
 - `backend/src/router/*.js` has web-facing endpoints.
 - `frontend/`: Vue 3 + Vite app (Vuetify); alias `@` -> `frontend/src`, `/api` proxied to `http://localhost:5001`
 - `docker-compose.yml`: backend + mongo for local dev & tests

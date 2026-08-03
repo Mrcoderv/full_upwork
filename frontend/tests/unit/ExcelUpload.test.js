@@ -1,49 +1,23 @@
 import { mount } from '@vue/test-utils'
-import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore } from 'vuex'
-import { api } from '../../src/store/store.js'
 import ExcelUpload from '../../src/views/Admin/ExcelUpload.vue'
 
-vi.mock('axios', () => {
-    const axiosMock = {
-        get: vi.fn((url) => {
-            if (url.includes('/api/students')) {
-                return Promise.resolve({
-                    data: [
-                        {
-                            _id: '1',
-                            name: 'John Doe',
-                            personalNumber: '123456789',
-                            email: 'john@example.com',
-                        },
-                    ],
-                });
-            }
-            if (url.includes('/api/all-programs')) {
-                return Promise.resolve({ data: [] });
-            }
-            if (url.includes('/api/all-course-packages')) {
-                return Promise.resolve({ data: [] });
-            }
-            if (url.includes('/api/all-courses')) {
-                return Promise.resolve({ data: [] });
-            }
-            return Promise.reject(new Error(`404 Not Found: ${url}`));
-        }),
-        post: vi.fn(() => Promise.resolve({ data: 'Success' })),
-        put: vi.fn(() => Promise.resolve({ data: 'Success' })),
-        delete: vi.fn(() => Promise.resolve({ data: 'Success' })),
+vi.mock('@/api/client.js', () => ({
+    default: {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
+        patch: vi.fn(),
         interceptors: {
             request: { use: vi.fn() },
-            response: { use: vi.fn() }
-        }
-    };
-    axiosMock.create = vi.fn(() => axiosMock);
-    return {
-        default: axiosMock,
-    };
-});
+            response: { use: vi.fn() },
+        },
+    },
+}))
+
+import client from '@/api/client.js'
 
 
 describe('ExcelUpload.vue', () => {
@@ -131,8 +105,8 @@ describe('ExcelUpload.vue', () => {
     });
     it('saves grade for a course', async () => {
         await wrapper.vm.saveGrade('student1', 'course1', 'A');
-        expect(axios.put).toHaveBeenCalledWith(
-            `${import.meta.env.VITE_API_URL}/api/student/student1/education/course1/grade`,
+        expect(client.put).toHaveBeenCalledWith(
+            '/student/student1/education/course1/grade',
             { grade: 'A' }
         );
     });
@@ -253,7 +227,7 @@ describe('ExcelUpload.vue', () => {
             education: [],
         };
         wrapper.vm.students = [{ _id: 'student-1', name: 'Original' }];
-        axios.put.mockResolvedValue({ data: { _id: 'student-1', name: 'Updated' } });
+        client.put.mockResolvedValue({ data: { _id: 'student-1', name: 'Updated' } });
         const showSuccessSpy = vi.spyOn(wrapper.vm, 'showSuccess').mockImplementation(() => { });
 
         await wrapper.vm.saveEditedStudent();
@@ -270,7 +244,7 @@ describe('ExcelUpload.vue', () => {
             education: [],
         };
         const showErrorSpy = vi.spyOn(wrapper.vm, 'showError').mockImplementation(() => { });
-        axios.put.mockRejectedValue(new Error('boom'));
+        client.put.mockRejectedValue(new Error('boom'));
 
         await wrapper.vm.saveEditedStudent();
 
@@ -345,7 +319,7 @@ describe('ExcelUpload.vue', () => {
     it('shows detailed error when uploadFile fails with reasons', async () => {
         const showErrorSpy = vi.spyOn(wrapper.vm, 'showError').mockImplementation(() => { });
         wrapper.vm.file = { name: 'students.xlsx' };
-        api.post.mockRejectedValue({
+        client.post.mockRejectedValue({
             response: {
                 status: 422,
                 data: { reasons: [{ student: '123', message: 'Missing' }] },
@@ -361,7 +335,7 @@ describe('ExcelUpload.vue', () => {
 
     it('shows error when fetchStudents fails', async () => {
         const showErrorSpy = vi.spyOn(wrapper.vm, 'showError').mockImplementation(() => { });
-        axios.get.mockRejectedValueOnce({ response: { data: 'boom' } });
+        client.get.mockRejectedValueOnce({ response: { data: 'boom' } });
 
         await wrapper.vm.fetchStudents();
 
@@ -371,7 +345,7 @@ describe('ExcelUpload.vue', () => {
 
     it('logs when loading education options fails', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
-        axios.get.mockRejectedValueOnce(new Error('boom'));
+        client.get.mockRejectedValueOnce(new Error('boom'));
 
         await wrapper.vm.fetchEducationOptions();
 
@@ -383,7 +357,7 @@ describe('ExcelUpload.vue', () => {
         expect(wrapper.vm.formatDate('2024-01-01T05:00:00')).toBe('2024-01-01');
         expect(wrapper.vm.formatDate('Simple string')).toBe('Simple string');
         expect(wrapper.vm.formatDate('')).toBe('');
-        expect(wrapper.vm.formatDateForInput('2024-01-02T12:00:00')).toBe('2024-01-02'); // TODO: TZ from host
+        expect(wrapper.vm.formatDateForInput('2024-01-02T12:00:00')).toBe('2024-01-02');
         expect(wrapper.vm.formatDateForInput('invalid')).toBe('');
         expect(wrapper.vm.formatDateTimeForInput('2024-01-02T10:15:00')).toMatch(/2024-01-02T10:15/);
         expect(wrapper.vm.formatDateTimeForInput('invalid')).toBe('');
@@ -411,12 +385,12 @@ describe('ExcelUpload.vue', () => {
         vi.useFakeTimers();
         wrapper.vm.file = { name: 'students.xlsx' };
         const fetchSpy = vi.spyOn(wrapper.vm, 'fetchStudents').mockImplementation(() => Promise.resolve());
-        api.post.mockResolvedValue({ data: 'ok' });
+        client.post.mockResolvedValue({ data: 'ok' });
 
         await wrapper.vm.uploadFile();
 
-        expect(api.post).toHaveBeenCalledWith(
-            'uploads/upload/xlsxupload',
+        expect(client.post).toHaveBeenCalledWith(
+            '/uploads/upload/xlsxupload',
             expect.any(Object),
             expect.objectContaining({
                 headers: {
@@ -437,7 +411,7 @@ describe('ExcelUpload.vue', () => {
     it('shows warning when uploadFile returns 409', async () => {
         const showWarningSpy = vi.spyOn(wrapper.vm, 'showWarning').mockImplementation(() => { });
         wrapper.vm.file = { name: 'students.xlsx' };
-        api.post.mockRejectedValue({ response: { status: 409 } });
+        client.post.mockRejectedValue({ response: { status: 409 } });
 
         await wrapper.vm.uploadFile();
 
@@ -450,7 +424,7 @@ describe('ExcelUpload.vue', () => {
     it('shows login error when uploadFile returns 401', async () => {
         const showErrorSpy = vi.spyOn(wrapper.vm, 'showError').mockImplementation(() => { });
         wrapper.vm.file = { name: 'students.xlsx' };
-        api.post.mockRejectedValue({ response: { status: 401 } });
+        client.post.mockRejectedValue({ response: { status: 401 } });
 
         await wrapper.vm.uploadFile();
 
@@ -461,7 +435,7 @@ describe('ExcelUpload.vue', () => {
     it('shows generic upload error for other failures', async () => {
         const showErrorSpy = vi.spyOn(wrapper.vm, 'showError').mockImplementation(() => { });
         wrapper.vm.file = { name: 'students.xlsx' };
-        api.post.mockRejectedValue({ response: { status: 500 } });
+        client.post.mockRejectedValue({ response: { status: 500 } });
 
         await wrapper.vm.uploadFile();
 
@@ -471,7 +445,7 @@ describe('ExcelUpload.vue', () => {
 
     it('toggles dropout status when updateDropOut succeeds', async () => {
         wrapper.vm.students = [{ _id: 'drop', dropout: false }];
-        axios.put.mockResolvedValue({ data: { _id: 'drop', dropout: true } });
+        client.put.mockResolvedValue({ data: { _id: 'drop', dropout: true } });
 
         await wrapper.vm.updateDropOut(wrapper.vm.students[0]);
 
@@ -480,7 +454,7 @@ describe('ExcelUpload.vue', () => {
 
     it('deletes a student when deleteStudent succeeds', async () => {
         wrapper.vm.students = [{ _id: 'keep' }, { _id: 'remove' }];
-        axios.delete.mockResolvedValue({});
+        client.delete.mockResolvedValue({});
 
         await wrapper.vm.deleteStudent('remove');
 
@@ -490,7 +464,7 @@ describe('ExcelUpload.vue', () => {
 
     it('deletes all students when deleteAllStudents succeeds', async () => {
         wrapper.vm.students = [{ _id: 'a' }];
-        axios.delete.mockResolvedValue({});
+        client.delete.mockResolvedValue({});
 
         await wrapper.vm.deleteAllStudents();
 
@@ -498,7 +472,7 @@ describe('ExcelUpload.vue', () => {
     });
 
     it('fetches students with normalized defaults', async () => {
-        axios.get.mockResolvedValueOnce({
+        client.get.mockResolvedValueOnce({
             data: [{ _id: 'norm', municipality: null, education: null, courses: null }],
         });
 
@@ -518,7 +492,7 @@ describe('ExcelUpload.vue', () => {
         const packages = [{ _id: 'pkg1', coursePackageName: 'Pack' }];
         const courses = [{ _id: 'c1', courseName: 'Course', courseCode: 'C01' }];
 
-        axios.get
+        client.get
             .mockResolvedValueOnce({ data: programs })
             .mockResolvedValueOnce({ data: packages })
             .mockResolvedValueOnce({ data: courses });

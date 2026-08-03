@@ -1,13 +1,8 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import dotenv from "dotenv";
 import logger from "../utils/logger.js";
-dotenv.config({ path: ".env.development" });
-
-if (!process.env.JWT_SECRET) {
-    process.env.JWT_SECRET = "test-secret";
-}
+import { AUTH_COOKIE_NAME, setAuthCookie, clearAuthCookie } from "../config/cookies.js";
 
 /**
  * Authentication Controller
@@ -95,12 +90,7 @@ export const login = async (req, res) => {
             expiresIn: "7d",
         });
 
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setAuthCookie(res, token);
 
         // Ensure role is always set from roles array (for backward compatibility)
         const primaryRole = user.roles && user.roles.length > 0 ? user.roles[0] : (user.role || 'guest');
@@ -133,7 +123,7 @@ export const authenticateUser = (req, res, next) => {
         req.userId = req.userId || req.user.userId || req.user._id || req.user.id;
         return next();
     }
-    let token = req.cookies?.token;
+    let token = req.cookies?.[AUTH_COOKIE_NAME];
 
     if (!token) {
         const authHeader = req.headers.authorization;
@@ -181,11 +171,7 @@ export const authenticateUser = (req, res, next) => {
  * @returns {Promise<void>}
  */
 export const logout = async (req, res) => {
-    res.clearCookie("token", {
-        httpOnly: true,
-        sameSite: "strict",
-        secure: process.env.NODE_ENV === "production",
-    });
+    clearAuthCookie(res);
 
     res.json({ message: "Logout successful" });
 };
@@ -201,7 +187,7 @@ export const getSession = async (req, res) => {
     logger.info("Incoming session request");
     logger.debug({ cookies: req.cookies }, "Cookies received");
 
-    const token = req.cookies.token || req.cookies.authToken;
+    const token = req.cookies[AUTH_COOKIE_NAME] || req.cookies.authToken;
 
     if (!token) {
         logger.warn("No valid token found");
