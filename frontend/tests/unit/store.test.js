@@ -8,7 +8,7 @@ const resetApiMocks = () => {
     api.delete = vi.fn()
 }
 
-const defaultState = () => ({ user: null, tasks: [] })
+const defaultState = () => ({ user: null, tasks: [], requiresPasswordChange: false })
 
 describe('Vuex Store', () => {
     beforeEach(() => {
@@ -19,6 +19,7 @@ describe('Vuex Store', () => {
     it('should have a default state', () => {
         expect(store.state.user).toBeNull()
         expect(store.state.tasks).toEqual([])
+        expect(store.state.requiresPasswordChange).toBe(false)
     })
 
     describe('getters', () => {
@@ -152,8 +153,8 @@ describe('Vuex Store', () => {
         it('login success', async () => {
             const credentials = { email: 'test@test.com', password: 'password' }
             const user = { name: 'Test User' }
-            api.post.mockResolvedValue({})
-            api.get.mockResolvedValue({ data: { user } })
+            api.post.mockResolvedValue({ data: { requiresPasswordChange: false } })
+            api.get.mockResolvedValue({ data: { user, requiresPasswordChange: false } })
 
             const result = await store.dispatch('login', credentials)
 
@@ -163,7 +164,18 @@ describe('Vuex Store', () => {
             })
             expect(api.get).toHaveBeenCalledWith('/auth/session')
             expect(store.state.user).toEqual(user)
-            expect(result).toEqual({ success: true, message: 'Login successful' })
+            expect(result).toEqual({ success: true, message: 'Login successful', requiresPasswordChange: false })
+        })
+
+        it('login records requiresPasswordChange from the response', async () => {
+            const credentials = { email: 'admin@test.com', password: 'mindful' }
+            api.post.mockResolvedValue({ data: { requiresPasswordChange: true } })
+            api.get.mockResolvedValue({ data: { user: { name: 'Admin' }, requiresPasswordChange: true } })
+
+            const result = await store.dispatch('login', credentials)
+
+            expect(store.state.requiresPasswordChange).toBe(true)
+            expect(result.requiresPasswordChange).toBe(true)
         })
 
         it('login failure', async () => {
@@ -178,12 +190,43 @@ describe('Vuex Store', () => {
 
         it('fetchUser success', async () => {
             const user = { name: 'Test User' }
-            api.get.mockResolvedValue({ data: { user } })
+            api.get.mockResolvedValue({ data: { user, requiresPasswordChange: true } })
 
             await store.dispatch('fetchUser')
 
             expect(api.get).toHaveBeenCalledWith('/auth/session')
             expect(store.state.user).toEqual(user)
+            expect(store.state.requiresPasswordChange).toBe(true)
+        })
+
+        it('changePassword success clears the flag', async () => {
+            store.replaceState({ user: { name: 'Admin' }, tasks: [], requiresPasswordChange: true })
+            api.put.mockResolvedValue({ data: { message: 'Lösenordet har ändrats.', requiresPasswordChange: false } })
+
+            const result = await store.dispatch('changePassword', {
+                currentPassword: 'mindful',
+                newPassword: 'NewPassword123!',
+            })
+
+            expect(api.put).toHaveBeenCalledWith('/auth/change-password', {
+                currentPassword: 'mindful',
+                newPassword: 'NewPassword123!',
+            })
+            expect(result.success).toBe(true)
+            expect(store.state.requiresPasswordChange).toBe(false)
+        })
+
+        it('changePassword failure keeps the flag', async () => {
+            store.replaceState({ user: { name: 'Admin' }, tasks: [], requiresPasswordChange: true })
+            api.put.mockRejectedValue({ message: 'Nuvarande lösenord är felaktigt.' })
+
+            const result = await store.dispatch('changePassword', {
+                currentPassword: 'wrong',
+                newPassword: 'NewPassword123!',
+            })
+
+            expect(result.success).toBe(false)
+            expect(store.state.requiresPasswordChange).toBe(true)
         })
 
         it('fetchUser failure logs out', async () => {

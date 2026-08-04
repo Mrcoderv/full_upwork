@@ -11,14 +11,18 @@ import {
 import request from "supertest";
 import mongoose from "mongoose";
 import express from "express";
+import cookieParser from "cookie-parser";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../../src/models/User.js";
 import authRoutes, { requireUser } from "../../src/router/authRoutes.js";
+import { authRateLimiter } from "../../src/middleware/security.js";
 import {
     connectTestDatabase,
     disconnectTestDatabase,
 } from "../helpers/mongoTest.js";
+
+const TEST_IP = "127.0.0.1";
 
 let app;
 
@@ -28,6 +32,7 @@ describe("Auth Routes", () => {
         await connectTestDatabase();
         app = express();
         app.use(express.json());
+        app.use(cookieParser());
         app.use("/api", authRoutes);
     }, 60000);
 
@@ -41,6 +46,7 @@ describe("Auth Routes", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+        authRateLimiter.resetKey(TEST_IP);
     });
 
     describe("POST /api/auth/register", () => {
@@ -172,6 +178,107 @@ describe("Auth Routes", () => {
             expect(req.user).toMatchObject(payload);
             expect(next).toHaveBeenCalled();
             expect(res.status).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("mustChangePassword enforced flow", () => {
+        const login = (email, password) =>
+            request(app).post("/api/auth/login").send({ email, password });
+
+        it("login returns requiresPasswordChange and change-password clears the flag", async () => {
+            await User.create({
+                username: "Bootstrap Admin",
+                email: "bootstrap@example.com",
+                password: await bcrypt.hash("mindful", 10),
+                roles: ["systemadmin"],
+                mustChangePassword: true,
+            });
+
+            const loginRes = await login(
+                "bootstrap@example.com",
+                "mindful"
+            ).expect(200);
+
+            expect(loginRes.body.requiresPasswordChange).toBe(true);
+
+            const cookies = loginRes.headers["set-cookie"];
+
+            const changeRes = await request(app)
+                .put("/api/auth/change-password")
+                .set("Cookie", cookies)
+                .send({
+                    currentPassword: "mindful",
+                    newPassword: "NewPassword123!",
+                })
+                .expect(200);
+
+            expect(changeRes.body.requiresPasswordChange).toBe(false);
+
+            const saved = await User.findOne({ email: "bootstrap@example.com" });
+            expect(saved.mustChangePassword).toBe(false);
+            expect(
+                await bcrypt.compare("NewPassword123!", saved.password)
+            ).toBe(true);
+
+            const secondLogin = await login(
+                "bootstrap@example.com",
+                "NewPassword123!"
+            ).expect(200);
+            expect(secondLogin.body.requiresPasswordChange).toBe(false);
+        });
+
+        it("change-password rejects a wrong current password", async () => {
+            const user = await User.create({
+                username: "Flag Admin",
+                email: "flag@example.com",
+                password: await bcrypt.hash("mindful", 10),
+                roles: ["systemadmin"],
+                mustChangePassword: true,
+            });
+            const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+
+            const res = await request(app)
+                .put("/api/auth/change-password")
+                .set("Cookie", [`token=${token}`])
+                .send({
+                    currentPassword: "wrong-password",
+                    newPassword: "NewPassword123!",
+                })
+                .expect(401);
+
+            expect(res.body.error).toBe("Nuvarande lösenord är felaktigt.");
+            const saved = await User.findById(user._id);
+            expect(saved.mustChangePassword).toBe(true);
+        });
+
+        it("change-password requires authentication", async () => {
+            await request(app)
+                .put("/api/auth/change-password")
+                .send({
+                    currentPassword: "mindful",
+                    newPassword: "NewPassword123!",
+                })
+                .expect(401);
+        });
+
+        it("rejects a weak new password", async () => {
+            const user = await User.create({
+                username: "Weak Admin",
+                email: "weak@example.com",
+                password: await bcrypt.hash("mindful", 10),
+                roles: ["systemadmin"],
+                mustChangePassword: true,
+            });
+            const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+
+            await request(app)
+                .put("/api/auth/change-password")
+                .set("Cookie", [`token=${token}`])
+                .send({
+                    currentPassword: "mindful",
+                    newPassword: "short",
+                })
+                .expect(400);
         });
     });
 });

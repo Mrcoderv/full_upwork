@@ -105,7 +105,7 @@ import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
 import router from "./src/router/router.js";
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5010;
 
 // Middleware setup
 app.use(cookieParser());
@@ -302,7 +302,10 @@ process.on("unhandledRejection", (err) => {
 // Start the server unless running tests
 if (process.env.NODE_ENV !== "test") {
     server = app.listen(PORT, () => {
-        logger.info({ port: PORT }, "Server started");
+        logger.info(
+            { port: PORT },
+            `API listening on http://localhost:${PORT} (resolved PORT=${PORT})`
+        );
         logger.info("Security features active: rate limiting, CORS, helmet, input validation");
         logger.info("Performance features active: caching, lazy loading, query optimization");
         logger.info("Monitoring active: error tracking, performance metrics, health checks");

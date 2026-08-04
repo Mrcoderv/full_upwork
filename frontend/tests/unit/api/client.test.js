@@ -26,6 +26,23 @@ describe('normalizeError', () => {
     expect(n.message).toContain('internetanslutning')
   })
 
+  it('logs the exact failed URL in dev mode for NETWORK errors', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const err = makeAxiosError({ code: 'ERR_NETWORK' })
+    err.config = {
+      baseURL: 'http://localhost:5010/api',
+      url: '/auth/login',
+    }
+
+    const n = normalizeError(err)
+
+    expect(n.code).toBe('NETWORK')
+    expect(consoleErrorSpy).toHaveBeenCalled()
+    const logged = consoleErrorSpy.mock.calls[0][0]
+    expect(logged).toContain('http://localhost:5010/api/auth/login')
+    consoleErrorSpy.mockRestore()
+  })
+
   it('returns CANCELLED for ERR_CANCELED', () => {
     const err = makeAxiosError({ code: 'ERR_CANCELED' })
     const n = normalizeError(err)

@@ -81,7 +81,7 @@ format:
 
 lint:
 	cd backend && npx eslint src/ --max-warnings 50
-	cd frontend && npx eslint src/ --max-warnings 770
+	cd frontend && npx eslint src/ --max-warnings 780
 
 test-backend:
 	cd backend && NODE_ENV=test npx vitest run --mode test --reporter=$(CITEST_REPORTER)

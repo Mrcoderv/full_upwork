@@ -17,8 +17,18 @@ BACKEND_PORT=5010
 FRONTEND_PORT=5173
 MONGO_PORT=27017
 
-# ── 0. Generate JWT_SECRET if placeholder ───────────
+# Derive the backend port from backend/.env.development so launch.sh and the
+# backend always agree, even if a developer overrides PORT locally.
 ENV_FILE="$ROOT/backend/.env.development"
+if [ -f "$ENV_FILE" ]; then
+  ENV_PORT="$(grep -E '^PORT=[0-9]+' "$ENV_FILE" | tail -n 1 | cut -d= -f2 2>/dev/null || true)"
+  if [ -n "$ENV_PORT" ]; then
+    BACKEND_PORT="$ENV_PORT"
+    log "Using PORT=$BACKEND_PORT from backend/.env.development"
+  fi
+fi
+
+# ── 0. Generate JWT_SECRET if placeholder ───────────
 if [ -f "$ENV_FILE" ]; then
   if grep -q "REPLACE_WITH_GENERATED_SECRET" "$ENV_FILE"; then
     SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
@@ -28,20 +38,18 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # ── 1. Check / start MongoDB ────────────────────────
-if command -v mongod &>/dev/null; then
-  if pgrep -x mongod &>/dev/null; then
-    log "MongoDB already running on port $MONGO_PORT"
-  else
-    warn "Starting MongoDB..."
-    mongod --dbpath /data/db --bind_ip_all --fork --logpath /tmp/mongod.log 2>/dev/null || \
-    mongod --dbpath "$HOME/mongo-data" --bind_ip_all --fork --logpath /tmp/mongod.log 2>/dev/null || \
-    mongod --bind_ip_all --fork --logpath /tmp/mongod.log 2>/dev/null || {
-      err "Failed to start MongoDB. Install mongod or start it manually."
-      exit 1
-    }
-    sleep 2
-    log "MongoDB started on port $MONGO_PORT"
-  fi
+if pgrep -x mongod &>/dev/null || (echo > /dev/tcp/127.0.0.1/27017) 2>/dev/null; then
+  log "MongoDB already running on port $MONGO_PORT"
+elif command -v mongod &>/dev/null; then
+  warn "Starting MongoDB..."
+  mongod --dbpath /data/db --bind_ip_all --fork --logpath /tmp/mongod.log 2>/dev/null || \
+  mongod --dbpath "$HOME/mongo-data" --bind_ip_all --fork --logpath /tmp/mongod.log 2>/dev/null || \
+  mongod --bind_ip_all --fork --logpath /tmp/mongod.log 2>/dev/null || {
+    err "Failed to start MongoDB. Install mongod or start it manually."
+    exit 1
+  }
+  sleep 2
+  log "MongoDB started on port $MONGO_PORT"
 elif docker info &>/dev/null 2>&1; then
   if docker ps --format '{{.Names}}' | grep -q mindful_mongo; then
     log "MongoDB container already running"
@@ -53,7 +61,7 @@ elif docker info &>/dev/null 2>&1; then
   fi
   MONGO_PORT=27018
 else
-  err "No mongod binary or Docker found. Install one and retry."
+  err "No running MongoDB, mongod binary, or Docker found. Start MongoDB manually and retry."
   exit 1
 fi
 

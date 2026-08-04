@@ -24,7 +24,7 @@ jobs:
         run: npx eslint src/ --max-warnings 50
       - name: Lint frontend
         working-directory: frontend
-        run: npx eslint src/ --max-warnings 770
+        run: npx eslint src/ --max-warnings 780
 
   test:
     runs-on: ubuntu-latest

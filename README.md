@@ -13,27 +13,51 @@ Node/Express + Vue 3 school management system.
 | MongoDB | 6.0+ | `mongod --version` or use Docker |
 | Volta (optional) | any | `volta -v` — pins Node/pnpm automatically |
 
-### 1. Start MongoDB
+You do **not** need Docker to run the app locally. `launch.sh` detects whatever
+MongoDB is already available (see below).
 
-**Option A — Docker (recommended):**
+### Option A — One-command launcher: `./launch.sh` (recommended)
 
 ```sh
-make dev
+./launch.sh
 ```
 
-This starts MongoDB on `localhost:27017` via Docker Compose. Press `Ctrl+C` to stop.
+Works **with or without Docker**:
 
-**Option B — Local MongoDB:**
+- **No Docker** — uses a MongoDB already running on `127.0.0.1:27017`. If none is
+  running but the `mongod` binary is on your PATH, it starts one automatically.
+- **Docker** — only if no MongoDB is reachable and no `mongod` binary exists, it
+  falls back to starting the `mongo` service from `docker-compose.yml`.
 
-Ensure `mongod` is running on port 27017.
+`launch.sh` also copies `backend/.env.example` → `backend/.env.development` if
+missing and auto-generates `JWT_SECRET` when the placeholder is still present.
 
-### 2. Install dependencies
+When it finishes:
+
+| Service   | URL                  | Logs            |
+|-----------|----------------------|-----------------|
+| Frontend  | http://localhost:5173 | `frontend.log`  |
+| Backend   | http://localhost:5010 | `backend.log`   |
+
+Press `Ctrl+C` to stop everything.
+
+### Option B — Manual, no Docker
+
+#### 1. Start MongoDB
+
+```sh
+mongod --bind_ip_all
+```
+
+Keep it running in its own terminal (default port 27017).
+
+#### 2. Install dependencies
 
 ```sh
 pnpm install
 ```
 
-### 3. Configure environment
+#### 3. Configure environment
 
 ```sh
 cp backend/.env.example backend/.env.development
@@ -46,7 +70,7 @@ Edit `backend/.env.development` — the only _required_ values are:
 | `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/mindfullearning` |
 | `JWT_SECRET` | Secret for signing JWTs (≥ 32 chars) | `openssl rand -base64 48` |
 
-### 4. Start the app
+#### 4. Start the app
 
 ```sh
 # Backend (port 5010)
@@ -56,7 +80,25 @@ cd backend && pnpm dev
 cd frontend && pnpm dev
 ```
 
-Open http://localhost:5173.
+### Option C — Docker (full stack)
+
+```sh
+make dev
+```
+
+Starts the backend and MongoDB containers. Open http://localhost:5173.
+
+### Create the initial admin
+
+A fresh database has no admin. Create one with:
+
+```sh
+SYSTEM_ADMIN_PASSWORD="<strong-password>" node backend/scripts/createSystemAdmin.js
+```
+
+Omitting `SYSTEM_ADMIN_PASSWORD` creates the account with the known default
+password `mindful` and forces a password change on first login (see
+[Security](#security)).
 
 ## Health checks
 
@@ -113,6 +155,12 @@ The backend enforces security hardening at startup and runtime:
 - **Input validation**: `validateId()` and `validate()` middleware on public routes
 - **Mass assignment protection**: Allowlisted fields on user/student/exam updates
 - **Error sanitization**: Production 500s return generic messages; internal details logged only
+- **Default admin password rotation**: `backend/scripts/createSystemAdmin.js` creates the
+  initial `systemadmin` account with the known default password (`mindful`) and sets
+  `mustChangePassword: true`. The first login succeeds but the frontend redirects to
+  `/change-password` and blocks the rest of the app until the password is changed. To
+  skip the forced change, pass your own password: `SYSTEM_ADMIN_PASSWORD="<strong-password>"
+  node backend/scripts/createSystemAdmin.js`
 
 See `SECURITY-HARDENING.md` for the full report.
 
@@ -147,6 +195,18 @@ cp backend/.env.example backend/.env.development
 ### `ECONNREFUSED` on startup
 
 MongoDB is not running. Start it with `make dev` or ensure `mongod` is up.
+
+### Login fails with "Kunde inte ansluta till servern" and devtools shows a CORS error with status (null)
+
+This usually means the frontend and backend are pointed at different ports,
+not a real CORS problem. Check that `VITE_API_URL` matches the backend's
+actual `PORT`. The backend logs the port it actually listens on at startup
+(`API listening on http://localhost:PORT`), and the frontend logs the API URL
+it is about to call on dev startup (`[API] Connecting to: ...`). When the two
+disagree, update the wrong side (canonical local dev port: `5010`). In dev the
+Vite proxy forwards `/api` to `http://localhost:5010`, so an empty
+`VITE_API_URL` in `frontend/.env.development` is correct as long as the backend
+runs on `5010`.
 
 ### Port 5010 already in use
 

@@ -21,7 +21,7 @@ Optional:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `5001` | Backend listen port |
+| `PORT` | `5010` | Backend listen port |
 | `RATE_LIMIT_MAX_REQUESTS` | `100` | Requests per 15-min window |
 | `MAX_FILE_SIZE` | `10mb` | Upload size limit |
 
@@ -94,3 +94,30 @@ VITE_API_URL="" pnpm build   # empty = relative /api paths (proxied)
 ```
 
 The frontend expects `/api` to be proxied to the backend. Configure this in your reverse proxy (nginx, Caddy, etc.).
+
+## Troubleshooting
+
+### Login fails with "Kunde inte ansluta till servern" and devtools shows a CORS error with status (null)
+
+This usually means the frontend and backend are pointed at different ports,
+not a real CORS problem. Check that `VITE_API_URL` matches the backend's
+actual `PORT`. The backend logs the port it actually listens on at startup
+(`API listening on http://localhost:PORT`), and the frontend logs the API URL
+it is about to call on dev startup (`[API] Connecting to: ...`). When the two
+disagree, update the wrong side (canonical local dev port: `5010`). In dev the
+Vite proxy forwards `/api` to `http://localhost:5010`, so an empty
+`VITE_API_URL` in `frontend/.env.development` is correct as long as the backend
+runs on `5010`.
+
+### Initial System Admin is forced to change the default password
+
+`backend/scripts/createSystemAdmin.js` creates the initial `systemadmin`
+account with the known default password (`mindful`) and sets
+`mustChangePassword: true` on the account. The first login succeeds but the
+frontend redirects to `/change-password` and blocks the rest of the app until
+the password is changed. To avoid the forced change entirely, supply your own
+password when running the script:
+
+```sh
+SYSTEM_ADMIN_PASSWORD="<strong-password>" node backend/scripts/createSystemAdmin.js
+```

@@ -4,6 +4,7 @@ import store from '@/store/store.js'
 // Public Views
 import Home from '@/views/Home.vue'
 import LoginPage from '@/views/Auth/Login.vue'
+import ChangePasswordPage from '@/views/Auth/ChangePassword.vue'
 import ResetPassword from '@/views/Auth/ResetPassword.vue'
 import Register from '@/views/Auth/Register.vue'
 
@@ -59,6 +60,12 @@ const routes = [
     path: '/reset-password',
     component: ResetPassword,
     meta: { title: 'Reset Password - Mindful Learning' },
+  },
+  {
+    path: '/change-password',
+    name: 'ChangePassword',
+    component: ChangePasswordPage,
+    meta: { title: 'Byt lösenord - Mindful Learning', requiresAuth: true },
   },
 
   // Admin Dashboard: Move CoursesStats to top
@@ -326,6 +333,12 @@ router.beforeEach((to, from, next) => {
     next('/login') // Redirect unauthenticated users
   } else if (to.meta.role && !hasPermission(to.meta.role)) {
     next('/unauthorized') // Redirect if role is insufficient
+  } else if (
+    isAuthenticated &&
+    store.getters.requiresPasswordChange &&
+    to.path !== '/change-password'
+  ) {
+    next('/change-password') // Force password change before using the app
   } else {
     next() // Allow access
   }

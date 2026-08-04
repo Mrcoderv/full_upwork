@@ -83,7 +83,7 @@ Create `.env.development` for development or `.env.production` for production:
 ```env
 # Application Configuration
 NODE_ENV=development
-PORT=5001
+PORT=5010
 
 # Database Configuration
 MONGODB_URI=mongodb://localhost:27017/mindfullearning

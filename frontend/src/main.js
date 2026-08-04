@@ -16,6 +16,15 @@ import * as directives from 'vuetify/directives'
 
 document.documentElement.lang = 'sv'
 
+if (import.meta.env.DEV) {
+  const baseURL = client.defaults.baseURL
+  const proxyTarget = typeof __DEV_API_PROXY_TARGET__ !== 'undefined' ? __DEV_API_PROXY_TARGET__ : ''
+  const target = baseURL && !baseURL.startsWith('http')
+    ? `${window.location.origin}${baseURL} (Vite proxy → ${proxyTarget})`
+    : baseURL
+  console.info(`[API] Connecting to: ${target}`)
+}
+
 const vuetify = createVuetify({
   components,
   directives,

@@ -21,10 +21,12 @@ const store = createStore({
   state: {
     user: null,
     tasks: [],
+    requiresPasswordChange: false,
   },
 
   getters: {
     isLoggedIn: (state) => !!state.user,
+    requiresPasswordChange: (state) => !!state.requiresPasswordChange,
     userRole: (state) => {
       // Support both role (singular) and roles (array) for backward compatibility
       if (state.user?.role) return state.user.role;
@@ -100,9 +102,13 @@ const store = createStore({
       console.log('🔹 Vuex: Logging out user')
       state.user = null
       state.tasks = [] // Clear tasks on logout
+      state.requiresPasswordChange = false
     },
     SET_TASKS(state, tasks) {
       state.tasks = tasks
+    },
+    SET_REQUIRES_PASSWORD_CHANGE(state, value) {
+      state.requiresPasswordChange = !!value
     },
     ADD_TASK(state, task) {
       state.tasks.push(task)
@@ -120,16 +126,22 @@ const store = createStore({
   },
 
   actions: {
-    async login({ dispatch }, credentials) {
+    async login({ dispatch, commit }, credentials) {
       try {
-        await api.post('/auth/login', {
+        const { data } = await api.post('/auth/login', {
           email: credentials.email.trim(),
           password: credentials.password.trim(),
         })
 
+        commit('SET_REQUIRES_PASSWORD_CHANGE', data?.requiresPasswordChange)
+
         await dispatch('fetchUser')
 
-        return { success: true, message: 'Login successful' }
+        return {
+          success: true,
+          message: 'Login successful',
+          requiresPasswordChange: !!data?.requiresPasswordChange,
+        }
       } catch (error) {
         console.error('Login failed:', error)
         return { success: false, message: error.message || 'Login failed' }
@@ -138,9 +150,22 @@ const store = createStore({
     async fetchUser({ commit }) {
       try {
         const { data } = await api.get('/auth/session')
+        commit('SET_REQUIRES_PASSWORD_CHANGE', data?.requiresPasswordChange)
         commit('SET_USER', data.user)
       } catch (error) {
         console.error('Failed to fetch current user:', error)
+      }
+    },
+    async changePassword({ commit }, { currentPassword, newPassword }) {
+      try {
+        const { data } = await api.put('/auth/change-password', {
+          currentPassword,
+          newPassword,
+        })
+        commit('SET_REQUIRES_PASSWORD_CHANGE', false)
+        return { success: true, message: data?.message || 'Lösenordet har ändrats.' }
+      } catch (error) {
+        return { success: false, message: error.message || 'Lösenordsändringen misslyckades.' }
       }
     },
 

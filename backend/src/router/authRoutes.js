@@ -5,9 +5,11 @@ import User from "../models/User.js";
 import {
     getSession,
     login,
+    changePassword,
     logout as controllerLogout,
 } from "../controllers/authController.js";
 import { authRateLimiter } from "../middleware/security.js";
+import { isAuthenticated } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { asyncHandler } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
@@ -24,6 +26,11 @@ const registerSchema = {
 const loginSchema = {
     email: { type: "string", required: true, email: true },
     password: { type: "string", required: true },
+};
+
+const changePasswordSchema = {
+    currentPassword: { type: "string", required: true },
+    newPassword: { type: "string", required: true, password: true },
 };
 
 // Register User
@@ -56,6 +63,14 @@ router.post("/auth/login", authRateLimiter, validate(loginSchema), asyncHandler(
 
 // Logout (controller)
 router.post("/auth/logout", asyncHandler(controllerLogout));
+
+// Change own password (authenticated) — clears mustChangePassword
+router.put(
+    "/auth/change-password",
+    isAuthenticated,
+    validate(changePasswordSchema),
+    asyncHandler(changePassword)
+);
 
 // ✅ Auth Middleware for extracting user from JWT cookie
 function requireUser(req, res, next) {

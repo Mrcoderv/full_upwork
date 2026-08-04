@@ -191,6 +191,7 @@ router.post(
                 email,
                 password: hashedPassword,
                 roles: ["teacher"],
+                mustChangePassword: !generatePassword,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             });

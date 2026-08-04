@@ -205,6 +205,7 @@ describe("userRoutes", () => {
             expect(res.body.tempPassword).toBeTruthy();
             expect(bcrypt.hash).toHaveBeenCalled();
             expect(user.password).toBe("hashed-password");
+            expect(user.mustChangePassword).toBe(true);
             expect(user.save).toHaveBeenCalled();
         });
 

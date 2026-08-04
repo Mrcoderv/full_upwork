@@ -1,71 +1,73 @@
 <template>
   <div class="login-page">
     <div class="login-container">
-      <!-- Logo Section -->
       <div class="login-header">
         <router-link to="/" class="logo-link">
           <img src="@/assets/mindful_transparent.png" alt="Mindful Logo" class="logo" />
         </router-link>
-        <h1>Välkommen tillbaka</h1>
-        <p>Logga in för att fortsätta till Mindful Learning</p>
+        <h1>Byt lösenord</h1>
+        <p>Du måste byta lösenord innan du fortsätter</p>
       </div>
 
-      <!-- Login Form -->
       <div class="login-card">
-        <form @submit.prevent="handleLogin" class="login-form">
+        <form class="login-form" @submit.prevent="handleChangePassword">
           <div class="form-group">
-            <label for="email">E-postadress</label>
+            <label for="currentPassword">Nuvarande lösenord</label>
             <input
-              id="email"
-              type="email"
-              placeholder="din@email.com"
-              v-model="email"
-              required
-              autocomplete="username"
-              class="form-input"
-              :class="{ 'error': message && message.includes('email') }"
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="password">Lösenord</label>
-            <input
-              id="password"
+              id="currentPassword"
+              v-model="currentPassword"
               type="password"
-              placeholder="Ange ditt lösenord"
-              v-model="password"
+              placeholder="Ange ditt nuvarande lösenord"
               required
               autocomplete="current-password"
               class="form-input"
-              :class="{ 'error': message && message.includes('lösenord') }"
             />
           </div>
 
-          <button 
-            type="submit" 
+          <div class="form-group">
+            <label for="newPassword">Nytt lösenord</label>
+            <input
+              id="newPassword"
+              v-model="newPassword"
+              type="password"
+              placeholder="Minst 8 tecken, med stor/små bokstav, siffra och specialtecken"
+              required
+              autocomplete="new-password"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="confirmPassword">Bekräfta nytt lösenord</label>
+            <input
+              id="confirmPassword"
+              v-model="confirmPassword"
+              type="password"
+              placeholder="Upprepa det nya lösenordet"
+              required
+              autocomplete="new-password"
+              class="form-input"
+            />
+          </div>
+
+          <button
+            type="submit"
             class="btn btn-primary btn-lg login-btn"
             :disabled="isLoading"
           >
             <span v-if="isLoading" class="loading-spinner"></span>
-            {{ isLoading ? 'Loggar in...' : 'Logga in' }}
+            {{ isLoading ? 'Byter lösenord...' : 'Byt lösenord' }}
           </button>
         </form>
 
-        <!-- Error Message -->
         <div v-if="message" class="error-alert">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="15" y1="9" x2="9" y2="15"/>
-            <line x1="9" y1="9" x2="15" y2="15"/>
-          </svg>
           {{ message }}
         </div>
 
-        <!-- Additional Links -->
         <div class="login-footer">
-          <router-link to="/" class="back-link">
-            ← Tillbaka till startsidan
-          </router-link>
+          <button type="button" class="back-link" @click="handleLogout">
+            Logga ut
+          </button>
         </div>
       </div>
     </div>
@@ -76,54 +78,63 @@
   import { ref } from 'vue'
   import { useStore } from 'vuex'
   import { useRouter } from 'vue-router'
+  import { useToast } from '@/composables/useToast.js'
 
   export default {
     setup() {
       const store = useStore()
       const router = useRouter()
+      const toast = useToast()
 
-      const email = ref('')
-      const password = ref('')
+      const currentPassword = ref('')
+      const newPassword = ref('')
+      const confirmPassword = ref('')
       const message = ref('')
       const isLoading = ref(false)
 
-      const handleLogin = async () => {
+      const handleChangePassword = async () => {
         if (isLoading.value) return
-        
+
+        if (newPassword.value !== confirmPassword.value) {
+          message.value = 'De nya lösenorden matchar inte.'
+          return
+        }
+
         isLoading.value = true
         message.value = ''
 
         try {
-          const result = await store.dispatch('login', {
-            email: email.value,
-            password: password.value,
+          const result = await store.dispatch('changePassword', {
+            currentPassword: currentPassword.value,
+            newPassword: newPassword.value,
           })
 
-          console.log('🎯 Login result:', result)
-
           if (result.success) {
-            if (result.requiresPasswordChange) {
-              router.push('/change-password')
-            } else {
-              router.push('/profile')
-            }
+            toast.success('Lösenordet har ändrats!')
+            router.push('/profile')
           } else {
-            message.value = result.message || 'Inloggningen misslyckades'
+            message.value = result.message || 'Lösenordsändringen misslyckades.'
           }
         } catch (error) {
           message.value = 'Ett fel uppstod. Försök igen.'
-          console.error('Login error:', error)
         } finally {
           isLoading.value = false
         }
       }
 
+      const handleLogout = async () => {
+        await store.dispatch('logout')
+        router.push('/login')
+      }
+
       return {
-        email,
-        password,
+        currentPassword,
+        newPassword,
+        confirmPassword,
         message,
         isLoading,
-        handleLogin,
+        handleChangePassword,
+        handleLogout,
       }
     },
   }
@@ -224,15 +235,6 @@
     box-shadow: 0 0 0 3px var(--color-primary-light);
   }
 
-  .form-input.error {
-    border-color: var(--color-error);
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-  }
-
-  .form-input::placeholder {
-    color: var(--color-text-muted);
-  }
-
   .login-btn {
     width: 100%;
     margin-top: 0.5rem;
@@ -275,10 +277,6 @@
     margin-top: 1rem;
   }
 
-  .error-alert svg {
-    flex-shrink: 0;
-  }
-
   .login-footer {
     margin-top: 1.5rem;
     text-align: center;
@@ -289,13 +287,16 @@
     text-decoration: none;
     font-size: 0.875rem;
     transition: color 0.2s ease;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
   }
 
   .back-link:hover {
     color: var(--color-primary);
   }
 
-  /* Responsiv design */
   @media (max-width: 480px) {
     .login-page {
       padding: 0.5rem;
@@ -316,37 +317,6 @@
     .logo {
       height: 60px;
       margin-bottom: 1rem;
-    }
-  }
-
-  /* Animationer */
-  .login-container {
-    animation: fadeInUp 0.6s ease-out;
-  }
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .login-card {
-    animation: slideIn 0.4s ease-out 0.2s both;
-  }
-
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
     }
   }
 </style>

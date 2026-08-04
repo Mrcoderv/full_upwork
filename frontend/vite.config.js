@@ -3,7 +3,12 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import removeMissingSourceMapPlugin from './removeMissingSourceMapPlugin.js';
 
+const API_PROXY_TARGET = 'http://localhost:5010';
+
 export default defineConfig({
+    define: {
+        __DEV_API_PROXY_TARGET__: JSON.stringify(API_PROXY_TARGET),
+    },
     plugins: [
         removeMissingSourceMapPlugin(),
         vue({
@@ -25,7 +30,7 @@ export default defineConfig({
         sourcemapIgnoreList: (path) => path.includes('node_modules'),
         proxy: {
             '/api': {
-                target: 'http://localhost:5010',
+                target: API_PROXY_TARGET,
                 changeOrigin: true,
                 secure: false,
             },

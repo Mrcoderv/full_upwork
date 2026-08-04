@@ -74,6 +74,7 @@ router.post("/reset-password", validate(resetPasswordSchema), async (req, res) =
 
         await User.findByIdAndUpdate(decoded.id, {
             password: hashedPassword,
+            mustChangePassword: false,
         });
 
         return res.send({ message: "Lösenordet har ändrats!" });
@@ -182,6 +183,7 @@ router.post(
             const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
             user.password = hashedPassword;
+            user.mustChangePassword = true; // temp password — force change on next login
             await user.save();
 
             res.send({
@@ -241,6 +243,7 @@ router.post(
                 email: email,
                 password: hashedPassword,
                 roles: ["student"],
+                mustChangePassword: true, // temp password — force change on first login
             });
 
             await newUser.save();

@@ -36,6 +36,17 @@ export function normalizeError(error) {
   }
 
   if (!error.response) {
+    if (import.meta.env.DEV) {
+      const base = error.config?.baseURL || ''
+      const suffix = error.config?.url || ''
+      const attempted = base && !base.startsWith('http')
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}${base}${suffix}`
+        : `${base}${suffix}`
+      console.error(
+        `[API] Nätverksfel: kunde inte ansluta till ${attempted} — kontrollera att backend körs på rätt port (VITE_API_URL ska matcha backendens PORT).`,
+        error
+      )
+    }
     return {
       status: null,
       message: 'Kunde inte ansluta till servern. Kontrollera din internetanslutning.',
