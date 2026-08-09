@@ -434,6 +434,63 @@ describe("CourseMatchingService.processStudentEducation", () => {
         expect(result.errors).toEqual([]);
         expect(studentDoc.save).toHaveBeenCalled();
     });
+
+    it("skips excluded courses when a package is revised by checklist", async () => {
+        const packageDoc = {
+            _id: "pkg-revised",
+            coursePackageName: "Reviderat paket",
+            coursePackageCourses: [
+                { _id: "course-a", courseName: "Kurs A", courseExtent: 5 },
+                { _id: "course-b", courseName: "Kurs B", courseExtent: 5 },
+            ],
+        };
+        coursePackages = [];
+        CourseInstanceMock.findOne.mockResolvedValue(null);
+        const packageQuery = {
+            populate: vi.fn().mockResolvedValue(packageDoc),
+        };
+        CoursePackageMock.findById.mockReturnValue(packageQuery);
+        const studentDoc = {
+            _id: "stu-revised",
+            education: [],
+            teacherId: null,
+            email: "revised@student.com",
+            save: vi.fn().mockResolvedValue(null),
+        };
+        StudentMock.findById.mockResolvedValue(studentDoc);
+        CourseMock.findById.mockImplementation(async (id) => {
+            if (id === "course-a") {
+                return { _id: "course-a", courseName: "Kurs A", courseCode: "A1", courseExtent: 5 };
+            }
+            if (id === "course-b") {
+                return { _id: "course-b", courseName: "Kurs B", courseCode: "B1", courseExtent: 5 };
+            }
+            return null;
+        });
+
+        const result = await CourseMatchingService.processStudentEducation(
+            "stu-revised",
+            [
+                {
+                    type: "CoursePackage",
+                    name: "REVISED1",
+                    refId: "pkg-revised",
+                    startDate: "2025-03-03",
+                    endDate: "2025-05-01",
+                    excludedCourseIds: ["course-b"],
+                },
+            ],
+            "userRevised"
+        );
+
+        expect(result.errors).toEqual([]);
+        const createdEnrollments = StudentEnrollmentMock.instances.filter(
+            (e) => e.studentId === "stu-revised"
+        );
+        expect(createdEnrollments).toHaveLength(1);
+        expect(createdEnrollments[0].mainCourseId).toBe("course-a");
+        expect(result.warnings.some((w) => w.type === "package_revised")).toBe(true);
+    });
 });
 
 describe("CourseMatchingService.processStudentEducation additional scenarios", () => {
@@ -2460,5 +2517,117 @@ describe("CourseMatchingService.processStudentEducation coverage invariants", ()
         matchSpy.mockRestore();
         createSpy.mockRestore();
         StudentEnrollmentMock.forceMissingCourseInstance = false;
+    });
+});
+
+describe("CourseMatchingService municipality-based exam mode", () => {
+    const runIndividualCourse = async (studentDoc, options = {}) => {
+        CoursePackageMock.find.mockImplementation(() => ({
+            lean: vi.fn(() => Promise.resolve([])),
+        }));
+        const match = {
+            course: {
+                _id: "course-exam-mode",
+                courseName: "Exam Mode Course",
+                courseCode: "EXAMMODE101",
+                courseExtent: "5",
+            },
+            score: 1,
+        };
+        const findMatchSpy = vi
+            .spyOn(CourseMatchingService, "findBestCourseMatch")
+            .mockResolvedValue(match);
+        const createSpy = vi
+            .spyOn(CourseMatchingService, "findOrCreateCourseInstance")
+            .mockResolvedValue({
+                instance: {
+                    _id: "ci-exam-mode",
+                    courseName: "Exam Mode Course",
+                    startDate: new Date("2025-01-15"),
+                    endDate: new Date("2025-02-15"),
+                },
+                wasCreated: false,
+            });
+        StudentEnrollmentMock.findOne.mockResolvedValue(null);
+        StudentMock.findById.mockResolvedValue(studentDoc);
+
+        const result = await CourseMatchingService.processStudentEducation(
+            studentDoc._id,
+            [
+                {
+                    type: "Course",
+                    name: "EXAMMODE101",
+                    startDate: "2025-01-15",
+                    endDate: "2025-02-15",
+                },
+            ],
+            "user-exam-mode",
+            options
+        );
+
+        findMatchSpy.mockRestore();
+        createSpy.mockRestore();
+        return result;
+    };
+
+    it("getDefaultExamMode maps municipalities per the spec", () => {
+        expect(CourseMatchingService.getDefaultExamMode("Upplands Bro")).toBe("remote");
+        expect(CourseMatchingService.getDefaultExamMode({ type: "Upplands Bro" })).toBe("remote");
+        expect(CourseMatchingService.getDefaultExamMode("Upplands-Bro")).toBe("remote");
+        expect(CourseMatchingService.getDefaultExamMode("upplands bro")).toBe("remote");
+        expect(CourseMatchingService.getDefaultExamMode("Sollentuna")).toBe("on-site");
+        expect(CourseMatchingService.getDefaultExamMode({ type: "Sollentuna" })).toBe("on-site");
+        expect(CourseMatchingService.getDefaultExamMode(undefined)).toBe("on-site");
+        expect(CourseMatchingService.getDefaultExamMode("")).toBe("on-site");
+    });
+
+    it("defaults to on-site for a municipality other than Upplands Bro", async () => {
+        const studentDoc = new StudentMock({
+            _id: "stu-on-site",
+            education: [],
+            email: "onsite@student.com",
+            municipality: "Sollentuna",
+        });
+        const result = await runIndividualCourse(studentDoc);
+        expect(result.enrollments).toHaveLength(1);
+        expect(StudentEnrollmentMock.instances[0].examMode).toBe("on-site");
+    });
+
+    it("defaults to remote for Upplands Bro", async () => {
+        const studentDoc = new StudentMock({
+            _id: "stu-remote",
+            education: [],
+            email: "remote@student.com",
+            municipality: { type: "Upplands Bro" },
+        });
+        const result = await runIndividualCourse(studentDoc);
+        expect(result.enrollments).toHaveLength(1);
+        expect(StudentEnrollmentMock.instances[0].examMode).toBe("remote");
+    });
+
+    it("respects an explicit examMode option over the municipality default", async () => {
+        const studentDoc = new StudentMock({
+            _id: "stu-explicit",
+            education: [],
+            email: "explicit@student.com",
+            municipality: { type: "Upplands Bro" },
+        });
+        const result = await runIndividualCourse(studentDoc, { examMode: "on-site" });
+        expect(result.enrollments).toHaveLength(1);
+        expect(StudentEnrollmentMock.instances[0].examMode).toBe("on-site");
+    });
+
+    it("keeps auto-calculating the slutprov date alongside the exam mode default", async () => {
+        const studentDoc = new StudentMock({
+            _id: "stu-remote-date",
+            education: [],
+            email: "remotedate@student.com",
+            municipality: "Upplands Bro",
+        });
+        const result = await runIndividualCourse(studentDoc);
+        expect(result.enrollments).toHaveLength(1);
+        expect(StudentEnrollmentMock.instances[0].examMode).toBe("remote");
+        // No teacher set, so the fallback Wednesday-of-week-4 rule still applies
+        expect(StudentEnrollmentMock.instances[0].slutprovDate).toBeInstanceOf(Date);
     });
 });

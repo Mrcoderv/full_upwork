@@ -202,6 +202,12 @@ const routes = [
     meta: { title: 'Student Enrollments', role: 'admin' },
   },
   {
+    path: '/inaktiva-elever',
+    name: 'InactiveStudents',
+    component: () => import('@/views/Admin/InactiveStudents.vue'),
+    meta: { title: 'Inaktiva elever', role: ['admin', 'systemadmin'] },
+  },
+  {
     path: '/teacher-management',
     name: 'TeacherManagement',
     component: TeacherManagement,
@@ -224,6 +230,12 @@ const routes = [
     name: 'AnalyticsDashboard',
     component: () => import('@/views/Admin/AnalyticsDashboard.vue'),
     meta: { title: 'Rapporter & Analys', role: ['admin', 'systemadmin'] },
+  },
+  {
+    path: '/admin/betygsskala',
+    name: 'GradingScaleAdmin',
+    component: () => import('@/views/Admin/GradingScaleAdmin.vue'),
+    meta: { title: 'Betygsskalor', role: ['admin', 'systemadmin'] },
   },
 
   {

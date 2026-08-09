@@ -6,12 +6,15 @@ import { config } from '@vue/test-utils'
 
 global.confirm = vi.fn(() => true) // Always return "true" for confirm dialogs
 
-// Mock `ResizeObserver` to prevent crashes
-global.ResizeObserver = vi.fn(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}))
+// Mock `ResizeObserver` to prevent crashes (must be a constructable class
+// because Vuetify components call `new ResizeObserver(...)`)
+global.ResizeObserver = class {
+    constructor() {
+        this.observe = vi.fn()
+        this.unobserve = vi.fn()
+        this.disconnect = vi.fn()
+    }
+}
 
 // Mock `window.alert` to avoid JSDOM errors
 global.alert = vi.fn()

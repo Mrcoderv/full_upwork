@@ -58,6 +58,27 @@
           />
         </template>
 
+        <template #item.npScore="{ item }">
+          <div v-if="isNationalCourse(item.course.courseCode)" class="np-score-cell">
+            <v-text-field
+              v-model.number="item.course.npScore"
+              type="number"
+              min="0"
+              placeholder="Poäng"
+              variant="outlined"
+              density="compact"
+              hide-details
+              :disabled="item.course.locked"
+              @blur="suggestGrade(item.course)"
+            />
+            <div v-if="item.course.npScore !== null && item.course.npScore !== undefined" class="suggested-grade-hint">
+              <span v-if="item.course.suggestedGrade">Skalan ger: <strong>{{ item.course.suggestedGrade }}</strong></span>
+              <span v-else-if="item.course.suggestChecked">Ingen skala satt för termen/ämnet</span>
+            </div>
+          </div>
+          <span v-else class="text-muted">–</span>
+        </template>
+
         <template #item.comments="{ item }">
           <v-textarea
             v-model="item.course.comments"
@@ -75,14 +96,14 @@
           </v-btn>
         </template>
 
-        <template v-if="isAdmin" #item.lock="{ item }">
+        <template #item.lock="{ item }">
           <v-checkbox
-            v-model="item.course.locked"
-            @change="toggleLock(item.student._id, item.course.refId, !item.course.locked)"
-            :disabled="!isAdmin"
+            :model-value="item.course.locked"
+            :disabled="item.course.locked && !isAdmin"
             density="compact"
             hide-details
             variant="outlined"
+            @update:model-value="toggleLock(item.student._id, item.course.refId, item.course.locked, item.course.enrollmentId)"
           />
         </template>
       </v-data-table>
@@ -109,15 +130,14 @@
     { title: 'Kurs', key: 'courseCode', sortable: false },
     { title: 'Lärare', key: 'teacher', sortable: false },
     { title: 'Betyg', key: 'grade', sortable: false },
+    { title: 'NP-poäng', key: 'npScore', sortable: false },
     { title: 'Motivering', key: 'reason', sortable: false },
     { title: 'Kommentar', key: 'comments', sortable: false },
     { title: 'Spara', key: 'save', sortable: false },
     { title: 'Lås', key: 'lock', sortable: false },
   ]
 
-  const headers = computed(() =>
-    isAdmin.value ? baseHeaders : baseHeaders.filter((h) => h.key !== 'lock')
-  )
+  const headers = computed(() => baseHeaders)
 
   const formattedRows = computed(() =>
     studentsToGrade.value.flatMap((student) =>
@@ -200,6 +220,7 @@
             grade: item.grade || '',
             reason: item.reason || '',
             comments: item.comments || '',
+            npScore: item.npScore ?? null,
             locked: item.locked || false,
             type: 'Course',
             name: courseInstance.courseName || mainCourse?.courseName || 'Okänd kurs',
@@ -217,6 +238,7 @@
             grade: item.grade || '',
             reason: '',
             comments: '',
+            npScore: item.npScore ?? null,
             locked: false,
             type: 'Course',
             name: item.courseName || 'Kurs (från utbildning)',
@@ -231,6 +253,7 @@
           courseData.grade = courseData.grade || ''
           courseData.reason = courseData.reason || ''
           courseData.comments = courseData.comments || ''
+          courseData.npScore = courseData.npScore ?? null
           courseData.locked = courseData.locked || false
           
           student.coursesToGrade.push(courseData)
@@ -249,6 +272,46 @@
 
   const shouldShowCourse = (course, student) => {
     return true
+  }
+
+  // National-test subjects (Engelska/Svenska/Matematik) follow the same
+  // course-code prefix convention used by gradeStudent.vue.
+  function nationalSubject(courseCode) {
+    const code = String(courseCode || '').toUpperCase().trim()
+    if (code.startsWith('SVE')) return 'Svenska'
+    if (code.startsWith('ENG')) return 'Engelska'
+    if (code.startsWith('MAT') || code.startsWith('MA')) return 'Matematik'
+    return null
+  }
+
+  const isNationalCourse = (courseCode) => nationalSubject(courseCode) !== null
+
+  // Swedish term label (HT24/VT25) derived from a course end date.
+  function termFromDate(dateStr) {
+    if (!dateStr) return null
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return null
+    const month = d.getMonth() + 1
+    const year = d.getFullYear()
+    return month >= 8 ? `HT${String(year).slice(2)}` : `VT${String(year).slice(2)}`
+  }
+
+  const suggestGrade = async (course) => {
+    course.suggestedGrade = null
+    course.suggestChecked = false
+    const subject = nationalSubject(course.courseCode)
+    const term = termFromDate(course.endDate)
+    if (subject === null || term === null) return
+    if (typeof course.npScore !== 'number' || course.npScore < 0) return
+    try {
+      const { data } = await client.get('/grading-scale/suggest', {
+        params: { term, subject, points: course.npScore },
+      })
+      course.suggestedGrade = data.grade
+      course.suggestChecked = true
+    } catch (err) {
+      // Suggestion is a convenience helper; failure should never block grading.
+    }
   }
 
   const getTeacherName = (course, student) => {
@@ -285,8 +348,6 @@
       // Check if this is a new enrollment-based course (has enrollmentId)
       if (course.enrollmentId && course.source === 'enrollment') {
         // Use the new StudentEnrollment endpoint
-        console.log('💾 Saving grade for enrollment:', course.enrollmentId, course)
-        
         await client.put(
           `/update-grade/${course.enrollmentId}`,
           {
@@ -302,8 +363,6 @@
       } else {
         // Legacy: Use old Student.education endpoint
         const courseId = course.refId
-        console.log('💾 Saving grade for legacy education entry:', courseId, course)
-        
         await client.post(
           '/teacher/save-grade/',
           {
@@ -321,43 +380,36 @@
         await loadStudents()
       }
     } catch (err) {
-      console.error('❌ Spara betyg misslyckades:', err)
       toast.error('Kunde inte spara betyg: ' + (err.message || 'Okänt fel'))
     }
   }
 
-  const toggleLock = async (studentId, courseId, isLocked) => {
-    if (!isAdmin.value) {
-      toast.error('Endast administratörer kan låsa eller låsa upp betyg.')
-      return
-    }
-
+  const toggleLock = async (studentId, courseId, isCurrentlyLocked, enrollmentId) => {
     try {
-      if (!isLocked) {
-        await client.post(
-          '/teacher/lock-grade',
-          {
-            studentId,
-            courseId,
-          }
-        )
-
-        toast.success('Betyg låst!')
-      } else if (isAdmin.value) {
-        await client.put(
-          '/admin/unlock-grade',
-          {
-            studentId,
-            courseId,
-          }
-        )
-
+      if (!isCurrentlyLocked) {
+        // Teacher or Admin can lock the grade
+        await client.post('/teacher/lock-grade', {
+          studentId,
+          courseId,
+          enrollmentId,
+        })
+        toast.success('Betyg låst! Meddelande skickat till administratörer.')
+      } else {
+        // Only Admin/SystemAdmin can unlock
+        if (!isAdmin.value) {
+          toast.error('Endast administratörer kan låsa upp ett låst betyg.')
+          return
+        }
+        await client.put('/admin/unlock-grade', {
+          studentId,
+          courseId,
+          enrollmentId,
+        })
         toast.success('Betyg upplåst!')
       }
       await loadStudents()
     } catch (err) {
-      console.error('Låsning/upplåsning misslyckades:', err)
-      toast.error('Kunde inte ändra låsstatus.')
+      toast.error('Kunde inte ändra låsstatus: ' + (err.message || 'Okänt fel'))
     }
   }
 
@@ -524,5 +576,19 @@
   .course-link:hover {
     color: #1565c0;
     text-decoration: underline;
+  }
+
+  .np-score-cell {
+    min-width: 150px;
+  }
+
+  .suggested-grade-hint {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: #6c757d;
+  }
+
+  .suggested-grade-hint strong {
+    color: #1976d2;
   }
 </style>

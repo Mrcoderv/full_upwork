@@ -566,5 +566,129 @@ describe("notificationController", () => {
             );
             expect(notification?.resolved).toBe(false);
         });
+
+        it("addresses the notification to the student's login account", async () => {
+            const studentUser = await User.create({
+                name: "Student Login",
+                email: "student.login@example.com",
+                password: "secret",
+                roles: ["student"],
+            });
+
+            const student = await Student.create({
+                name: "Student Login",
+                personalNumber: "190001039999",
+                email: "student.login@example.com",
+            });
+
+            const course = await Course.create({
+                courseName: "Engelska",
+                courseCode: "ENG101",
+            });
+
+            const enrollmentDoc = {
+                _id: new mongoose.Types.ObjectId(),
+                studentId: student._id,
+                courseInstanceId: new mongoose.Types.ObjectId(),
+                mainCourseId: course._id,
+                teacherId: new mongoose.Types.ObjectId(),
+            };
+
+            await sendStudyplanChangedNotification({
+                doc: enrollmentDoc,
+                changeType: "created",
+            });
+
+            const notification = await Notification.findOne({
+                type: "studyplan_changed",
+            }).lean();
+
+            expect(notification?.meta?.studentUserId?.toString()).toBe(
+                studentUser._id.toString()
+            );
+            expect(notification?.teacher?.toString()).toBe(
+                enrollmentDoc.teacherId.toString()
+            );
+        });
+
+        it("leaves studentUserId null when the student has no login account", async () => {
+            const student = await Student.create({
+                name: "Student Three",
+                personalNumber: "190001049999",
+                email: "student.three@example.com",
+            });
+
+            const course = await Course.create({
+                courseName: "Matematik 3",
+                courseCode: "MATH3",
+            });
+
+            const enrollmentDoc = {
+                _id: new mongoose.Types.ObjectId(),
+                studentId: student._id,
+                courseInstanceId: new mongoose.Types.ObjectId(),
+                mainCourseId: course._id,
+                teacherId: new mongoose.Types.ObjectId(),
+            };
+
+            await sendStudyplanChangedNotification({
+                doc: enrollmentDoc,
+                changeType: "created",
+            });
+
+            const notification = await Notification.findOne({
+                type: "studyplan_changed",
+            }).lean();
+
+            expect(notification?.meta?.studentUserId).toBeNull();
+        });
+
+        it("mentions a revision with new dates when the status changes to reviderad", async () => {
+            const student = await Student.create({
+                name: "Student Four",
+                personalNumber: "190001059999",
+                email: "student.four@example.com",
+            });
+
+            const course = await Course.create({
+                courseName: "Fysik",
+                courseCode: "FYS101",
+            });
+
+            const enrollmentDoc = {
+                _id: new mongoose.Types.ObjectId(),
+                studentId: student._id,
+                courseInstanceId: new mongoose.Types.ObjectId(),
+                mainCourseId: course._id,
+                teacherId: new mongoose.Types.ObjectId(),
+            };
+
+            await sendStudyplanChangedNotification({
+                doc: enrollmentDoc,
+                changeType: "updated",
+                changes: {
+                    changedFields: ["status", "startDate", "endDate"],
+                    previousValues: {
+                        status: "enrolled",
+                        startDate: new Date("2025-03-01"),
+                        endDate: new Date("2025-05-01"),
+                    },
+                    newValues: {
+                        status: "reviderad",
+                        startDate: new Date("2025-03-15"),
+                        endDate: new Date("2025-05-15"),
+                    },
+                },
+            });
+
+            const notification = await Notification.findOne({
+                type: "studyplan_changed",
+            }).lean();
+
+            expect(notification?.message).toContain("reviderad");
+            expect(notification?.message).toContain("Fysik");
+            expect(notification?.message).toContain("2025-03-15");
+            expect(notification?.message).toContain("2025-05-15");
+        });
     });
 });

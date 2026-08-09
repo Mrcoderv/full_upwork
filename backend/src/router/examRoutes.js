@@ -38,30 +38,25 @@ function calculateExamDate(requestedMonth) {
     return new Date(Date.UTC(year, month, 15));
 }
 
+const MONTHS = [
+    "Januari",
+    "Februari",
+    "Mars",
+    "April",
+    "Maj",
+    "Juni",
+    "Juli",
+    "Augusti",
+    "September",
+    "Oktober",
+    "November",
+    "December",
+];
+
 function getNextMonth(currentMonth) {
-    const months = {
-        Januari: 0,
-        Februari: 1,
-        Mars: 2,
-        April: 3,
-        Maj: 4,
-        Juni: 5,
-        Juli: 6,
-        Augusti: 7,
-        September: 8,
-        Oktober: 9,
-        November: 10,
-        December: 11,
-    };
-
-    const monthIndex = months[currentMonth];
-    if (monthIndex === undefined) return null;
-
-    const newMonth = (monthIndex + 1) % 12;
-    const yearAdjustment = newMonth === 0 ? 1 : 0;
-    const newYear = new Date().getFullYear() + yearAdjustment;
-
-    return `${newYear}-${(newMonth + 1).toString().padStart(2, "0")}`;
+    const monthIndex = MONTHS.indexOf(currentMonth);
+    if (monthIndex === -1) return null;
+    return MONTHS[(monthIndex + 1) % 12];
 }
 
 router.post("/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), async (req, res) => {
@@ -173,30 +168,15 @@ router.get("/exams", isAuthenticated, async (req, res) => {
         const now = new Date();
         const currentYear = now.getFullYear();
 
-        const months = [
-            "Januari",
-            "Februari",
-            "Mars",
-            "April",
-            "Maj",
-            "Juni",
-            "Juli",
-            "Augusti",
-            "September",
-            "Oktober",
-            "November",
-            "December",
-        ];
-
         for (const exam of exams) {
             if (
                 !exam.requestedMonth ||
                 !exam.teacherId ||
-                exam.status !== "intresse"
+                !["intresse", "moved"].includes(exam.status)
             )
                 continue;
 
-            const monthIndex = months.indexOf(exam.requestedMonth);
+            const monthIndex = MONTHS.indexOf(exam.requestedMonth);
             if (monthIndex === -1) continue;
 
             const endOfMonth = new Date(currentYear, monthIndex + 1, 0); // sista dagen i månaden
@@ -208,6 +188,7 @@ router.get("/exams", isAuthenticated, async (req, res) => {
                 const exists = await Notification.findOne({
                     teacher: exam.teacherId._id,
                     examId: exam._id,
+                    resolvedByUsers: { $size: 0 },
                 });
                 if (!exists) {
                     const message = `Ny prövningselev: ${exam.name} (${exam.course}) önskar skriva i ${exam.requestedMonth}`;
@@ -2489,7 +2470,7 @@ router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res
     }
 });
 
-router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmin']), async (req, res) => {
+router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmin', 'teacher']), async (req, res) => {
     try {
         const { decision, comment } = req.body;
         const examId = req.params.id;
@@ -2500,6 +2481,20 @@ router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmi
         const exam = await Exam.findById(examId).populate("teacherId");
         if (!exam) {
             return res.status(404).json({ error: "Prövning hittades inte." });
+        }
+
+        // Lärare får bara besluta om sina egna prövningar
+        if (req.user.role === "teacher") {
+            const teacher = await Teacher.findOne({ userId: req.user.userId });
+            if (!teacher) {
+                return res.status(403).json({ error: "Teacher profile not found" });
+            }
+            const examTeacherId = exam.teacherId?._id || exam.teacherId;
+            if (String(examTeacherId) !== String(teacher._id)) {
+                return res
+                    .status(403)
+                    .json({ error: "Du kan bara besluta om dina egna prövningar" });
+            }
         }
 
         const updateData = { decision, comment };
@@ -2527,6 +2522,20 @@ router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmi
                 updateData.studentId = student._id;
                 break;
 
+            case "move":
+                const nextMonth = getNextMonth(exam.requestedMonth);
+                if (!nextMonth) {
+                    return res
+                        .status(400)
+                        .json({ error: "Ogiltig månad för flytt" });
+                }
+                if (!exam.originalRequestedMonth) {
+                    updateData.originalRequestedMonth = exam.requestedMonth;
+                }
+                updateData.status = "moved";
+                updateData.requestedMonth = nextMonth;
+                break;
+
             case "deny":
                 updateData.status = "denied";
                 break;
@@ -2538,6 +2547,14 @@ router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmi
         const updatedExam = await Exam.findByIdAndUpdate(examId, updateData, {
             new: true,
         });
+
+        // Markera notisen för denna prövning som hanterad för beslutaren
+        if (req.user.userId) {
+            await Notification.updateMany(
+                { examId },
+                { $addToSet: { resolvedByUsers: req.user.userId } }
+            );
+        }
 
         res.json(updatedExam);
     } catch (err) {

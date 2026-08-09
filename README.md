@@ -119,6 +119,57 @@ curl http://localhost:5010/health/ready
 # {"status":"ok","database":"connected","uptime":42.1}
 ```
 
+## Studieplan & notifikationer
+
+When a student's study plan changes (course dates or status, e.g. `reviderad`),
+the system notifies both sides:
+
+- **Teacher** — a `studyplan_changed` notification addressed to the enrollment's
+  `teacherId`, shown in the navbar bell.
+- **Student** — the same notification is also addressed to the student's login
+  account (matched by email on the `Student` record) via `meta.studentUserId`.
+  `GET /notifications` filters these so a student only ever sees their own.
+
+Revision messages include the new course dates, e.g. "Studieplan reviderad för … —
+Nya datum: 2025-03-15 – 2025-05-15."
+
+**APL rule:** APL period dates are derived from the student's current
+`StudentEnrollment` records in `GET /students` (single source of truth). Stored
+legacy `CoursePackage` education entries are deduplicated by package id, so a
+study plan revision that moves course end dates is automatically reflected in the
+APL board's end date.
+
+**Auto-RÖD (auto-red):** `GET /students` and `GET /student-details/:id` derive an
+APL period (earliest start / latest end across `CoursePackage` education
+entries) and compute an *effective* `aplStatus`: when 0 days remain and fewer
+than `APL_AUTO_RED_WEEKS` (default **3**, env override `APL_AUTO_RED_WEEKS`)
+weeks are left until the APL end date, the response reports `aplStatus: "RED"`
+with `aplStatusAuto: true` and `aplWeeksRemaining` (whole weeks, ceil). The
+stored status and its history are never mutated — auto-RED only overrides the
+returned value; a manual status change (with history) still takes precedence.
+Frontend surfaces this as an **AUTO** badge on the APL board and an "Auto-röd –
+slutar om X veckor" note on the student's APL tab.
+
+## Återkommande elever (re-registrering)
+
+- **Manual create auto-fill:** `POST /student` checks `personalNumber` (and
+  email) against existing students. If the student already exists, the submitted
+  details are auto-filled into the existing record (the dropout flag is cleared)
+  and the new courses are registered — it returns HTTP `200` with
+  `alreadyExists: true` instead of creating a duplicate. The manual-add form
+  reports this so staff know the record was updated, not re-created.
+- **"Lästa kurser" list:** the student's **Studieplan** tab lists completed
+  courses (enrollments with status `completed`) and each row has a
+  **"Ny antagning"** button that re-enrolls the student in that course
+  (`POST /course-matching/process-education`), scheduling it after the last
+  course at the current study tempo.
+
+## Nationella prov & betygsskalor
+
+- **NP-poäng (National test points):** `BetygSattning.vue` includes an **NP-poäng** column for national-test courses (Engelska/Svenska/Matematik). Scores are persisted in `StudentEnrollment.nationalTestPoints` and legacy education `npScore`.
+- **Annual Grading Scale Administration:** System admins and admins can manage point thresholds (min points → grade A–E) per term (e.g. `HT24`, `VT25`) and subject (Engelska/Svenska/Matematik) via `/admin/betygsskala` (`GradingScaleAdmin.vue`).
+- **Grade suggestion:** In `BetygSattning.vue`, teachers entering national test points can click **"Visa förslag"** to request the grade suggestion (`GET /grading-scale/suggest?term=...&subject=...&points=...`) calculated against that term and subject's active scale.
+
 ## Testing
 
 ```sh

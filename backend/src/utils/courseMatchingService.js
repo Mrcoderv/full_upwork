@@ -35,6 +35,26 @@ class CourseMatchingService {
     }
 
     /**
+     * Default exam mode derived from the student's municipality.
+     * Spec: all municipalities except Upplands Bro default to on-site exams;
+     * Upplands Bro defaults to remote (distans).
+     * Handles the municipality being stored as a string or as { type: "Upplands Bro" },
+     * and tolerates casing/hyphen/space variants ("Upplands-Bro", "upplands bro").
+     */
+    static getDefaultExamMode(municipality) {
+        const raw =
+            typeof municipality === "string"
+                ? municipality
+                : municipality?.type || "";
+        if (!raw) return "on-site";
+        const normalized = String(raw)
+            .trim()
+            .toLowerCase()
+            .replace(/[\s-]+/g, "");
+        return normalized === "upplandsbro" ? "remote" : "on-site";
+    }
+
+    /**
      * Clean course name for better matching
      */
     static cleanCourseName(name) {
@@ -327,7 +347,7 @@ class CourseMatchingService {
                             studentDocA?.teacherId || entry.teacherId || null,
                         notes: entry.notes || null,
                         needsSupport: options.needsSupport || false,
-                        examMode: options.examMode || 'on-site',
+                        examMode: options.examMode || this.getDefaultExamMode(studentDocA?.municipality),
                     });
                     logger.debug({ teacherId: enrollment.teacherId || "null", studentDocTeacherId: studentDocA?.teacherId || "null", entryTeacherId: entry.teacherId || "null" }, "Creating individual course enrollment");
 
@@ -456,6 +476,33 @@ class CourseMatchingService {
                         continue;
                     }
 
+                    // Package revision: admin may have unchecked courses ("revidera bort
+                    // vissa kurser genom att bocka av dem i en lista"). Skip them.
+                    const excludedCourseIds = new Set(
+                        (entry.excludedCourseIds || []).map((id) => String(id))
+                    );
+                    const packageCourses = (packageDoc.coursePackageCourses || []).filter(
+                        (course) => {
+                            const courseId =
+                                typeof course === "object"
+                                    ? course?._id
+                                    : course;
+                            return !excludedCourseIds.has(String(courseId));
+                        }
+                    );
+                    if (
+                        excludedCourseIds.size > 0 &&
+                        packageCourses.length < (packageDoc.coursePackageCourses || []).length
+                    ) {
+                        results.warnings.push({
+                            type: "package_revised",
+                            packageName: packageDoc.coursePackageName,
+                            studentId,
+                            message: `Kurspaketet "${packageDoc.coursePackageName}" har reviderats: ${excludedCourseIds.size} kurs(er) borttagna (${excludedCourseIds.size} st avbokade i listan).`,
+                        });
+                        logger.info({ studentId, packageName: packageDoc.coursePackageName, excluded: [...excludedCourseIds] }, "CoursePackage revised by excluding courses");
+                    }
+
                     // Get student first to find teacherId for course instances
                     let studentDocPackage;
                     if (!global._StudentModel) {
@@ -477,9 +524,9 @@ class CourseMatchingService {
                     );
                     let i = 0;
 
-                    while (i < packageDoc.coursePackageCourses.length) {
+                    while (i < packageCourses.length) {
                         // Get current course details
-                        const courseId = packageDoc.coursePackageCourses[i];
+                        const courseId = packageCourses[i];
                         const course =
                             typeof courseId === "object"
                                 ? courseId
@@ -496,10 +543,10 @@ class CourseMatchingService {
 
                         if (
                             extentWeeks === 2.5 &&
-                            i + 1 < packageDoc.coursePackageCourses.length
+                            i + 1 < packageCourses.length
                         ) {
                             const nextCourseId =
-                                packageDoc.coursePackageCourses[i + 1];
+                                packageCourses[i + 1];
                             nextCourse =
                                 typeof nextCourseId === "object"
                                     ? nextCourseId
@@ -582,10 +629,8 @@ class CourseMatchingService {
                                 entry.teacherId ||
                                 null,
                             notes: entry.notes || null,
-                            needsSupport: options.needsSupport,
-                            examMode: options.examMode,
                             needsSupport: options.needsSupport || false,
-                            examMode: options.examMode || 'on-site',
+                            examMode: options.examMode || this.getDefaultExamMode(studentDocB?.municipality),
                         });
                         logger.debug({ teacherId: enrollment.teacherId || "null", studentDocTeacherId: studentDocB?.teacherId || "null", entryTeacherId: entry.teacherId || "null" }, "Creating enrollment");
                         logger.debug({ enrollment: enrollment.toObject() }, "StudentEnrollment to be created");
@@ -721,7 +766,7 @@ class CourseMatchingService {
                                         null,
                                     notes: entry.notes || null,
                                     needsSupport: options.needsSupport,
-                                    examMode: options.examMode,
+                                    examMode: options.examMode || this.getDefaultExamMode(studentDocB?.municipality),
                                 });
 
                                 await nextEnrollment.save();
@@ -834,12 +879,15 @@ class CourseMatchingService {
                             await studentDocD.save();
                             // Surface a non-blocking note so the uploader can see that a package was added
                             const studentName = studentDocD?.name || studentDocD?.email || "Okänd elev";
+                            const includedCount = packageCourses.length;
+                            const excludedCount = (packageDoc.coursePackageCourses?.length || 0) - includedCount;
+                            const revisionNote = excludedCount > 0 ? ` (${excludedCount} kurser borttagna via revidering)` : "";
                             results.warnings.push({
                                 type: "package_added",
                                 packageName: packageDoc.coursePackageName,
                                 studentId,
                                 studentName,
-                                message: `Kurspaket "${packageDoc.coursePackageName}" har lagts till för elev ${studentName}. Paketet innehåller ${packageDoc.coursePackageCourses?.length || 0} kurser som kommer att skapas automatiskt.`,
+                                message: `Kurspaket "${packageDoc.coursePackageName}" har lagts till för elev ${studentName}. Paketet innehåller ${includedCount} kurser som kommer att skapas automatiskt${revisionNote}.`,
                             });
                             logger.info({ studentName: studentDocD.name || studentDocD.email, packageName: packageDoc.coursePackageName }, "Added CoursePackage education entry for student");
                         }
@@ -962,7 +1010,7 @@ class CourseMatchingService {
                             studentDoc?.teacherId || entry.teacherId || null,
                         notes: entry.notes || null,
                         needsSupport: options.needsSupport,
-                        examMode: options.examMode,
+                        examMode: options.examMode || this.getDefaultExamMode(studentDoc?.municipality),
                     });
 
                     logger.debug({ enrollment: enrollment.toObject() }, "Individual course StudentEnrollment to be created");
@@ -1058,7 +1106,7 @@ class CourseMatchingService {
                         teacherId: entry.teacherId || null,
                         notes: entry.notes || null,
                         needsSupport: options.needsSupport,
-                        examMode: options.examMode,
+                        examMode: options.examMode || this.getDefaultExamMode(studentDocE?.municipality),
                     });
                     await programEnrollment.save();
                     results.enrollments.push({

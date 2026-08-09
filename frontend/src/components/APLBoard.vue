@@ -65,6 +65,11 @@
         @click="openComments(student)"
       >
         <router-link :to="`/student/${student._id}`" @click.stop>{{ student.name }}</router-link>
+        <span
+          v-if="student.aplStatusAuto"
+          class="auto-red-badge"
+          title="Auto-röd – APL-perioden slutar snart"
+        >AUTO</span>
         <v-icon
           v-if="commentStatus(student)"
           :class="['comment-icon', { pulse: commentStatus(student) === 'unseen' }]"
@@ -124,6 +129,13 @@
               <span>Start: {{ earliestStartDisplay || '–' }}</span>
               <span class="dot-sep">•</span>
               <span>Slut: {{ latestEndDisplay || '–' }}</span>
+            </div>
+            <div v-if="selectedStudent.aplEndDate" class="education-row">
+              <strong>APL-period:</strong>
+              <span>{{ formatDateOnly(selectedStudent.aplStartDate) || '–' }} – {{ formatDateOnly(selectedStudent.aplEndDate) || '–' }}</span>
+              <span v-if="selectedStudent.aplStatusAuto" class="auto-red-hint">
+                Auto-röd ({{ selectedStudent.aplWeeksRemaining }} v kvar)
+              </span>
             </div>
           </div>
         </v-card-text>
@@ -758,6 +770,25 @@
     margin: 6px 0;
     border-radius: 3px;
     cursor: grab;
+  }
+
+  .auto-red-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: #dc3545;
+    color: #fff;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+  }
+
+  .auto-red-hint {
+    margin-left: 8px;
+    color: #dc3545;
+    font-weight: 600;
   }
 
   .comment-entry {

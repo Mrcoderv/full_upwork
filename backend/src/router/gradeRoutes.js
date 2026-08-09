@@ -12,6 +12,11 @@ import StudentEnrollment from "../models/StudentEnrollment.js";
 import CourseInstance from "../models/CourseInstance.js";
 import Teacher from "../models/Teacher.js";
 import ExamAttendance from "../models/ExamAttendance.js";
+import GradingScale from "../models/GradingScale.js";
+import {
+    gradeFromScale,
+    validateScalePayload,
+} from "../utils/gradingScale.js";
 
 import {
   createNotification,
@@ -20,6 +25,7 @@ import {
   evaluateActionPlanStatusAndNotify,
   checkPendingGradesAndNotify,
 } from "../controllers/notificationController.js";
+import NOTIFICATION_TYPES from "../controllers/notificationTypes.js";
 
 const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped", "tester"];
 const ALLOWED_ADMIN_ROLES = ["systemadmin", "admin"];
@@ -126,39 +132,67 @@ router.get("/students/ungraded", authenticateUser, async (req, res) => {
 });
 
 router.put("/admin/unlock-grade", authenticateUser, async (req, res) => {
-  // Anta att req.user finns
   const user = req.user;
   if (!(user.role === "admin" || user.role === "systemadmin")) {
     return res
       .status(403)
       .json({ error: "Endast admin/systemadmin kan låsa upp." });
   }
-  const { studentId, courseId } = req.body;
+  const { studentId, courseId, enrollmentId } = req.body;
 
   try {
-    const result = await Student.updateOne(
-      {
-        _id: studentId,
-        "education.refId": courseId,
-        "education.type": "Course",
-        "education.removedAt": null,
-      },
-      {
-        $set: {
-          "education.$.locked": false,
-        },
-      }
-    );
+    let studentName = "Elev";
+    let courseName = "Kurs";
+    let found = false;
 
-    if (result.matchedCount === 0) {
+    if (enrollmentId) {
+      const enrollment = await StudentEnrollment.findById(enrollmentId)
+        .populate("studentId", "name")
+        .populate("courseInstanceId", "courseName");
+      if (enrollment) {
+        found = true;
+        enrollment.isGradeLocked = false;
+        enrollment.gradeLockedBy = null;
+        enrollment.gradeLockedAt = null;
+        await enrollment.save();
+        if (enrollment.studentId) studentName = enrollment.studentId.name || studentName;
+        if (enrollment.courseInstanceId) courseName = enrollment.courseInstanceId.courseName || courseName;
+      }
+    }
+
+    if (studentId && courseId) {
+      const result = await Student.updateOne(
+        {
+          _id: studentId,
+          "education.refId": courseId,
+          "education.type": "Course",
+          "education.removedAt": null,
+        },
+        {
+          $set: {
+            "education.$.locked": false,
+          },
+        }
+      );
+      if (result && result.matchedCount > 0) {
+        found = true;
+      }
+      if (StudentEnrollment.updateMany) {
+        await StudentEnrollment.updateMany(
+          { studentId, courseInstanceId: courseId },
+          { $set: { isGradeLocked: false, gradeLockedBy: null, gradeLockedAt: null } }
+        );
+      }
+    }
+
+    if (!found && !enrollmentId) {
       return res.status(404).send("Kurs hittades inte");
     }
 
-    // (Skicka adminnotis om du vill!)
     await Notification.create({
-      type: "grade_unlocked",
-      message: `Admin ${user.name || user.username} låste upp en betygsrad.`,
-      meta: { studentId, courseId },
+      type: NOTIFICATION_TYPES.GRADE_UNLOCKED,
+      message: `Admin ${user.name || user.username || 'Admin'} låste upp betyget för ${studentName} (${courseName}).`,
+      meta: { studentId, courseId, enrollmentId },
       resolved: false,
     });
 
@@ -307,6 +341,7 @@ router.get('/students-to-grade', authenticateUser, async (req, res) => {
       reason: enrollment.motivation || '', // Map motivation to reason for frontend
       comments: enrollment.comments || '',
       locked: enrollment.isGradeLocked || false,
+      npScore: enrollment.nationalTestPoints ?? null,
       enrollmentId: enrollment._id.toString(),
       source: 'enrollment',
     }));
@@ -423,6 +458,7 @@ router.get('/students-to-grade', authenticateUser, async (req, res) => {
           courseInstance: null,
           endDate: edu.endDate,
           grade: edu.grade || null,
+          npScore: edu.npScore ?? null,
           enrollmentId: edu._id, // refers to education entry id
           courseRefId: edu.refId, // The actual course ID for saving grades
           courseName: edu.name || null, // Course name if available
@@ -493,34 +529,83 @@ router.post("/teacher/save-grade", authenticateUser, async (req, res) => {
 });
 
 router.post("/teacher/lock-grade", authenticateUser, async (req, res) => {
-  const { studentId, courseId } = req.body;
+  const { studentId, courseId, enrollmentId } = req.body;
   const role = req.user?.role;
+  const userId = req.user?.userId;
 
-  if (!["admin", "systemadmin"].includes(role)) {
+  if (!ALLOWED_GRADING_ROLES.includes(role)) {
     return res
       .status(403)
-      .json({ error: "Endast admin/systemadmin kan låsa betyg." });
+      .json({ error: "Endast behörig personal kan låsa betyg." });
   }
 
   try {
-    const student = await Student.findById(studentId);
-    if (!student) return res.status(404).json({ error: "Student not found" });
+    let studentName = "Elev";
+    let courseName = "Kurs";
+    let targetStudentId = studentId;
+    let targetCourseId = courseId;
 
-    // Find the course in the education array and lock it
-    const educationEntry = student.education.find(
-      (edu) => edu.refId.toString() === courseId
-    );
+    if (enrollmentId) {
+      const enrollment = await StudentEnrollment.findById(enrollmentId)
+        .populate("studentId", "name")
+        .populate("courseInstanceId", "courseName");
+      if (!enrollment) {
+        return res.status(404).json({ error: "Enrollment not found" });
+      }
+      enrollment.isGradeLocked = true;
+      enrollment.gradeLockedBy = userId;
+      enrollment.gradeLockedAt = new Date();
+      await enrollment.save();
 
-    if (educationEntry) {
-      educationEntry.locked = true; // Lock the grade for the specific course
-      await student.save(); // Persist the change to the database
+      if (enrollment.studentId) studentName = enrollment.studentId.name || studentName;
+      if (enrollment.courseInstanceId) courseName = enrollment.courseInstanceId.courseName || courseName;
+      targetStudentId = enrollment.studentId?._id?.toString() || targetStudentId;
+    } else if (targetStudentId) {
+      const student = await Student.findById(targetStudentId);
+      if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+      studentName = student.name || studentName;
+      if (targetCourseId && Array.isArray(student.education)) {
+        const educationEntry = student.education.find(
+          (edu) => edu.refId?.toString() === targetCourseId.toString()
+        );
+        if (!educationEntry) {
+          return res.status(404).json({ error: "Course not found in student's education" });
+        }
+        educationEntry.locked = true;
+        courseName = educationEntry.name || courseName;
+      } else {
+        return res.status(404).json({ error: "Course not found in student's education" });
+      }
+      await student.save();
 
-      return res.status(200).json({ message: "Grade locked", student });
+      if (StudentEnrollment.updateMany) {
+        await StudentEnrollment.updateMany(
+          { studentId: targetStudentId, courseInstanceId: targetCourseId },
+          { $set: { isGradeLocked: true, gradeLockedBy: userId, gradeLockedAt: new Date() } }
+        );
+      }
+    } else {
+      return res
+        .status(400)
+        .json({ error: "studentId eller enrollmentId krävs för att låsa betyg." });
     }
 
-    return res
-      .status(404)
-      .json({ error: "Course not found in student's education" });
+    const lockerName = req.user?.name || req.user?.username || "Användare";
+    await Notification.create({
+      type: NOTIFICATION_TYPES.GRADE_LOCKED,
+      message: `Betyg låst för ${studentName} (${courseName}) av ${role === "teacher" ? "lärare" : "admin"} ${lockerName}.`,
+      meta: {
+        studentId: targetStudentId,
+        courseId: targetCourseId,
+        enrollmentId: enrollmentId || null,
+        teacherId: userId,
+      },
+      resolved: false,
+    });
+
+    return res.status(200).json({ message: "Grade locked", locked: true });
   } catch (error) {
     logger.error({ err: error }, "Error locking grade");
     res.status(500).json({ error: "Server error" });
@@ -811,7 +896,7 @@ router.put('/update-grade/:enrollmentId', authenticateUser, async (req, res) => 
     if (grade) enrollment.grade = grade;
     if (motivation) enrollment.motivation = motivation;
     if (comments !== undefined) enrollment.comments = comments;
-    if (nationalTestPoints) enrollment.nationalTestPoints = nationalTestPoints;
+    if (nationalTestPoints !== undefined) enrollment.nationalTestPoints = nationalTestPoints;
     
     enrollment.gradeDate = new Date();
     enrollment.gradeBy = userId;
@@ -825,6 +910,136 @@ router.put('/update-grade/:enrollmentId', authenticateUser, async (req, res) => 
     });
   } catch (error) {
     logger.error({ err: error }, "Error updating grade");
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Grading scales (national tests: Engelska/Svenska/Matematik) ---
+// The points->grade scale changes annually (e.g. HT24) and is managed by
+// admins/systemadmins. Writes are admin-only; reads are allowed for staff.
+
+router.get("/grading-scale", authenticateUser, async (req, res) => {
+  if (!ALLOWED_STAFF_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  try {
+    const { term, subject } = req.query;
+    const query = {};
+    if (term) query.term = term;
+    if (subject) query.subject = subject;
+    const scales = await GradingScale.find(query).sort({ term: 1, subject: 1 }).lean();
+    res.json(scales);
+  } catch (error) {
+    logger.error({ err: error }, "Error listing grading scales");
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get("/grading-scale/terms", authenticateUser, async (req, res) => {
+  if (!ALLOWED_STAFF_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  try {
+    const terms = await GradingScale.distinct("term");
+    res.json(terms.sort());
+  } catch (error) {
+    logger.error({ err: error }, "Error listing grading scale terms");
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Suggest the grade a national-test score yields for a term+subject.
+router.get("/grading-scale/suggest", authenticateUser, async (req, res) => {
+  if (!ALLOWED_STAFF_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  try {
+    const { term, subject } = req.query;
+    const points = Number(req.query.points);
+    if (!term || !subject || !Number.isFinite(points)) {
+      return res.status(400).json({ error: "term, subject och points krävs" });
+    }
+    const scale = await GradingScale.findOne({ term, subject }).lean();
+    if (!scale) {
+      return res.json({ grade: null, hasScale: false });
+    }
+    const grade = gradeFromScale(points, scale.scale);
+    res.json({ grade, hasScale: true });
+  } catch (error) {
+    logger.error({ err: error }, "Error suggesting grade from scale");
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post("/grading-scale", authenticateUser, async (req, res) => {
+  if (!ALLOWED_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Endast admin/systemadmin kan ändra betygsskalor." });
+  }
+  try {
+    const { term, subject, scale } = req.body || {};
+    const validationError = validateScalePayload(term, subject, scale);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+    const existing = await GradingScale.findOne({ term, subject });
+    if (existing) {
+      return res.status(409).json({ error: "En betygsskala för den termen och det ämnet finns redan." });
+    }
+    const doc = await GradingScale.create({ term: term.trim(), subject: subject.trim(), scale });
+    res.status(201).json(doc);
+  } catch (error) {
+    logger.error({ err: error }, "Error creating grading scale");
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put("/grading-scale/:id", authenticateUser, async (req, res) => {
+  if (!ALLOWED_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Endast admin/systemadmin kan ändra betygsskalor." });
+  }
+  try {
+    const { id } = req.params;
+    const { term, subject, scale } = req.body || {};
+    const validationError = validateScalePayload(term, subject, scale);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+    const existing = await GradingScale.findById(id);
+    if (!existing) {
+      return res.status(404).json({ error: "Betygsskalan hittades inte." });
+    }
+    const dup = await GradingScale.findOne({
+      term: term.trim(),
+      subject: subject.trim(),
+      _id: { $ne: id },
+    });
+    if (dup) {
+      return res.status(409).json({ error: "En betygsskala för den termen och det ämnet finns redan." });
+    }
+    existing.term = term.trim();
+    existing.subject = subject.trim();
+    existing.scale = scale;
+    await existing.save();
+    res.json(existing);
+  } catch (error) {
+    logger.error({ err: error }, "Error updating grading scale");
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete("/grading-scale/:id", authenticateUser, async (req, res) => {
+  if (!ALLOWED_ADMIN_ROLES.includes(req.user?.role)) {
+    return res.status(403).json({ error: "Endast admin/systemadmin kan ändra betygsskalor." });
+  }
+  try {
+    const { id } = req.params;
+    const deleted = await GradingScale.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ error: "Betygsskalan hittades inte." });
+    }
+    res.json({ success: true, message: "Betygsskala borttagen." });
+  } catch (error) {
+    logger.error({ err: error }, "Error deleting grading scale");
     res.status(500).json({ error: 'Internal server error' });
   }
 });

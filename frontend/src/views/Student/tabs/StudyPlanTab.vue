@@ -134,6 +134,36 @@
         </div>
         <div v-else class="no-education">Ingen utbildning registrerad</div>
       </div>
+
+      <div v-if="completedCourses.length" class="completed-courses-section">
+        <h4 class="completed-title">Lästa kurser</h4>
+        <p class="completed-hint">
+          Klicka på "Ny antagning" för att anmäla eleven till kursen igen.
+        </p>
+        <div class="completed-course-list">
+          <div
+            v-for="course in completedCourses"
+            :key="course._id || course.enrollmentId"
+            class="completed-course-item"
+          >
+            <div class="completed-course-info">
+              <span class="completed-course-name">{{ getEducationName(course) }}</span>
+              <span v-if="course.startDate && course.endDate" class="completed-course-period">
+                {{ formatDateISO(course.startDate) }} - {{ formatDateISO(course.endDate) }}
+              </span>
+              <span v-if="course.grade" class="completed-course-grade">Betyg: {{ course.grade }}</span>
+            </div>
+            <button
+              v-if="canEditStatus"
+              class="reenroll-button"
+              :disabled="reEnrolling[course.enrollmentId || course._id]"
+              @click="handleReEnroll(course)"
+            >
+              {{ reEnrolling[course.enrollmentId || course._id] ? 'ANMÄLER...' : 'Ny antagning' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -491,6 +521,74 @@ export default {
       }
     };
 
+    // Completed courses ("Lästa kurser") eligible for re-registration
+    const completedCourses = computed(() => {
+      return (sortedEducation.value || []).filter(
+        (edu) =>
+          edu.isEnrollment &&
+          edu.type === 'Course' &&
+          edu.status === 'completed'
+      );
+    });
+
+    const reEnrolling = ref({});
+
+    const handleReEnroll = async (course) => {
+      if (!course || !props.student?._id) return;
+
+      const courseName = getEducationName(course);
+      const confirmed = window.confirm(
+        `Är du säker på att du vill anmäla eleven till kursen "${courseName}" igen?`
+      );
+      if (!confirmed) return;
+
+      const key = course.enrollmentId || course._id;
+      reEnrolling.value[key] = true;
+      try {
+        // Start one day after the last scheduled course, or today if none
+        const lastEnd = sortedEducation.value
+          .map((edu) => (edu.endDate ? new Date(edu.endDate).getTime() : 0))
+          .filter((time) => !isNaN(time))
+          .reduce((max, time) => Math.max(max, time), 0);
+        const start = lastEnd > 0 ? new Date(lastEnd) : new Date();
+        start.setDate(start.getDate() + 1);
+        const startDate = start.toISOString().slice(0, 10);
+
+        const tempoWeeks = Number(selectedTempo.value) || 5;
+        const end = new Date(start);
+        end.setDate(end.getDate() + tempoWeeks * 7);
+        const endDate = end.toISOString().slice(0, 10);
+
+        await client.post('/course-matching/process-education', {
+          studentId: props.student._id,
+          educationEntries: [
+            {
+              type: 'Course',
+              refId: course.refId?._id || course.refId,
+              name: courseName,
+              startDate,
+              endDate,
+            },
+          ],
+          needsSupport: false,
+          examMode: 'on-site',
+        });
+
+        const refreshed = await client.get(`/student-details/${props.student._id}`);
+        emit('student-updated', refreshed.data);
+        toast.success(`Eleven har anmälts till kursen "${courseName}" igen.`);
+      } catch (err) {
+        console.error('Error re-enrolling student in course:', err);
+        const errorMessage =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          'Kunde inte anmäla eleven till kursen igen';
+        toast.error(`Kunde inte anmäla eleven till kursen igen: ${errorMessage}`);
+      } finally {
+        reEnrolling.value[key] = false;
+      }
+    };
+
     return {
       sortedEducation,
       handleEducationReorder,
@@ -509,6 +607,9 @@ export default {
       selectedTempo,
       updatingTempo,
       handleTempoChange,
+      completedCourses,
+      reEnrolling,
+      handleReEnroll,
     };
   },
 };
@@ -803,5 +904,74 @@ export default {
   color: #6c757d;
   font-style: italic;
   margin-left: 10px;
+}
+.completed-courses-section {
+  margin-top: 24px;
+  padding: 10px;
+  border-top: 1px solid #dee2e6;
+}
+.completed-title {
+  margin: 0 0 4px 0;
+  color: #2c3e50;
+  font-size: 16px;
+}
+.completed-hint {
+  margin: 0 0 12px 0;
+  color: #6c757d;
+  font-size: 13px;
+}
+.completed-course-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.completed-course-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #dee2e6;
+  border-left: 4px solid #6c757d;
+  border-radius: 4px;
+  background: #fafafa;
+}
+.completed-course-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.completed-course-name {
+  font-weight: 600;
+  color: #2c3e50;
+}
+.completed-course-period {
+  color: #6c757d;
+  font-size: 13px;
+}
+.completed-course-grade {
+  color: #6c757d;
+  font-size: 13px;
+}
+.reenroll-button {
+  background: #28a745;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.reenroll-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.reenroll-button:hover:not(:disabled) {
+  background: #218838;
 }
 </style>

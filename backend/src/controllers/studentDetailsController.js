@@ -9,8 +9,10 @@ import ExamAttendance from "../models/ExamAttendance.js";
 import Provning from "../models/Provning.js";
 import Teacher from "../models/Teacher.js";
 import Notification from "../models/Notification.js";
+import CalendarEvent from "../models/Event.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
+import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
 
 /**
  * Student Details Controller
@@ -122,6 +124,20 @@ export const getStudentDetails = async (req, res) => {
                 (e) => e.status === "dropped"
             ).length,
         };
+
+        // APL auto-status: derive the APL period and the effective (date-driven)
+        // status the same way as GET /students, so the APL-flik matches the board.
+        const aplPeriod = computeAplPeriod(populatedStudent.education);
+        const aplEffective = computeAplEffectiveStatus(
+            populatedStudent.aplStatus,
+            aplPeriod.aplEndDate
+        );
+        populatedStudent.aplStatus = aplEffective.aplStatus;
+        populatedStudent.aplStatusStored = aplEffective.aplStatusStored;
+        populatedStudent.aplStatusAuto = aplEffective.aplAutoRed;
+        populatedStudent.aplWeeksRemaining = aplEffective.aplWeeksRemaining;
+        populatedStudent.aplStartDate = aplPeriod.aplStartDate;
+        populatedStudent.aplEndDate = aplPeriod.aplEndDate;
 
         res.json(populatedStudent);
     } catch (error) {
@@ -636,6 +652,42 @@ export const setStudentDropout = async (req, res) => {
         });
         logger.info({ count: deletedProvning.deletedCount, name: student.name }, "Deleted exam registrations (Provning)");
 
+        // Remove the student from persisted calendar slutprov events and delete now-empty events.
+        // This makes the removal durable so the student no longer appears on the slutprov list
+        // even in stored calendar events (the read endpoints also filter by dropout as a safety net).
+        let removedFromEvents = 0;
+        let deletedEmptyEvents = 0;
+        try {
+            const pullResult = await CalendarEvent.updateMany(
+                {
+                    "extendedProps.type": "slutprov",
+                    "extendedProps.students._id": studentObjectId,
+                },
+                { $pull: { "extendedProps.students": { _id: studentObjectId } } }
+            );
+            removedFromEvents = pullResult.modifiedCount || 0;
+            logger.info({ count: removedFromEvents, name: student.name }, "Removed dropout student from persisted calendar events");
+
+            const emptyEvents = await CalendarEvent.find({
+                "extendedProps.type": "slutprov",
+                $or: [
+                    { "extendedProps.students": { $size: 0 } },
+                    { "extendedProps.students": { $exists: false } },
+                    { "extendedProps.students": null },
+                ],
+            }).select("_id");
+
+            if (emptyEvents.length > 0) {
+                const deleteResult = await CalendarEvent.deleteMany({
+                    _id: { $in: emptyEvents.map((e) => e._id) },
+                });
+                deletedEmptyEvents = deleteResult.deletedCount || 0;
+                logger.info({ count: deletedEmptyEvents, name: student.name }, "Deleted empty calendar events after dropout");
+            }
+        } catch (eventError) {
+            logger.error({ err: eventError, name: student.name }, "Error cleaning up calendar events for dropout student");
+        }
+
         // Send notification to responsible teacher
         let teacherRecord = null;
         let teacherUserId = null;
@@ -784,6 +836,8 @@ export const setStudentDropout = async (req, res) => {
             deletedExamAttendance: deletedExamAttendance.deletedCount,
             deletedProvning: deletedProvning.deletedCount,
             deletedEmptyExams: deletedEmptyExams,
+            removedFromEvents,
+            deletedEmptyEvents,
         });
     } catch (error) {
         logger.error({ err: error }, "Error setting student as dropout");
@@ -859,11 +913,39 @@ export const removeStudentDropout = async (req, res) => {
         logger.info({ name: student.name }, "Removed dropout status for student");
         logger.debug({ count: resolvedNotifications.modifiedCount }, "Resolved dropout notifications");
 
+        // Re-add the student to calendar slutprov events (enrollment-based and manual finalExamDate).
+        // The sync functions skip dropout students, so this must run after dropout has been cleared.
+        let reSyncedEnrollments = 0;
+        try {
+            const { syncCalendarEventFromEnrollment, syncCalendarEventsForStudent } = await import(
+                "../utils/calendarEventSync.js"
+            );
+
+            const enrollments = await StudentEnrollment.find({
+                studentId: student._id,
+                slutprovDate: { $ne: null },
+            }).select("_id");
+
+            for (const enrollment of enrollments) {
+                await syncCalendarEventFromEnrollment(enrollment._id);
+                reSyncedEnrollments++;
+            }
+
+            if (student.finalExamDate) {
+                await syncCalendarEventsForStudent(student._id);
+            }
+
+            logger.info({ name: student.name, reSyncedEnrollments }, "Re-synced calendar events after dropout removal");
+        } catch (syncError) {
+            logger.error({ err: syncError, name: student.name }, "Error re-syncing calendar events after dropout removal");
+        }
+
         res.json({
             success: true,
             message: "Dropout status removed successfully",
             student,
             resolvedNotifications: resolvedNotifications.modifiedCount,
+            reSyncedEnrollments,
         });
     } catch (error) {
         logger.error({ err: error }, "Error removing dropout status");

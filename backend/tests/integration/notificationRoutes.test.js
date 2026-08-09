@@ -190,6 +190,54 @@ describe("Notification Routes", () => {
             expect(Array.isArray(response.body)).toBe(true);
         });
 
+        it("returns only notifications addressed to a student user", async () => {
+            const studentUserId = new mongoose.Types.ObjectId();
+            const otherStudentId = new mongoose.Types.ObjectId();
+            const studentId = new mongoose.Types.ObjectId();
+
+            await Notification.create([
+                {
+                    type: "studyplan_changed",
+                    message: "Din studieplan har reviderats",
+                    resolved: false,
+                    meta: {
+                        studentId,
+                        studentUserId,
+                        mainCourseId: new mongoose.Types.ObjectId(),
+                    },
+                },
+                {
+                    type: "studyplan_changed",
+                    message: "Annan elevs revidering",
+                    resolved: false,
+                    meta: {
+                        studentId,
+                        studentUserId: otherStudentId,
+                        mainCourseId: new mongoose.Types.ObjectId(),
+                    },
+                },
+                {
+                    type: "grades_pending",
+                    message: "Personalnotis",
+                    resolved: false,
+                },
+            ]);
+
+            const token = signToken({
+                role: "student",
+                userId: studentUserId.toString(),
+            });
+
+            const response = await request(app)
+                .get("/api/notifications")
+                .set("Authorization", `Bearer ${token}`)
+                .expect(200);
+
+            expect(Array.isArray(response.body)).toBe(true);
+            expect(response.body).toHaveLength(1);
+            expect(response.body[0].message).toBe("Din studieplan har reviderats");
+        });
+
         it("handles server errors", async () => {
             vi.spyOn(Notification, "find").mockRejectedValueOnce(
                 new Error("DB failure")

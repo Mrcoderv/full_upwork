@@ -15,6 +15,11 @@ import CoursePackage from "../../src/models/CoursePackage.js";
 import Program from "../../src/models/Program.js";
 import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import CourseInstance from "../../src/models/CourseInstance.js";
+import ExamAttendance from "../../src/models/ExamAttendance.js";
+import Provning from "../../src/models/Provning.js";
+import Teacher from "../../src/models/Teacher.js";
+import Notification from "../../src/models/Notification.js";
+import CalendarEvent from "../../src/models/Event.js";
 import {
     getStudentDetails,
     updateStudentInfo,
@@ -23,6 +28,8 @@ import {
     deleteComment,
     markCommentSeen,
     getChangeHistory,
+    setStudentDropout,
+    removeStudentDropout,
 } from "../../src/controllers/studentDetailsController.js";
 import {
     connectTestDatabase,
@@ -102,6 +109,11 @@ describe("studentDetailsController", () => {
             Program.deleteMany({}),
             StudentEnrollment.deleteMany({}),
             CourseInstance.deleteMany({}),
+            ExamAttendance.deleteMany({}),
+            Provning.deleteMany({}),
+            Teacher.deleteMany({}),
+            Notification.deleteMany({}),
+            CalendarEvent.deleteMany({}),
         ]);
     });
 
@@ -369,6 +381,108 @@ describe("studentDetailsController", () => {
 
             expect(res.statusCode).toBe(500);
             expect(res.body).toEqual({ error: "Failed to fetch student details" });
+        });
+
+        it("derives an effective auto-RED status from the APL end date", async () => {
+            const soon = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+            const studentDoc = {
+                toObject: () => ({
+                    _id: new mongoose.Types.ObjectId(),
+                    aplStatus: "GRAY",
+                    education: [
+                        {
+                            _id: new mongoose.Types.ObjectId(),
+                            type: "CoursePackage",
+                            refId: new mongoose.Types.ObjectId(),
+                            name: "APL Package",
+                            startDate: new Date(
+                                Date.now() - 20 * 24 * 60 * 60 * 1000
+                            ),
+                            endDate: soon,
+                        },
+                    ],
+                }),
+            };
+
+            const select = vi.fn().mockResolvedValue(studentDoc);
+            const populate = vi.fn().mockReturnValue({ select });
+            vi.spyOn(Student, "findById").mockReturnValue({ populate });
+
+            const sort = vi.fn().mockResolvedValue([]);
+            const populateTeacher = vi.fn().mockReturnValue({ sort });
+            const populateMain = vi.fn().mockReturnValue({
+                populate: populateTeacher,
+            });
+            const populateCourseInstance = vi.fn().mockReturnValue({
+                populate: populateMain,
+            });
+            vi.spyOn(StudentEnrollment, "find").mockReturnValue({
+                populate: populateCourseInstance,
+            });
+
+            const req = buildReq({
+                params: { id: new mongoose.Types.ObjectId().toString() },
+            });
+            const res = buildRes();
+
+            await getStudentDetails(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.aplStatus).toBe("RED");
+            expect(res.body.aplStatusStored).toBe("GRAY");
+            expect(res.body.aplStatusAuto).toBe(true);
+            expect(res.body.aplWeeksRemaining).toBe(2);
+            expect(new Date(res.body.aplEndDate).getTime()).toBe(soon.getTime());
+        });
+
+        it("keeps the stored APL status when the APL end date is far away", async () => {
+            const studentDoc = {
+                toObject: () => ({
+                    _id: new mongoose.Types.ObjectId(),
+                    aplStatus: "YELLOW",
+                    education: [
+                        {
+                            _id: new mongoose.Types.ObjectId(),
+                            type: "CoursePackage",
+                            refId: new mongoose.Types.ObjectId(),
+                            name: "APL Package",
+                            startDate: new Date(
+                                Date.now() + 30 * 24 * 60 * 60 * 1000
+                            ),
+                            endDate: new Date(
+                                Date.now() + 200 * 24 * 60 * 60 * 1000
+                            ),
+                        },
+                    ],
+                }),
+            };
+
+            const select = vi.fn().mockResolvedValue(studentDoc);
+            const populate = vi.fn().mockReturnValue({ select });
+            vi.spyOn(Student, "findById").mockReturnValue({ populate });
+
+            const sort = vi.fn().mockResolvedValue([]);
+            const populateTeacher = vi.fn().mockReturnValue({ sort });
+            const populateMain = vi.fn().mockReturnValue({
+                populate: populateTeacher,
+            });
+            const populateCourseInstance = vi.fn().mockReturnValue({
+                populate: populateMain,
+            });
+            vi.spyOn(StudentEnrollment, "find").mockReturnValue({
+                populate: populateCourseInstance,
+            });
+
+            const req = buildReq({
+                params: { id: new mongoose.Types.ObjectId().toString() },
+            });
+            const res = buildRes();
+
+            await getStudentDetails(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.aplStatus).toBe("YELLOW");
+            expect(res.body.aplStatusAuto).toBe(false);
         });
     });
 
@@ -1128,6 +1242,147 @@ describe("studentDetailsController", () => {
 
             expect(res.statusCode).toBe(500);
             expect(res.body).toEqual({ error: "Failed to fetch change history" });
+        });
+    });
+
+    describe("setStudentDropout / removeStudentDropout", () => {
+        const adminUser = () => ({
+            role: "admin",
+            userId: new mongoose.Types.ObjectId().toString(),
+            name: "Admin User",
+        });
+
+        const buildCalendarStudent = (student) => ({
+            _id: student._id,
+            name: student.name,
+            personalNumber: student.personalNumber,
+            additionalInfo: "",
+            attended: false,
+        });
+
+        it("rejects non-admin users", async () => {
+            const student = await createStudent({ dropout: false });
+
+            const req = buildReq({
+                params: { id: student._id.toString() },
+                user: { role: "teacher" },
+            });
+            const res = buildRes();
+
+            await setStudentDropout(req, res);
+
+            expect(res.statusCode).toBe(403);
+            expect(res.body.error).toContain("Insufficient permissions");
+        });
+
+        it("removes dropout student from persisted calendar slutprov events and deletes empty events", async () => {
+            const student = await createStudent({
+                name: "Dropout Student",
+                dropout: false,
+                finalExamDate: new Date("2026-09-01T00:00:00.000Z"),
+            });
+            const otherStudent = await createStudent({
+                name: "Other Student",
+                email: "other@example.com",
+            });
+
+            const sharedEvent = await CalendarEvent.create({
+                title: "Lärare A",
+                start: new Date("2026-09-01T12:00:00.000Z"),
+                color: "#ff6b6b",
+                extendedProps: {
+                    teacher: "Lärare A",
+                    type: "slutprov",
+                    students: [
+                        buildCalendarStudent(student),
+                        buildCalendarStudent(otherStudent),
+                    ],
+                },
+            });
+
+            const ownEvent = await CalendarEvent.create({
+                title: "Lärare B",
+                start: new Date("2026-09-02T12:00:00.000Z"),
+                color: "#ff6b6b",
+                extendedProps: {
+                    teacher: "Lärare B",
+                    type: "slutprov",
+                    students: [buildCalendarStudent(student)],
+                },
+            });
+
+            const req = buildReq({
+                params: { id: student._id.toString() },
+                user: adminUser(),
+            });
+            const res = buildRes();
+
+            await setStudentDropout(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+
+            const refreshed = await Student.findById(student._id);
+            expect(refreshed.dropout).toBe(true);
+
+            const refreshedShared = await CalendarEvent.findById(sharedEvent._id);
+            expect(refreshedShared).not.toBeNull();
+            expect(refreshedShared.extendedProps.students).toHaveLength(1);
+            expect(refreshedShared.extendedProps.students[0]._id.toString()).toBe(
+                otherStudent._id.toString()
+            );
+
+            const removedOwnEvent = await CalendarEvent.findById(ownEvent._id);
+            expect(removedOwnEvent).toBeNull();
+        });
+
+        it("re-adds student to calendar slutprov events after dropout removal", async () => {
+            const student = await createStudent({
+                name: "Reactivated Student",
+                dropout: true,
+            });
+
+            const course = await Course.create({
+                courseName: "Matematik",
+                courseCode: "MAT",
+            });
+            const courseInstance = await CourseInstance.create({
+                mainCourseId: course._id,
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+                courseName: "Matematik",
+                courseCode: "MAT",
+            });
+
+            await StudentEnrollment.create({
+                studentId: student._id,
+                courseInstanceId: courseInstance._id,
+                mainCourseId: course._id,
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+                slutprovDate: new Date("2026-10-15T00:00:00.000Z"),
+                status: "active",
+            });
+
+            const req = buildReq({
+                params: { id: student._id.toString() },
+                user: adminUser(),
+            });
+            const res = buildRes();
+
+            await removeStudentDropout(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.success).toBe(true);
+
+            const refreshed = await Student.findById(student._id);
+            expect(refreshed.dropout).toBe(false);
+
+            const events = await CalendarEvent.find({
+                "extendedProps.type": "slutprov",
+                "extendedProps.students._id": student._id,
+            });
+            expect(events.length).toBeGreaterThan(0);
         });
     });
 });

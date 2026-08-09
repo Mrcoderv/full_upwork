@@ -28,6 +28,15 @@ router.get("/notifications", authenticateUser, async (req, res) => {
       resolvedByUsers: { $nin: [userId] }
     };
     
+    // If user is a student, only show study plan notifications addressed to them
+    if (req.user.role === "student") {
+      query = { 
+        "meta.studentUserId": userId,
+        resolvedByUsers: { $nin: [userId] }
+      };
+      logger.debug({ userId: req.user.userId, name: req.user.name || req.user.username }, "Student fetching their notifications")
+    }
+    
     // If user is an admin, only show notifications they created (for dropout notifications)
     if (["admin", "systemadmin"].includes(req.user.role)) {
       // For dropout notifications, only show those created by this admin

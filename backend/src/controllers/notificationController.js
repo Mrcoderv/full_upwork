@@ -261,12 +261,40 @@ export async function sendStudyplanChangedNotification({ doc, changeType, change
 
         const courseName = course.courseName || course.name || "okänd kurs";
 
+        // Find the student's login account so the confirmation reaches them too.
+        // The student account is linked to the Student record by email.
+        let studentUserId = null;
+        try {
+            const studentUser = await User.findOne({ email: student.email });
+            studentUserId = studentUser?._id || null;
+        } catch (userError) {
+            logger.error({ err: userError, studentId: student._id }, "Error looking up student user for study plan notification");
+        }
+
+        const formatDate = (value) => {
+            if (!value) return "";
+            const date = new Date(value);
+            if (isNaN(date.getTime())) return "";
+            return date.toISOString().slice(0, 10);
+        };
+
         let message = '';
         if (changeType === 'created') {
             message = `Ny studieplan skapad för ${student.name} i kursen ${courseName}.`;
         } else if (changeType === 'updated') {
-            const changedFields = Object.keys(changes.newValues).join(', ');
-            message = `Studieplan uppdaterad för ${student.name} i kursen ${courseName}. Fält ändrade: ${changedFields}.`;
+            const newValues = changes?.newValues || {};
+            const changedFields = Object.keys(newValues).join(', ');
+            const isRevised = newValues.status === "reviderad";
+            const newStart = newValues.startDate;
+            const newEnd = newValues.endDate;
+            if (isRevised) {
+                const range = [formatDate(newStart), formatDate(newEnd)].filter(Boolean).join(' – ');
+                message = range
+                    ? `Studieplan reviderad för ${student.name} i kursen ${courseName}. Nya datum: ${range}.`
+                    : `Studieplan reviderad för ${student.name} i kursen ${courseName}.`;
+            } else {
+                message = `Studieplan uppdaterad för ${student.name} i kursen ${courseName}. Fält ändrade: ${changedFields}.`;
+            }
         } else if (changeType === 'deleted') {
             message = `Studieplan borttagen för ${student.name} i kursen ${courseName}.`;
         }
@@ -281,6 +309,7 @@ export async function sendStudyplanChangedNotification({ doc, changeType, change
                 courseInstanceId: doc.courseInstanceId,
                 mainCourseId: doc.mainCourseId,
                 courseName,
+                studentUserId,
                 changeType,
                 details: changes // For 'updated', this contains changedFields, previousValues, newValues
             },

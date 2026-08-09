@@ -10,6 +10,28 @@
         <div class="status-badge" :class="statusClass">
           <span class="status-label">{{ statusLabel }}</span>
         </div>
+        <div v-if="student.aplStatusAuto" class="auto-red-note">
+          <strong>Auto-röd:</strong> APL-perioden slutar inom
+          {{ student.aplWeeksRemaining }}
+          {{ student.aplWeeksRemaining === 1 ? 'vecka' : 'veckor' }} —
+          statusen är automatiskt satt till "Snart slut".
+        </div>
+      </div>
+
+      <!-- APL Period -->
+      <div v-if="student.aplStartDate || student.aplEndDate" class="apl-section">
+        <h4 class="section-title">APL-period</h4>
+        <div class="apl-period-row">
+          <strong>Start:</strong>
+          <span>{{ formatDateOnly(student.aplStartDate) || '–' }}</span>
+        </div>
+        <div class="apl-period-row">
+          <strong>Slut:</strong>
+          <span>{{ formatDateOnly(student.aplEndDate) || '–' }}</span>
+          <span v-if="student.aplWeeksRemaining !== null && student.aplWeeksRemaining >= 0" class="weeks-remaining">
+            ({{ student.aplWeeksRemaining }} v kvar)
+          </span>
+        </div>
       </div>
 
       <!-- Status History -->
@@ -112,6 +134,17 @@ export default {
       });
     };
 
+    const formatDateOnly = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleDateString('sv-SE', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+    };
+
     return {
       statusLabel,
       statusClass,
@@ -119,6 +152,7 @@ export default {
       getStatusLabel,
       getStatusClass,
       formatDate,
+      formatDateOnly,
     };
   },
 };
@@ -243,5 +277,30 @@ export default {
   color: #6c757d;
   font-size: 0.875rem;
   font-style: italic;
+}
+
+.auto-red-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fce4e4;
+  border: 1px solid #f5c6c6;
+  border-radius: 4px;
+  color: #b02a37;
+  font-size: 0.9rem;
+}
+
+.apl-period-row {
+  margin-bottom: 6px;
+  color: #495057;
+}
+
+.apl-period-row strong {
+  min-width: 60px;
+  display: inline-block;
+}
+
+.weeks-remaining {
+  color: #b02a37;
+  font-weight: 600;
 }
 </style>

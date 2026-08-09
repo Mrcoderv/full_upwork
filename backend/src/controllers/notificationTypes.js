@@ -23,6 +23,10 @@ const NOTIFICATION_TYPES = {
   
     // ✍️ Signering
     SIGNING_REQUIRED: "signing_required", // Läraren behöver signera betygskatalog
+
+    // 🔒 Betyg lås/upplås
+    GRADE_LOCKED: "grade_locked", // Betyg låst — admin meddelas så de kan betygsätta i kommunernas system
+    GRADE_UNLOCKED: "grade_unlocked", // Betyg upplåst (admin/systemadmin)
   
     // 🗓️ Möten
     MEETING_BOOKED: "meeting_booked", // SYV/specped bokat möte med elev

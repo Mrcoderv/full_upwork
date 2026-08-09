@@ -104,6 +104,7 @@ vi.mock("../../src/models/Notification.js", () => ({
   default: {
     findOne: vi.fn(),
     create: vi.fn(),
+    updateMany: vi.fn().mockResolvedValue({ modifiedCount: 1 }),
   },
 }));
 
@@ -804,6 +805,231 @@ describe("examRoutes", () => {
       .send({ decision: "accept", comment: "Go" });
     expect(res.status).toBe(200);
     expect(Student.findOneAndUpdate).toHaveBeenCalled();
+  });
+
+  it("allows a teacher to decide on their own exam", async () => {
+    const examDoc = {
+      _id: "decision-teacher-own",
+      name: "Own Exam",
+      requestedMonth: "Maj",
+      personalNumber: "111",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+    Student.findOneAndUpdate.mockResolvedValue({ _id: "student-own" });
+    Exam.findByIdAndUpdate.mockResolvedValue({ ...examDoc, status: "scheduled" });
+
+    const res = await request(app)
+      .put("/api/exams/decision-teacher-own/decision")
+      .set("x-user-role", "teacher")
+      .send({ decision: "accept", comment: "Ok" });
+
+    expect(res.status).toBe(200);
+    expect(Student.findOneAndUpdate).toHaveBeenCalled();
+  });
+
+  it("forbids a teacher from deciding on another teacher's exam", async () => {
+    const examDoc = {
+      _id: "decision-teacher-other",
+      name: "Other Teacher Exam",
+      requestedMonth: "Maj",
+      personalNumber: "222",
+      teacherId: { _id: "teacher-other" },
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+
+    const res = await request(app)
+      .put("/api/exams/decision-teacher-other/decision")
+      .set("x-user-role", "teacher")
+      .send({ decision: "deny", comment: "Nope" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: "Du kan bara besluta om dina egna prövningar",
+    });
+  });
+
+  it("forbids a teacher without a profile from deciding", async () => {
+    Teacher.findOne.mockReturnValueOnce(createSessionQuery(null));
+    const examDoc = {
+      _id: "decision-teacher-noprofile",
+      name: "No Profile Exam",
+      requestedMonth: "Maj",
+      personalNumber: "333",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+
+    const res = await request(app)
+      .put("/api/exams/decision-teacher-noprofile/decision")
+      .set("x-user-role", "teacher")
+      .send({ decision: "deny", comment: "Nope" });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "Teacher profile not found" });
+  });
+
+  it("moves an exam to the following month", async () => {
+    const examDoc = {
+      _id: "decision-move",
+      name: "Move Exam",
+      requestedMonth: "Augusti",
+      personalNumber: "444",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+    Exam.findByIdAndUpdate.mockResolvedValueOnce({
+      _id: "decision-move",
+      status: "moved",
+      requestedMonth: "September",
+      originalRequestedMonth: "Augusti",
+    });
+
+    const res = await request(app)
+      .put("/api/exams/decision-move/decision")
+      .set("x-user-role", "teacher")
+      .send({ decision: "move", comment: "Flyttad" });
+
+    expect(res.status).toBe(200);
+    expect(Exam.findByIdAndUpdate).toHaveBeenCalledWith(
+      "decision-move",
+      expect.objectContaining({
+        status: "moved",
+        requestedMonth: "September",
+        originalRequestedMonth: "Augusti",
+      }),
+      { new: true }
+    );
+  });
+
+  it("wraps around to Januari when moving from December", async () => {
+    const examDoc = {
+      _id: "decision-move-december",
+      name: "December Exam",
+      requestedMonth: "December",
+      personalNumber: "555",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+    Exam.findByIdAndUpdate.mockResolvedValueOnce({
+      _id: "decision-move-december",
+      status: "moved",
+      requestedMonth: "Januari",
+    });
+
+    const res = await request(app)
+      .put("/api/exams/decision-move-december/decision")
+      .set("x-user-role", "admin")
+      .send({ decision: "move", comment: "Flyttad" });
+
+    expect(res.status).toBe(200);
+    expect(Exam.findByIdAndUpdate).toHaveBeenCalledWith(
+      "decision-move-december",
+      expect.objectContaining({ status: "moved", requestedMonth: "Januari" }),
+      { new: true }
+    );
+  });
+
+  it("rejects a move when the requested month is invalid", async () => {
+    const examDoc = {
+      _id: "decision-move-invalid",
+      name: "Invalid Month Exam",
+      requestedMonth: "Ogiltig",
+      personalNumber: "666",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+
+    const res = await request(app)
+      .put("/api/exams/decision-move-invalid/decision")
+      .set("x-user-role", "admin")
+      .send({ decision: "move", comment: "Flyttad" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Ogiltig månad för flytt" });
+  });
+
+  it("keeps the original requested month after repeated moves", async () => {
+    const examDoc = {
+      _id: "decision-move-twice",
+      name: "Twice Moved Exam",
+      requestedMonth: "September",
+      originalRequestedMonth: "Augusti",
+      personalNumber: "777",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+    Exam.findByIdAndUpdate.mockResolvedValueOnce({
+      _id: "decision-move-twice",
+      status: "moved",
+      requestedMonth: "Oktober",
+      originalRequestedMonth: "Augusti",
+    });
+
+    const res = await request(app)
+      .put("/api/exams/decision-move-twice/decision")
+      .set("x-user-role", "admin")
+      .send({ decision: "move", comment: "Igen" });
+
+    expect(res.status).toBe(200);
+    expect(Exam.findByIdAndUpdate).toHaveBeenCalledWith(
+      "decision-move-twice",
+      expect.objectContaining({
+        status: "moved",
+        requestedMonth: "Oktober",
+      }),
+      { new: true }
+    );
+    const updateArg = Exam.findByIdAndUpdate.mock.calls[0][1];
+    expect(updateArg.originalRequestedMonth).toBeUndefined();
+  });
+
+  it("marks the exam notification as resolved for the deciding user", async () => {
+    const examDoc = {
+      _id: "decision-resolve",
+      name: "Resolve Exam",
+      requestedMonth: "Maj",
+      personalNumber: "888",
+      teacherId: teacherDoc,
+    };
+    Exam.findById.mockReturnValueOnce(createQueryChain(examDoc));
+    Student.findOneAndUpdate.mockResolvedValue({ _id: "student-resolve" });
+    Exam.findByIdAndUpdate.mockResolvedValue({ ...examDoc, status: "scheduled" });
+
+    const res = await request(app)
+      .put("/api/exams/decision-resolve/decision")
+      .set("x-user-role", "teacher")
+      .send({ decision: "accept", comment: "Ok" });
+
+    expect(res.status).toBe(200);
+    expect(Notification.updateMany).toHaveBeenCalledWith(
+      { examId: "decision-resolve" },
+      { $addToSet: { resolvedByUsers: "user-id" } }
+    );
+  });
+
+  it("creates notifications for moved exams within the reminder window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-05T00:00:00.000Z"));
+    const examDoc = {
+      _id: "exam-moved",
+      name: "Moved Exam",
+      course: "Physics",
+      teacherId: teacherDoc,
+      requestedMonth: "Juni",
+      status: "moved",
+      personalNumber: "999",
+    };
+    Exam.find.mockReturnValue(createQueryChain([examDoc]));
+    Notification.findOne.mockResolvedValue(null);
+    const res = await request(app)
+      .get("/api/exams")
+      .set("x-user-role", "teacher");
+    vi.useRealTimers();
+    expect(res.status).toBe(200);
+    expect(Notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ examId: "exam-moved", teacher: "teacher-1" })
+    );
   });
 
   it("lists exam history for a student", async () => {

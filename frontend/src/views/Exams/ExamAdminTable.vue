@@ -19,6 +19,7 @@
             <option value="">📌 Alla statusar</option>
             <option value="intresse">Intresse</option>
             <option value="scheduled">Godkänd</option>
+            <option value="moved">Flyttad</option>
             <option value="denied">Nekad</option>
           </select>
         </div>
@@ -66,6 +67,7 @@
                   <select v-model="decisions[exam._id].decision" class="form-select form-select-sm">
                     <option value="">Välj</option>
                     <option value="accept">Godkänn</option>
+                    <option value="move">Flytta till nästa månad</option>
                     <option value="deny">Neka</option>
                   </select>
                 </div>
@@ -180,6 +182,7 @@
   const statusColor = (status) => {
   switch (status) {
     case 'scheduled': return 'bg-success text-white'
+    case 'moved': return 'bg-warning text-dark'
     case 'denied': return 'bg-danger text-white'
     case 'intresse': return 'bg-info text-dark'
     default: return 'bg-secondary'

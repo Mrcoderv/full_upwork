@@ -109,6 +109,8 @@ const studentEnrollmentSchema = new mongoose.Schema(
         comments: { type: String, default: '' }, // Grade comments
         nationalTestPoints: { type: Number, default: null }, // National test points
         isGradeLocked: { type: Boolean, default: false }, // Lock grade from editing
+        gradeLockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        gradeLockedAt: { type: Date, default: null },
         
         // Slutprov (final exam) date
         slutprovDate: { type: Date, default: null },

@@ -97,6 +97,16 @@ const StudentSchema = new mongoose.Schema(
             default: "GRAY",
         },
 
+        // "Eleven har redan utfört praktik via annan skola" (tidigare praktik)
+        priorAplCompleted: { type: Boolean, default: false },
+
+        // Link to the uploaded intyg document (visible in Dokument-fliken)
+        priorAplIntygDocId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Document",
+            default: null,
+        },
+
         aplStatusHistory: [
             {
                 status: {

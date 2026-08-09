@@ -401,7 +401,7 @@
 
       const userRole = computed(() => store.getters.userRole || 'guest') // Default to 'guest' if undefined
       const canSeeNotifications = computed(() =>
-        ['teacher', 'admin', 'systemadmin'].includes(userRole.value)
+        ['teacher', 'admin', 'systemadmin', 'student'].includes(userRole.value)
       )
 
       // Dölja navbar på login-sidan
@@ -733,6 +733,7 @@
       ]
       const menuItems = [
         { name: 'Betygsrapporter', link: '/admin/betygsrapporter', role: ['admin', 'systemadmin'] },
+        { name: 'Betygsskalor', link: '/admin/betygsskala', role: ['admin', 'systemadmin'] },
         { name: 'Rapporter & Analys', link: '/admin/analytics', role: ['admin', 'systemadmin'] },
         { name: 'APL', link: '/apl', role: ['admin', 'teacher', 'coordinator'] },
         {
@@ -749,6 +750,7 @@
         { name: 'Lägg till Lärare', link: '/lagg-till-larare', role: 'admin' },
         { name: 'Lärarhantering', link: '/teacher-management', role: 'admin' },
         { name: 'Elever', link: '/students', role: ['admin', 'teacher'] },
+        { name: 'Inaktiva elever', link: '/inaktiva-elever', role: ['admin', 'systemadmin'] },
         { name: 'Kurser (Lärarvy)', link: '/larare/kurser', role: 'teacher' },
         { name: 'Lägg till elev manuellt', link: '/manual-add-student', role: 'admin' },
         { name: 'Betyg', link: '/betyg', role: 'teacher' },

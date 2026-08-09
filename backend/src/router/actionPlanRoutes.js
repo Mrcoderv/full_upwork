@@ -2,9 +2,47 @@ import { Router } from "express";
 import ActionPlan from "../models/ActionPlan.js";
 import Notification from "../models/Notification.js";
 import FormQuestions from "../models/ActionPlanQuestions.js"
+import Student from "../models/Student.js";
 import { isAuthenticated } from "../middleware/auth.js";
+import { buildActionPlanPdf } from "../services/actionPlanPdf.js";
 import logger from "../utils/logger.js";
 const router = Router();
+
+router.get("/actionplan/:studentId/pdf", isAuthenticated, async (req, res) => {
+    try {
+        const plan = await ActionPlan.findOne({ studentId: req.params.studentId }).sort({ createdAt: -1 });
+        if (!plan) {
+            return res.status(404).json({ message: "Ingen handlingsplan hittad" });
+        }
+        const student = await Student.findById(plan.studentId).select("name");
+        const pdf = buildActionPlanPdf({
+            plan: plan.toObject(),
+            studentName: student?.name || "",
+        });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="handlingsplan-${plan._id}.pdf"`
+        );
+        res.send(pdf);
+    } catch (error) {
+        logger.error({ err: error }, "Error generating action plan PDF");
+        res.status(500).json({ message: "Något gick fel", error: error.message });
+    }
+});
+
+router.get("/actionplan/:studentId", isAuthenticated, async (req, res) => {
+    try {
+        const plan = await ActionPlan.findOne({ studentId: req.params.studentId }).sort({ createdAt: -1 });
+        if (!plan) {
+            return res.status(404).json({ message: "Ingen handlingsplan hittad" });
+        }
+        res.json(plan.toObject());
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching action plan");
+        res.status(500).json({ message: "Något gick fel", error: error.message });
+    }
+});
 
 router.post("/form-questions", isAuthenticated, async (req, res) => {
     try {

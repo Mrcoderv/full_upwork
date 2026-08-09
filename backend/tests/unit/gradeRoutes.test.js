@@ -95,12 +95,24 @@ vi.mock("../../src/models/StudentEnrollment.js", () => ({
     findOne: vi.fn(),
     findByIdAndDelete: vi.fn(),
     findById: vi.fn(),
+    updateMany: vi.fn(),
   },
 }));
 vi.mock("../../src/models/CourseInstance.js", () => ({
   __esModule: true,
   default: {
     find: vi.fn(),
+  },
+}));
+vi.mock("../../src/models/GradingScale.js", () => ({
+  __esModule: true,
+  default: {
+    find: vi.fn(),
+    distinct: vi.fn(),
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndDelete: vi.fn(),
   },
 }));
 
@@ -113,6 +125,7 @@ import Program from "../../src/models/Program.js";
 import CoursePackage from "../../src/models/CoursePackage.js";
 import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import CourseInstance from "../../src/models/CourseInstance.js";
+import GradingScale from "../../src/models/GradingScale.js";
 
 const app = express();
 app.use(express.json());
@@ -277,6 +290,10 @@ describe("GET /grades/students-to-grade", () => {
         courseInstanceId: { _id: "ci1" },
         endDate: new Date(now.getTime() - 86400000),
         grade: null,
+        motivation: "",
+        comments: "",
+        isGradeLocked: false,
+        nationalTestPoints: 87,
       },
     ];
     StudentEnrollment.find.mockReturnValueOnce(createQueryChain(enrollmentData));
@@ -287,7 +304,32 @@ describe("GET /grades/students-to-grade", () => {
           name: "Student2",
           email: "b@b",
           education: [
-            { _id: "ed1", name: "Logik", endDate: new Date(now.getTime() - 86400000), grade: null, removedAt: null },
+            { _id: "ed1", name: "Logik", endDate: new Date(now.getTime() - 86400000), grade: null, removedAt: null, npScore: 55 },
+          ],
+        },
+      ])
+    );
+
+    const res = await request(app)
+      .get("/grades/students-to-grade")
+      .set("x-user-role", "admin");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body.find((row) => row.source === "enrollment").npScore).toBe(87);
+  });
+
+  it("passes through npScore for legacy education entries", async () => {
+    const now = new Date();
+    StudentEnrollment.find.mockReturnValueOnce(createQueryChain([]));
+    Student.find.mockReturnValueOnce(
+      createLeanResult([
+        {
+          _id: "stu2",
+          name: "Student2",
+          email: "b@b",
+          education: [
+            { _id: "ed1", name: "Logik", endDate: new Date(now.getTime() - 86400000), grade: null, removedAt: null, npScore: 55 },
           ],
         },
       ])
@@ -296,8 +338,9 @@ describe("GET /grades/students-to-grade", () => {
     const res = await request(app).get("/grades/students-to-grade");
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-});
+    expect(res.body[0].source).toBe("student_education");
+    expect(res.body[0].npScore).toBe(55);
+  });
 
   it("returns 500 when enrollment query fails", async () => {
     StudentEnrollment.find.mockRejectedValueOnce(new Error("boom"));
@@ -339,7 +382,8 @@ describe("POST /grades/teacher/lock-grade", () => {
   it("locks grade when student and course exist", async () => {
     const studentInstance = {
       _id: "stu1",
-      education: [{ refId: "course1", locked: false }],
+      name: "Student One",
+      education: [{ refId: "course1", name: "Matematik", locked: false }],
       save: vi.fn().mockResolvedValue(true),
     };
     Student.findById.mockResolvedValue(studentInstance);
@@ -349,6 +393,14 @@ describe("POST /grades/teacher/lock-grade", () => {
       .send({ studentId: "stu1", courseId: "course1" });
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Grade locked");
+    expect(studentInstance.education[0].locked).toBe(true);
+    expect(Notification.create).toHaveBeenCalledTimes(1);
+    expect(Notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "grade_locked",
+        message: expect.stringContaining("Matematik"),
+      })
+    );
   });
 
   it("returns 404 when student missing", async () => {
@@ -385,14 +437,15 @@ describe("POST /grades/teacher/lock-grade", () => {
     expect(res.status).toBe(500);
   });
 
-  it("rejects non-admin users", async () => {
+  it("rejects roles outside the grading scope", async () => {
     const res = await request(app)
       .post("/grades/teacher/lock-grade")
-      .set("x-user-role", "teacher")
+      .set("x-user-role", "student")
       .send({ studentId: "stu1", courseId: "course1" });
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toContain("Endast admin");
+    expect(res.body.error).toContain("Endast behörig personal");
+    expect(Notification.create).not.toHaveBeenCalled();
   });
 });
 
@@ -589,5 +642,332 @@ describe("PUT /grades/update-grade/:enrollmentId", () => {
       .set("x-user-role", "teacher")
       .send({ grade: "B" });
     expect(res.status).toBe(500);
+  });
+
+  it("saves nationalTestPoints = 0 (not falsy-skipped)", async () => {
+    const enrollment = createEnrollmentRecord();
+    StudentEnrollment.findById.mockResolvedValueOnce(enrollment);
+    const res = await request(app)
+      .put("/grades/update-grade/en1")
+      .set("x-user-role", "teacher")
+      .send({ grade: "E", nationalTestPoints: 0 });
+    expect(enrollment.save).toHaveBeenCalled();
+    expect(res.body.success).toBe(true);
+    expect(enrollment.nationalTestPoints).toBe(0);
+  });
+});
+
+describe("Grading scales (/grades/grading-scale)", () => {
+  const scalePayload = {
+    term: "HT24",
+    subject: "Matematik",
+    scale: [
+      { min: 90, grade: "A" },
+      { min: 75, grade: "B" },
+      { min: 60, grade: "C" },
+      { min: 45, grade: "D" },
+      { min: 30, grade: "E" },
+    ],
+  };
+
+  beforeEach(() => {
+    GradingScale.find.mockReset();
+    GradingScale.distinct.mockReset();
+    GradingScale.findOne.mockReset();
+    GradingScale.create.mockReset();
+    GradingScale.findById.mockReset();
+    GradingScale.findByIdAndDelete.mockReset();
+  });
+
+  describe("GET /grades/grading-scale", () => {
+    it("returns 403 for unauthenticated staff role", async () => {
+      const res = await request(app)
+        .get("/grades/grading-scale")
+        .set("x-user-role", "student");
+      expect(res.status).toBe(403);
+    });
+
+    it("lists scales, filtered by term and subject", async () => {
+      GradingScale.find.mockReturnValueOnce(
+        createQueryChain([{ _id: "scale-1", term: "HT24", subject: "Matematik" }])
+      );
+      const res = await request(app)
+        .get("/grades/grading-scale?term=HT24&subject=Matematik")
+        .set("x-user-role", "teacher");
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(GradingScale.find).toHaveBeenCalledWith({ term: "HT24", subject: "Matematik" });
+    });
+  });
+
+  describe("GET /grades/grading-scale/terms", () => {
+    it("returns distinct terms sorted", async () => {
+      GradingScale.distinct.mockResolvedValue(["VT25", "HT24"]);
+      const res = await request(app)
+        .get("/grades/grading-scale/terms")
+        .set("x-user-role", "admin");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(["HT24", "VT25"]);
+    });
+  });
+
+  describe("GET /grades/grading-scale/suggest", () => {
+    it("returns the suggested grade for a score", async () => {
+      GradingScale.findOne.mockReturnValueOnce({
+        lean: vi.fn().mockResolvedValue({ _id: "scale-1", term: "HT24", subject: "Matematik", scale: scalePayload.scale }),
+      });
+      const res = await request(app)
+        .get("/grades/grading-scale/suggest?term=HT24&subject=Matematik&points=82")
+        .set("x-user-role", "teacher");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ grade: "B", hasScale: true });
+    });
+
+    it("returns hasScale false when no scale exists", async () => {
+      GradingScale.findOne.mockReturnValueOnce({
+        lean: vi.fn().mockResolvedValue(null),
+      });
+      const res = await request(app)
+        .get("/grades/grading-scale/suggest?term=HT24&subject=Engelska&points=82")
+        .set("x-user-role", "teacher");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ grade: null, hasScale: false });
+    });
+
+    it("returns 400 when points are missing", async () => {
+      const res = await request(app)
+        .get("/grades/grading-scale/suggest?term=HT24&subject=Matematik")
+        .set("x-user-role", "teacher");
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("POST /grades/grading-scale", () => {
+    it("creates a scale as admin", async () => {
+      GradingScale.findOne.mockResolvedValue(null);
+      GradingScale.create.mockResolvedValue({ _id: "scale-1", ...scalePayload });
+      const res = await request(app)
+        .post("/grades/grading-scale")
+        .set("x-user-role", "admin")
+        .send(scalePayload);
+      expect(res.status).toBe(201);
+      expect(res.body._id).toBe("scale-1");
+    });
+
+    it("rejects non-admin users", async () => {
+      const res = await request(app)
+        .post("/grades/grading-scale")
+        .set("x-user-role", "teacher")
+        .send(scalePayload);
+      expect(res.status).toBe(403);
+    });
+
+    it("returns 409 when the term+subject already exists", async () => {
+      GradingScale.findOne.mockResolvedValue({ _id: "scale-1" });
+      const res = await request(app)
+        .post("/grades/grading-scale")
+        .set("x-user-role", "admin")
+        .send(scalePayload);
+      expect(res.status).toBe(409);
+    });
+
+    it("returns 400 for an invalid term", async () => {
+      const res = await request(app)
+        .post("/grades/grading-scale")
+        .set("x-user-role", "admin")
+        .send({ ...scalePayload, term: "2024" });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("PUT /grades/grading-scale/:id", () => {
+    it("updates a scale as admin", async () => {
+      const existing = { _id: "scale-1", ...scalePayload, save: vi.fn().mockResolvedValue(true) };
+      GradingScale.findById.mockResolvedValue(existing);
+      GradingScale.findOne.mockResolvedValue(null);
+      const res = await request(app)
+        .put("/grades/grading-scale/scale-1")
+        .set("x-user-role", "systemadmin")
+        .send({ ...scalePayload, term: "VT25" });
+      expect(res.status).toBe(200);
+      expect(existing.term).toBe("VT25");
+      expect(existing.save).toHaveBeenCalled();
+    });
+
+    it("returns 404 when the scale is missing", async () => {
+      GradingScale.findById.mockResolvedValue(null);
+      const res = await request(app)
+        .put("/grades/grading-scale/missing")
+        .set("x-user-role", "admin")
+        .send(scalePayload);
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 409 on duplicate term+subject", async () => {
+      GradingScale.findById.mockResolvedValue({ _id: "scale-1" });
+      GradingScale.findOne.mockResolvedValue({ _id: "scale-2" });
+      const res = await request(app)
+        .put("/grades/grading-scale/scale-1")
+        .set("x-user-role", "admin")
+        .send(scalePayload);
+      expect(res.status).toBe(409);
+    });
+  });
+
+  describe("DELETE /grades/grading-scale/:id", () => {
+    it("deletes a scale as admin", async () => {
+      GradingScale.findByIdAndDelete.mockResolvedValue({ _id: "scale-1" });
+      const res = await request(app)
+        .delete("/grades/grading-scale/scale-1")
+        .set("x-user-role", "admin");
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("returns 404 when the scale is missing", async () => {
+      GradingScale.findByIdAndDelete.mockResolvedValue(null);
+      const res = await request(app)
+        .delete("/grades/grading-scale/missing")
+        .set("x-user-role", "admin");
+      expect(res.status).toBe(404);
+    });
+
+    it("rejects non-admin users", async () => {
+      const res = await request(app)
+        .delete("/grades/grading-scale/scale-1")
+        .set("x-user-role", "teacher");
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe("POST /grades/teacher/lock-grade & PUT /grades/admin/unlock-grade", () => {
+    const mockEnrollment = () => ({
+      populate: vi.fn(() => ({
+        populate: vi.fn(() => ({
+          _id: "en-1",
+          isGradeLocked: false,
+          studentId: { _id: "s-1", name: "Kalle Elev" },
+          courseInstanceId: { courseName: "Svenska 1" },
+          save: vi.fn().mockResolvedValue(true),
+        })),
+      })),
+    });
+
+    it("allows teachers to lock a grade and creates exactly one admin notification", async () => {
+      StudentEnrollment.findById.mockReturnValueOnce(mockEnrollment());
+
+      const res = await request(app)
+        .post("/grades/teacher/lock-grade")
+        .set("x-user-role", "teacher")
+        .send({ enrollmentId: "en-1" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.locked).toBe(true);
+      expect(Notification.create).toHaveBeenCalledTimes(1);
+      const [notification] = Notification.create.mock.calls[0];
+      expect(notification.type).toBe("grade_locked");
+      expect(notification.message).toContain("Kalle Elev");
+      expect(notification.message).toContain("Svenska 1");
+      expect(notification.message).toContain("lärare TestUser");
+      expect(notification.meta).toEqual(
+        expect.objectContaining({
+          studentId: "s-1",
+          enrollmentId: "en-1",
+          teacherId: "user123",
+        })
+      );
+    });
+
+    it("allows systemadmin to lock and still notifies admins", async () => {
+      StudentEnrollment.findById.mockReturnValueOnce(mockEnrollment());
+
+      const res = await request(app)
+        .post("/grades/teacher/lock-grade")
+        .set("x-user-role", "systemadmin")
+        .send({ enrollmentId: "en-1" });
+
+      expect(res.status).toBe(200);
+      expect(Notification.create).toHaveBeenCalledTimes(1);
+      expect(Notification.create.mock.calls[0][0].message).toContain("admin TestUser");
+    });
+
+    it("locks a legacy student.education row and notifies with course context", async () => {
+      const studentInstance = {
+        _id: "stu-edu",
+        name: "Legacy Elev",
+        education: [{ refId: "course-9", name: "Engelska 5", locked: false }],
+        save: vi.fn().mockResolvedValue(true),
+      };
+      Student.findById.mockResolvedValue(studentInstance);
+
+      const res = await request(app)
+        .post("/grades/teacher/lock-grade")
+        .set("x-user-role", "teacher")
+        .send({ studentId: "stu-edu", courseId: "course-9" });
+
+      expect(res.status).toBe(200);
+      expect(studentInstance.education[0].locked).toBe(true);
+      expect(Notification.create).toHaveBeenCalledTimes(1);
+      const [notification] = Notification.create.mock.calls[0];
+      expect(notification.type).toBe("grade_locked");
+      expect(notification.message).toContain("Legacy Elev");
+      expect(notification.message).toContain("Engelska 5");
+      expect(notification.meta).toEqual(
+        expect.objectContaining({
+          studentId: "stu-edu",
+          courseId: "course-9",
+          enrollmentId: null,
+        })
+      );
+    });
+
+    it("returns 400 and does not notify when neither student nor enrollment is provided", async () => {
+      const res = await request(app)
+        .post("/grades/teacher/lock-grade")
+        .set("x-user-role", "teacher")
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(Notification.create).not.toHaveBeenCalled();
+    });
+
+    it("allows admin to unlock a grade and creates an unlock notification", async () => {
+      StudentEnrollment.findById.mockReturnValueOnce({
+        populate: vi.fn(() => ({
+          populate: vi.fn(() => ({
+            _id: "en-1",
+            isGradeLocked: true,
+            studentId: { _id: "s-1", name: "Kalle Elev" },
+            courseInstanceId: { courseName: "Svenska 1" },
+            save: vi.fn().mockResolvedValue(true),
+          })),
+        })),
+      });
+
+      const res = await request(app)
+        .put("/grades/admin/unlock-grade")
+        .set("x-user-role", "admin")
+        .send({ enrollmentId: "en-1" });
+
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("Betyg upplåst");
+      expect(Notification.create).toHaveBeenCalledTimes(1);
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "grade_unlocked",
+          message: expect.stringContaining("Kalle Elev"),
+        })
+      );
+    });
+
+    it("rejects non-admin users attempting to unlock", async () => {
+      const res = await request(app)
+        .put("/grades/admin/unlock-grade")
+        .set("x-user-role", "teacher")
+        .send({ enrollmentId: "en-1" });
+
+      expect(res.status).toBe(403);
+      expect(Notification.create).not.toHaveBeenCalled();
+    });
   });
 });

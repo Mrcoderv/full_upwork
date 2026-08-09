@@ -21,6 +21,7 @@ import { sendDropoutNotification } from "../controllers/notificationController.j
 import { hasRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
+import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
 
 const router = Router();
 
@@ -342,15 +343,16 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
                 }));
 
             const mergedEducation = [...enrollmentEducation];
+            // Dedicated APL rule: CoursePackage entries are always derived from the
+            // student's current enrollments (single source of truth). Stored legacy
+            // CoursePackage entries must not be merged when a package enrollment
+            // already exists, otherwise stale start/end dates (e.g. after a study
+            // plan revision) would inflate the APL period shown in the APL board.
             for (const pkg of packageEntries) {
                 const exists = mergedEducation.some(
                     (x) =>
                         x.type === "CoursePackage" &&
-                        String(x.refId?._id || x.refId) === String(pkg.refId) &&
-                        String(new Date(x.startDate).getTime() || "") ===
-                            String(new Date(pkg.startDate).getTime() || "") &&
-                        String(new Date(x.endDate).getTime() || "") ===
-                            String(new Date(pkg.endDate).getTime() || "")
+                        String(x.refId?._id || x.refId) === String(pkg.refId)
                 );
                 if (!exists) mergedEducation.push(pkg);
             }
@@ -404,6 +406,22 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
             }
 
             student.education = mergedEducation;
+
+            // APL auto-status: derive the APL period from the merged education
+            // entries and compute the effective (date-driven) status. When the
+            // APL period ends within APL_AUTO_RED_WEEKS weeks the effective
+            // status becomes RED ("Snart slut") without touching stored data.
+            const aplPeriod = computeAplPeriod(student.education);
+            const aplEffective = computeAplEffectiveStatus(
+                student.aplStatus,
+                aplPeriod.aplEndDate
+            );
+            student.aplStatus = aplEffective.aplStatus;
+            student.aplStatusStored = aplEffective.aplStatusStored;
+            student.aplStatusAuto = aplEffective.aplAutoRed;
+            student.aplWeeksRemaining = aplEffective.aplWeeksRemaining;
+            student.aplStartDate = aplPeriod.aplStartDate;
+            student.aplEndDate = aplPeriod.aplEndDate;
         }
         res.status(200).json(students);
     } catch (error) {
@@ -411,6 +429,30 @@ router.get("/students", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (r
         res.status(500).json({ error: "Server error" });
     }
 });
+
+/**
+ * @route   GET /students/dropouts
+ * @desc    Fetch inactive (dropout) students for the "Inaktiva elever" list.
+ * @access  Protected (Admin+ only)
+ */
+router.get(
+    "/students/dropouts",
+    authenticateUser,
+    hasRole(["admin", "systemadmin"]),
+    async (req, res) => {
+        try {
+            const students = await Student.find({ dropout: true })
+                .populate("teacherId", "name email")
+                .sort({ updatedAt: -1 })
+                .lean();
+
+            res.status(200).json(students);
+        } catch (error) {
+            logger.error({ err: error }, "Error fetching inactive students");
+            res.status(500).json({ error: "Failed to fetch inactive students" });
+        }
+    }
+);
 
 /**
  * @route   POST /student
@@ -431,15 +473,43 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
             return res.status(400).json({ error: "Missing required fields" });
         }
 
-        const allowedStudentCreateFields = ['name', 'email', 'personalNumber', 'phone', 'municipality', 'startDate', 'endDate', 'finalExamDate', 'teacher', 'dropout', 'additionalInfo', 'courses', 'education', 'createdBy', 'specialNeeds', 'teacherId', 'aplStatus', 'exam', 'attendedExam', 'paidExamFee'];
+        const allowedStudentCreateFields = ['name', 'email', 'personalNumber', 'phone', 'municipality', 'startDate', 'endDate', 'finalExamDate', 'teacher', 'dropout', 'additionalInfo', 'courses', 'education', 'createdBy', 'specialNeeds', 'teacherId', 'aplStatus', 'exam', 'attendedExam', 'paidExamFee', 'priorAplCompleted', 'priorAplIntygDocId'];
         const studentData = {};
         for (const field of allowedStudentCreateFields) {
             if (req.body[field] !== undefined) studentData[field] = req.body[field];
         }
-        const student = new Student(studentData);
-        const savedStudent = await student.save();
+        // Re-registration (returning student): if a student with the same
+        // personalNumber or email already exists, auto-fill their record with
+        // the submitted details and register the new courses instead of
+        // creating a duplicate student.
+        const existingStudent = await Student.findOne({
+            $or: [
+                { personalNumber: studentData.personalNumber },
+                { email: studentData.email },
+            ],
+        });
 
-        logger.info({ id: savedStudent._id, name: savedStudent.name, email: savedStudent.email, aplStatus: savedStudent.aplStatus, education: savedStudent.education }, "Student saved");
+        let savedStudent;
+        let alreadyExists = false;
+        if (existingStudent) {
+            alreadyExists = true;
+            for (const field of Object.keys(studentData)) {
+                if (field === "education") continue;
+                if (studentData[field] !== undefined) {
+                    existingStudent[field] = studentData[field];
+                }
+            }
+            if (existingStudent.dropout) {
+                existingStudent.dropout = false;
+            }
+            savedStudent = await existingStudent.save();
+            logger.info({ id: savedStudent._id, name: savedStudent.name }, "Re-registered existing student with auto-filled details");
+        } else {
+            const student = new Student(studentData);
+            savedStudent = await student.save();
+
+            logger.info({ id: savedStudent._id, name: savedStudent.name, email: savedStudent.email, aplStatus: savedStudent.aplStatus, education: savedStudent.education }, "Student saved");
+        }
 
         if (req.body.education && req.body.education.length > 0) {
             const CourseMatchingService = await import(
@@ -451,7 +521,11 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
                     await CourseMatchingService.default.processStudentEducation(
                         savedStudent._id,
                         req.body.education,
-                        req.body.createdBy || null
+                        req.body.createdBy || null,
+                        {
+                            needsSupport: req.body.needsSupport,
+                            examMode: req.body.examMode,
+                        }
                     );
 
                 logger.info({ count: enrollmentResult?.enrollments?.length || 0, studentName: savedStudent.name }, "Created enrollments for student");
@@ -469,6 +543,13 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
             } catch (calendarError) {
                 logger.error({ err: calendarError }, "Error syncing calendar event");
             }
+        }
+
+        if (alreadyExists) {
+            const existingPayload = savedStudent.toObject
+                ? savedStudent.toObject()
+                : savedStudent;
+            return res.status(200).json({ ...existingPayload, alreadyExists: true });
         }
 
         res.status(201).json(savedStudent);
@@ -930,6 +1011,8 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
         "examLocation",
         "examTime",
         "education",
+        "priorAplCompleted",
+        "priorAplIntygDocId",
     ];
 
     const updates = {};

@@ -96,6 +96,17 @@
 
         <v-row>
           <v-col cols="12" class="text-end">
+            <v-btn
+              type="button"
+              variant="outlined"
+              color="secondary"
+              size="large"
+              elevation="1"
+              class="mr-3"
+              @click="downloadPdf"
+            >
+              Ladda ner PDF
+            </v-btn>
             <v-btn type="submit" color="primary" size="large" elevation="1">
               💾 Spara Handlingsplan
             </v-btn>
@@ -184,6 +195,29 @@
       }
     }
     */
+
+  const downloadPdf = async () => {
+    const studentId = props.userData?._id
+    if (!studentId) {
+      toast.error('Ingen studentdata hittades för att ladda ner handlingsplanen.')
+      return
+    }
+    try {
+      const res = await client.get(`/actionplan/${studentId}/pdf`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(res.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `handlingsplan-${studentId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success('Handlingsplanen laddades ner som PDF!')
+    } catch (error) {
+      console.error('Kunde inte ladda ner handlingsplan:', error)
+      toast.error(error.message || 'Kunde inte ladda ner handlingsplan.')
+    }
+  }
 
   const submitPlan = async () => {
     const studentId = props.userData?._id
