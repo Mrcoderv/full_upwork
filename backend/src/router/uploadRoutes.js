@@ -41,6 +41,15 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE }
 })
+// Resolve the logged-in user's own Student profile (student self-access),
+// linked by email the same way the rest of the app links student accounts.
+async function findSelfStudent(user) {
+  const roles = user.roles || (user.role ? [user.role] : []);
+  if (!roles.includes("student")) return null;
+  const Student = mongoose.model("Student");
+  return Student.findOne({ email: user.email });
+}
+
 // Middleware to authorize student-specific file access
 async function checkStudentAccess(req, res, next) {
   try {
@@ -54,6 +63,17 @@ async function checkStudentAccess(req, res, next) {
     const userRoles = user.roles || (user.role ? [user.role] : []);
     const isStaff = userRoles.some(r => ["systemadmin", "admin", "coordinator", "syv", "specped", "tester"].includes(r));
     const isTeacher = userRoles.includes("teacher");
+    const isStudent = userRoles.includes("student");
+
+    // A student may manage files for their own student profile (self-access),
+    // e.g. upload assignment files before submitting them.
+    if (isStudent && !isStaff && !isTeacher) {
+      const student = await findSelfStudent(user);
+      if (!student || student._id.toString() !== studentId) {
+        return res.status(403).json({ error: "Forbidden: You can only manage files for your own student profile." });
+      }
+      return next();
+    }
 
     if (!isStaff && !isTeacher) {
       return res.status(403).json({ error: "Forbidden: Access denied." });
@@ -102,8 +122,9 @@ async function checkFileAccess(req, res, next) {
     const userRoles = user.roles || (user.role ? [user.role] : []);
     const isStaff = userRoles.some(r => ["systemadmin", "admin", "coordinator", "syv", "specped", "tester"].includes(r));
     const isTeacher = userRoles.includes("teacher");
+    const isStudent = userRoles.includes("student");
 
-    if (!isStaff && !isTeacher) {
+    if (!isStaff && !isTeacher && !isStudent) {
       return res.status(403).json({ error: "Forbidden: Access denied." });
     }
 
@@ -117,6 +138,19 @@ async function checkFileAccess(req, res, next) {
     if (!studentId) {
       if (!userRoles.some(r => ["systemadmin", "admin", "tester"].includes(r))) {
         return res.status(403).json({ error: "Forbidden: Only administrators can access orphan files." });
+      }
+      req.fileRecord = file;
+      return next();
+    }
+
+    // A student may only download (GET) files belonging to their own profile.
+    if (isStudent && !isStaff && !isTeacher) {
+      if (req.method !== "GET") {
+        return res.status(403).json({ error: "Forbidden: Students can only download their own files." });
+      }
+      const student = await findSelfStudent(user);
+      if (!student || student._id.toString() !== String(studentId)) {
+        return res.status(403).json({ error: "Forbidden: You can only download your own files." });
       }
       req.fileRecord = file;
       return next();

@@ -359,7 +359,7 @@ describe("duplicateTemplateIntoCourseInstance", () => {
                 title: "Delprov",
                 isPartialExam: true,
                 isCaseStudy: false,
-                sections: [{ title: "S1", description: "d1" }],
+                sections: [{ title: "S1", description: "d1", instructions: "" }],
             },
         ]);
     });

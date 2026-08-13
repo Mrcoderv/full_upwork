@@ -780,6 +780,7 @@
         { name: 'Hantera Prövningar', link: '/provningar', role: 'admin' },
         { name: 'Prövningar', link: '/examform', role: 'student' },
         { name: 'Mina kurser', link: '/course-cards', role: 'student' },
+        { name: 'Inlämningar', link: '/submissions', role: ['teacher', 'admin', 'systemadmin'] },
         { name: 'Meddelanden', link: '/messages', role: ['student', 'teacher', 'syv', 'specped', 'admin', 'systemadmin', 'coordinator'] },
       ]
 

@@ -139,7 +139,44 @@
                     class="mt-2"
                     hide-details
                   />
+                  <v-textarea
+                    v-model="section.instructions"
+                    :label="`Sektion ${sectionIndex + 1} – Lektionsinnehåll (instruktioner)`"
+                    density="compact"
+                    class="mt-2"
+                    auto-grow
+                    rows="2"
+                    hide-details
+                  />
                 </div>
+              </div>
+
+              <div class="mt-3 assignment-block pa-2">
+                <v-checkbox
+                  v-model="module.assignmentEnabled"
+                  :label="`Inlämningsuppgift (modul ${module.moduleNumber})`"
+                  density="compact"
+                  hide-details
+                  class="assignment-toggle"
+                />
+                <template v-if="module.assignmentEnabled">
+                  <v-text-field
+                    v-model="module.assignment.title"
+                    label="Uppgiftens rubrik"
+                    density="compact"
+                    class="mt-2"
+                    hide-details
+                  />
+                  <v-textarea
+                    v-model="module.assignment.description"
+                    label="Uppgiftsbeskrivning"
+                    density="compact"
+                    class="mt-2"
+                    auto-grow
+                    rows="2"
+                    hide-details
+                  />
+                </template>
               </div>
             </div>
 
@@ -206,9 +243,11 @@
       isPartialExam: i === 2,
       isCaseStudy: i === 4,
       sections: [
-        { title: 'Sektion 1', description: '' },
-        { title: 'Sektion 2', description: '' },
+        { title: 'Sektion 1', description: '', instructions: '' },
+        { title: 'Sektion 2', description: '', instructions: '' },
       ],
+      assignment: { title: '', description: '' },
+      assignmentEnabled: false,
     }))
 
   const form = ref({
@@ -265,7 +304,13 @@
         sections: (module.sections || []).map((section) => ({
           title: section.title,
           description: section.description,
+          instructions: section.instructions || '',
         })),
+        assignment: {
+          title: module.assignment?.title || '',
+          description: module.assignment?.description || '',
+        },
+        assignmentEnabled: !!(module.assignment?.title || module.assignment?.description),
       })),
       isActive: template.isActive,
     }
@@ -284,7 +329,10 @@
       const payload = {
         templateName: form.value.templateName.trim(),
         courseId: form.value.courseId || undefined,
-        modules: form.value.modules,
+        modules: form.value.modules.map(({ assignmentEnabled, ...module }) => ({
+          ...module,
+          assignment: assignmentEnabled ? module.assignment : { title: '', description: '' },
+        })),
         isActive: form.value.isActive,
       }
       if (editing.value) {
@@ -343,6 +391,11 @@
   .section-block {
     background: #fafafa;
     border: 1px solid #eee;
+    border-radius: 6px;
+  }
+  .assignment-block {
+    background: #f3f6ff;
+    border: 1px solid #e0e7ff;
     border-radius: 6px;
   }
   .module-title-input {

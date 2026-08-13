@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 
-// A section inside a module (each module contains exactly 2 sections by default)
+// A section inside a module (each module contains exactly 2 sections by default).
+// `instructions` holds the actual lesson/study content the student reads.
 export const sectionSchema = new mongoose.Schema(
     {
         title: { type: String, default: "" },
         description: { type: String, default: "" },
+        instructions: { type: String, default: "" },
     },
     { _id: false }
 );
@@ -18,6 +20,12 @@ export const courseModuleSchema = new mongoose.Schema(
         isPartialExam: { type: Boolean, default: false },
         isCaseStudy: { type: Boolean, default: false },
         sections: { type: [sectionSchema], default: [] },
+        // Optional assignment the student submits for this module. Modules
+        // without an assignment contribute nothing to the course progress.
+        assignment: {
+            title: { type: String, default: "" },
+            description: { type: String, default: "" },
+        },
     },
     { _id: false }
 );
@@ -35,9 +43,10 @@ export const buildDefaultModules = () => {
             isPartialExam: i === 3,
             isCaseStudy: i === 5,
             sections: [
-                { title: "Sektion 1", description: "" },
-                { title: "Sektion 2", description: "" },
+                { title: "Sektion 1", description: "", instructions: "" },
+                { title: "Sektion 2", description: "", instructions: "" },
             ],
+            assignment: { title: "", description: "" },
         });
     }
     return modules;
@@ -53,5 +62,13 @@ export const cloneModules = (modules) =>
         sections: (m.sections || []).map((s) => ({
             title: s.title ?? "",
             description: s.description ?? "",
+            instructions: s.instructions ?? "",
         })),
+        assignment:
+            m.assignment?.title || m.assignment?.description
+                ? {
+                      title: m.assignment.title ?? "",
+                      description: m.assignment.description ?? "",
+                  }
+                : undefined,
     })) ?? [];

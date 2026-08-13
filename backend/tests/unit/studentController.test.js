@@ -53,6 +53,12 @@ vi.mock("../../src/utils/parseStudentExcel.js", async () => {
   };
 });
 
+vi.mock("../../src/services/emailService.js", () => ({
+  __esModule: true,
+  maybeSendLarteametEmail: vi.fn(),
+  SOLLENTUNA_MUNICIPALITY: "Sollentuna",
+}));
+
 const loggerMock = vi.hoisted(() => ({
   info: vi.fn(),
   warn: vi.fn(),
@@ -75,6 +81,7 @@ import {
   normalizeMunicipalityName,
 } from "../../src/controllers/studentController.js";
 import * as parseModule from "../../src/utils/parseStudentExcel.js";
+import { maybeSendLarteametEmail } from "../../src/services/emailService.js";
 
 const createLeanResult = (value) => ({
   lean: vi.fn().mockResolvedValue(value),
@@ -101,6 +108,8 @@ beforeEach(() => {
   Teacher.findOne.mockResolvedValue(null);
   createOrFindTeacherMock.mockClear();
   parseModule.parseStudentExcel.mockResolvedValue([]);
+  maybeSendLarteametEmail.mockReset();
+  maybeSendLarteametEmail.mockResolvedValue({ sent: true });
 });
 
 describe("normalizeMunicipalityName", () => {
@@ -235,6 +244,158 @@ describe("uploadXlsx", () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(Student.bulkWrite).toHaveBeenCalled();
+  });
+
+  it("fires the Lärteamet email exactly once for a newly created Sollentuna student", async () => {
+    const parsedStudents = [
+      {
+        email: "sollentuna@example.com",
+        name: "Sollentuna Student",
+        municipality: "Sollentuna",
+        teacher: "Teacher, First",
+        education: [{ name: "CRS-101 NIVÅ 1" }],
+      },
+    ];
+    parseModule.parseStudentExcel.mockResolvedValue(parsedStudents);
+    Course.find.mockReturnValue(
+      createLeanResult([{ courseCode: "CRS-101 NIVÅ 1", _id: "course-101" }])
+    );
+    const res = createMockRes();
+    const req = {
+      file: { buffer: Buffer.from("data"), originalname: "sollentuna.xlsx" },
+    };
+    await uploadXlsx(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(maybeSendLarteametEmail).toHaveBeenCalledTimes(1);
+    expect(maybeSendLarteametEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        student: expect.objectContaining({
+          email: "sollentuna@example.com",
+          name: "Sollentuna Student",
+          municipality: "Sollentuna",
+        }),
+        studentName: "Sollentuna Student",
+        email: "sollentuna@example.com",
+      })
+    );
+  });
+
+  it("fires the Lärteamet email per-student for new Sollentuna students in a bulk upload", async () => {
+    const parsedStudents = [
+      {
+        email: "sollentuna-a@example.com",
+        name: "Student A",
+        municipality: "Sollentuna",
+        teacher: "Teacher, First",
+        education: [{ name: "CRS-101 NIVÅ 1" }],
+      },
+      {
+        email: "sollentuna-b@example.com",
+        name: "Student B",
+        municipality: "Sollentuna",
+        teacher: "Teacher, First",
+        education: [{ name: "CRS-101 NIVÅ 1" }],
+      },
+    ];
+    parseModule.parseStudentExcel.mockResolvedValue(parsedStudents);
+    Course.find.mockReturnValue(
+      createLeanResult([{ courseCode: "CRS-101 NIVÅ 1", _id: "course-101" }])
+    );
+    const res = createMockRes();
+    const req = {
+      file: { buffer: Buffer.from("data"), originalname: "bulk-sollentuna.xlsx" },
+    };
+    await uploadXlsx(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(maybeSendLarteametEmail).toHaveBeenCalledTimes(2);
+    const sentTo = maybeSendLarteametEmail.mock.calls.map(
+      (call) => call[0].email
+    );
+    expect(sentTo.sort()).toEqual([
+      "sollentuna-a@example.com",
+      "sollentuna-b@example.com",
+    ]);
+  });
+
+  it("does NOT re-fire the Lärteamet email for an existing re-uploaded Sollentuna student", async () => {
+    const parsedStudents = [
+      {
+        email: "sollentuna-existing@example.com",
+        name: "Returning Sollentuna",
+        municipality: "Sollentuna",
+        teacher: "Teacher, First",
+        education: [{ name: "CRS-101 NIVÅ 1" }],
+      },
+    ];
+    parseModule.parseStudentExcel.mockResolvedValue(parsedStudents);
+    Course.find.mockReturnValue(
+      createLeanResult([{ courseCode: "CRS-101 NIVÅ 1", _id: "course-101" }])
+    );
+    Student.find.mockResolvedValue([
+      { email: "sollentuna-existing@example.com", education: [] },
+    ]);
+    const res = createMockRes();
+    const req = {
+      file: { buffer: Buffer.from("data"), originalname: "existing.xlsx" },
+    };
+    await uploadXlsx(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(maybeSendLarteametEmail).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire the Lärteamet email for non-Sollentuna students", async () => {
+    const parsedStudents = [
+      {
+        email: "solna@example.com",
+        name: "Solna Student",
+        municipality: "Solna",
+        teacher: "Teacher, First",
+        education: [{ name: "CRS-101 NIVÅ 1" }],
+      },
+    ];
+    parseModule.parseStudentExcel.mockResolvedValue(parsedStudents);
+    Course.find.mockReturnValue(
+      createLeanResult([{ courseCode: "CRS-101 NIVÅ 1", _id: "course-101" }])
+    );
+    const res = createMockRes();
+    const req = {
+      file: { buffer: Buffer.from("data"), originalname: "solna.xlsx" },
+    };
+    await uploadXlsx(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(maybeSendLarteametEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not abort the upload when the Lärteamet email send fails", async () => {
+    const parsedStudents = [
+      {
+        email: "sollentuna-fail@example.com",
+        name: "Failed Email",
+        municipality: "Sollentuna",
+        teacher: "Teacher, First",
+        education: [{ name: "CRS-101 NIVÅ 1" }],
+      },
+    ];
+    parseModule.parseStudentExcel.mockResolvedValue(parsedStudents);
+    Course.find.mockReturnValue(
+      createLeanResult([{ courseCode: "CRS-101 NIVÅ 1", _id: "course-101" }])
+    );
+    maybeSendLarteametEmail.mockRejectedValue(new Error("SMTP down"));
+    const res = createMockRes();
+    const req = {
+      file: { buffer: Buffer.from("data"), originalname: "sollentuna-fail.xlsx" },
+    };
+    await uploadXlsx(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.anything(),
+      "Lärteamet email trigger failed (non-fatal)"
+    );
   });
 
   it("returns 500 when the municipality cannot be matched", async () => {

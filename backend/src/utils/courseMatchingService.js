@@ -1,5 +1,7 @@
 import { normalizeCodeForMatching } from "./parseStudentExcel.js";
+import { cloneModules } from "../models/courseModuleSchema.js";
 import logger from "./logger.js";
+import TeacherScheduleParameters from "../models/TeacherScheduleParameters.js";
 
 class CourseMatchingService {
     /**
@@ -100,6 +102,26 @@ class CourseMatchingService {
     }
 
     /**
+     * Resolve the course template to auto-generate card content from at
+     * admission time (MILESTONE-3 #31 Part B).
+     *
+     * Rule: the template tied to this course via `courseId` wins. Among
+     * several candidates the most recently updated ACTIVE template is chosen
+     * (sort: isActive desc, then updatedAt desc). Returns null when the
+     * course has no template — callers then create the card with empty
+     * modules and log the gap explicitly.
+     */
+    static async resolveCourseTemplate(mainCourseId) {
+        const { default: CourseTemplate } = await import(
+            "../models/CourseTemplate.js"
+        );
+        return CourseTemplate.findOne({ courseId: mainCourseId }).sort({
+            isActive: -1,
+            updatedAt: -1,
+        });
+    }
+
+    /**
      * Find or create course instance for a specific date range
      */
     static async findOrCreateCourseInstance(
@@ -180,6 +202,67 @@ class CourseMatchingService {
         const month = String(startDateObj.getMonth() + 1).padStart(2, '0'); // Month (01-12)
         const uniqueCourseCode = `${mainCourse.courseCode}${year}${month}`;
 
+        // Auto-generate card content from the course's own template (item #31
+        // Part B). Only applies to NEW instances created at admission time —
+        // existing instances are never rewritten, so the "same course + dates
+        // share one card" behavior is unaffected. The admin flow's explicit
+        // templateId is resolved by the controller and always wins.
+        const template = await this.resolveCourseTemplate(mainCourseId);
+        let templateModules = [];
+        if (template) {
+            templateModules = cloneModules(template.modules);
+            logger.info({ courseName: mainCourse.courseName, templateId: template._id, moduleCount: templateModules.length }, "Auto-generated course card content from course template");
+        } else {
+            logger.info({ courseName: mainCourse.courseName, mainCourseId }, "course has no template — card created without content");
+        }
+
+        // --- Schedule parameters wiring ---
+        // 1. Determine length weeks from the course duration
+        const courseStart = new Date(startDate);
+        const courseEnd = new Date(endDate);
+        const lengthWeeks = Math.round((courseEnd - courseStart) / (7 * 24 * 60 * 60 * 1000));
+
+        // 2. Look up the responsible teacher's saved schedule parameters
+        let sectionDates = [];
+        if (responsibleTeacherId) {
+            const params = await TeacherScheduleParameters.findOne({
+                teacherId: responsibleTeacherId,
+                courseId: mainCourse.courseId || "",
+                lengthWeeks,
+            }).lean();
+
+            if (params && params.sectionOffsets && params.sectionOffsets.length === 5) {
+                // Use the teacher's saved offsets
+                sectionDates = params.sectionOffsets.map((offsetWeeks) => {
+                    const date = new Date(courseStart);
+                    date.setDate(date.getDate() + offsetWeeks * 7);
+                    return date;
+                });
+                logger.info({ courseName: mainCourse.courseName, teacherId: responsibleTeacherId, sectionDates }, "Using teacher's saved schedule parameters for section dates");
+            } else {
+                // Parameters exist but offsets are invalid/empty → fall back to defaults
+                logger.info({ courseName: mainCourse.courseName, teacherId: responsibleTeacherId }, "Teacher schedule parameters found but offsets invalid; using defaults");
+            }
+        }
+
+        // 3. If no saved parameters (or no teacher), use evenly-spaced defaults
+        if (sectionDates.length === 0) {
+            const defaultOffsets = {
+                5: [0, 1, 2, 3, 4],
+                10: [0, 2, 4, 6, 8],
+                20: [0, 4, 8, 12, 16],
+            };
+            const offsets = defaultOffsets[lengthWeeks] || [0, 1, 2, 3, 4];
+            sectionDates = offsets.map((offsetWeeks) => {
+                const date = new Date(courseStart);
+                date.setDate(date.getDate() + offsetWeeks * 7);
+                return date;
+            });
+            if (responsibleTeacherId) {
+                logger.info({ courseName: mainCourse.courseName, teacherId: responsibleTeacherId, lengthWeeks }, "No saved schedule parameters; using evenly-spaced defaults for section dates");
+            }
+        }
+
         const newInstance = new CourseInstance({
             mainCourseId,
             startDate,
@@ -193,6 +276,8 @@ class CourseMatchingService {
             notes: `Auto-created for student enrollment (${startDate.toDateString()} - ${endDate.toDateString()})`,
             // Only set slutprovDate if explicitly provided and no teacher (let pre-save hook calculate for teachers)
             slutprovDate: shouldSetSlutprovDate ? slutprovDate : undefined,
+            modules: templateModules,
+            sectionDates, // auto-generated section start dates
         });
 
         await newInstance.save();

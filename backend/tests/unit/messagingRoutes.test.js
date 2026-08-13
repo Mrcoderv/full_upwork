@@ -49,6 +49,17 @@ vi.mock("../../src/models/User.js", () => {
     },
   };
 });
+vi.mock("../../src/services/emailService.js", () => ({
+  __esModule: true,
+  sendEmail: vi.fn(),
+  renderMessageCopyEmail: vi.fn(
+    ({ senderName, messageBody, subject }) => ({
+      subject:
+        subject || `Meddelande från ${senderName || "Mindful Learning"}`,
+      text: `${senderName || "Mindful"}: ${messageBody}`,
+    })
+  ),
+}));
 
 import Conversation from "../../src/models/Conversation.js";
 import Message from "../../src/models/Message.js";
@@ -62,6 +73,7 @@ import {
   getRecipients,
 } from "../../src/controllers/messagingController.js";
 import { canMessage, sendEmailCopyOfMessage } from "../../src/services/messagingService.js";
+import { sendEmail, renderMessageCopyEmail } from "../../src/services/emailService.js";
 
 const createRes = () => {
   const res = {
@@ -125,10 +137,62 @@ describe("Messaging Service & Controller", () => {
     });
   });
 
-  describe("messagingService.sendEmailCopyOfMessage (Part B Stub)", () => {
-    it("executes stub without throwing", async () => {
-      const dummyMsg = { _id: new mongoose.Types.ObjectId() };
-      await expect(sendEmailCopyOfMessage(dummyMsg, studentUser)).resolves.not.toThrow();
+  describe("messagingService.sendEmailCopyOfMessage (Part B)", () => {
+    it("sends an email copy via the real email service for a student recipient with an email", async () => {
+      sendEmail.mockResolvedValue({ success: true });
+      const dummyMsg = {
+        _id: new mongoose.Types.ObjectId(),
+        body: "Kom ihåg inlämningen!",
+        conversationSubject: "Inlämning",
+      };
+
+      await sendEmailCopyOfMessage(dummyMsg, studentUser, {
+        senderName: "Anna Lärare",
+      });
+
+      expect(renderMessageCopyEmail).toHaveBeenCalledWith({
+        senderName: "Anna Lärare",
+        messageBody: "Kom ihåg inlämningen!",
+        subject: "Inlämning",
+      });
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: "erik@elev.se",
+          subject: "Inlämning",
+          text: "Anna Lärare: Kom ihåg inlämningen!",
+        })
+      );
+    });
+
+    it("skips sending when the student recipient has no email address", async () => {
+      const noEmailStudent = { ...studentUser, email: undefined };
+
+      await sendEmailCopyOfMessage(
+        { _id: new mongoose.Types.ObjectId(), body: "Hej" },
+        noEmailStudent,
+        { senderName: "Anna Lärare" }
+      );
+
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("does not send email copies for non-student recipients", async () => {
+      const adminUser = {
+        _id: new mongoose.Types.ObjectId(),
+        name: "Admin",
+        email: "admin@mindful.se",
+        roles: ["admin"],
+        role: "admin",
+      };
+
+      await sendEmailCopyOfMessage(
+        { _id: new mongoose.Types.ObjectId(), body: "Hej" },
+        adminUser,
+        { senderName: "Anna Lärare" }
+      );
+
+      expect(sendEmail).not.toHaveBeenCalled();
     });
   });
 

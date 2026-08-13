@@ -69,6 +69,16 @@
               </div>
             </div>
 
+            <div v-if="card.progress" class="progress-block">
+              <span class="progress-label">
+                Framsteg: {{ card.progress.completed }}/{{ card.progress.total }}
+                ({{ card.progress.percent }}%)
+              </span>
+              <div class="progress-track">
+                <div class="progress-fill" :style="{ width: card.progress.percent + '%' }"></div>
+              </div>
+            </div>
+
             <div v-if="card.modules && card.modules.length > 0" class="course-card-modules">
               <h5 class="modules-title">Kursupplägg</h5>
               <div class="module-chips">
@@ -93,8 +103,70 @@
                   <li v-for="(section, i) in module.sections || []" :key="i" class="section-item">
                     <span class="section-title">{{ section.title || 'Sektion ' + (i + 1) }}</span>
                     <span v-if="section.description" class="section-description">{{ section.description }}</span>
+                    <span v-if="section.instructions" class="section-instructions">{{ section.instructions }}</span>
                   </li>
                 </ul>
+
+                <div
+                  v-if="module.assignment && (module.assignment.title || module.assignment.description)"
+                  class="assignment-block"
+                >
+                  <div class="assignment-heading">
+                    <strong>{{ module.assignment.title || 'Inlämningsuppgift' }}</strong>
+                  </div>
+                  <p v-if="module.assignment.description" class="assignment-description">
+                    {{ module.assignment.description }}
+                  </p>
+
+                  <div v-if="getSubmission(card, module)" class="submission-status">
+                    <span class="submission-meta">
+                      Inlämnat {{ formatDateTime(getSubmission(card, module).submittedAt) }}
+                    </span>
+                    <span
+                      v-if="getSubmission(card, module).feedback && getSubmission(card, module).feedback.status === 'godkänd'"
+                      class="feedback-chip feedback-ok"
+                    >Godkänd</span>
+                    <span
+                      v-else-if="getSubmission(card, module).feedback && getSubmission(card, module).feedback.status === 'komplettera'"
+                      class="feedback-chip feedback-rework"
+                    >Komplettera</span>
+                    <span v-else class="feedback-chip feedback-pending">Väntar på återkoppling</span>
+                    <p
+                      v-if="getSubmission(card, module).feedback && getSubmission(card, module).feedback.comment"
+                      class="feedback-comment"
+                    >
+                      {{ getSubmission(card, module).feedback.comment }}
+                    </p>
+                  </div>
+
+                  <div class="submission-form">
+                    <textarea
+                      v-model="drafts[keyFor(card, module)].text"
+                      class="submission-textarea"
+                      :placeholder="'Skriv din inlämning för modul ' + module.moduleNumber + '...'"
+                      rows="3"
+                    ></textarea>
+                    <div class="submission-actions">
+                      <label class="file-picker">
+                        Välj fil
+                        <input type="file" class="file-input" @change="onFileChange(card, module, $event)" />
+                      </label>
+                      <span v-if="drafts[keyFor(card, module)].fileName" class="file-name">
+                        {{ drafts[keyFor(card, module)].fileName }}
+                      </span>
+                      <button
+                        class="submit-btn"
+                        :disabled="!!submitting[keyFor(card, module)]"
+                        @click="submitAssignment(card, module)"
+                      >
+                        {{ submitting[keyFor(card, module)] ? 'Skickar...' : 'Skicka in' }}
+                      </button>
+                    </div>
+                    <span v-if="submitError[keyFor(card, module)]" class="submit-error">
+                      {{ submitError[keyFor(card, module)] }}
+                    </span>
+                  </div>
+                </div>
               </details>
             </div>
           </article>
@@ -105,21 +177,104 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import client from '@/api/client.js'
 
 const loading = ref(false)
 const error = ref('')
 const cards = ref([])
 const student = ref(null)
+const learning = ref({})
+const drafts = reactive({})
+const submitting = reactive({})
+const submitError = reactive({})
 
 const activeCards = computed(() => cards.value.filter((c) => c.isCurrentlyActive).length)
+
+const keyFor = (card, module) => `${card.courseInstanceId}:${module.moduleNumber}`
+
+const initDraft = (card, module) => {
+  const key = keyFor(card, module)
+  if (!drafts[key]) drafts[key] = { text: '', file: null, fileName: '' }
+}
+
+const getSubmission = (card, module) => {
+  const entry = learning.value[card.courseInstanceId]
+  return entry?.submissions?.[module.moduleNumber] || null
+}
 
 const formatDate = (value) => {
   if (!value) return ''
   const date = new Date(value)
   if (isNaN(date.getTime())) return ''
   return date.toISOString().slice(0, 10)
+}
+
+const formatDateTime = (value) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (isNaN(date.getTime())) return ''
+  return date.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+const loadLearning = async (card) => {
+  try {
+    const { data } = await client.get(`/learning/instances/${card.courseInstanceId}/modules`)
+    learning.value[card.courseInstanceId] = {
+      submissions: data.submissions || {},
+      enrollmentId: data.enrollmentId || null,
+    }
+  } catch (e) {
+    learning.value[card.courseInstanceId] = { submissions: {}, enrollmentId: null }
+  }
+}
+
+const onFileChange = (card, module, event) => {
+  const file = event.target.files?.[0]
+  const key = keyFor(card, module)
+  initDraft(card, module)
+  if (file) {
+    drafts[key].file = file
+    drafts[key].fileName = file.name
+  }
+}
+
+const submitAssignment = async (card, module) => {
+  const key = keyFor(card, module)
+  initDraft(card, module)
+  const text = (drafts[key].text || '').trim()
+  let fileId = drafts[key].fileId
+  let fileName = drafts[key].fileName || ''
+  submitError[key] = ''
+
+  try {
+    if (drafts[key].file && !fileId) {
+      submitting[key] = true
+      const fd = new FormData()
+      fd.append('file', drafts[key].file)
+      const { data } = await client.post(`/uploads/${student.value._id}`, fd)
+      fileId = data.file?._id
+      fileName = data.file?.filename || drafts[key].fileName
+    }
+
+    if (!text && !fileId) {
+      submitError[key] = 'Ange en text eller ladda upp en fil.'
+      return
+    }
+
+    submitting[key] = true
+    const { data } = await client.post(
+      `/learning/instances/${card.courseInstanceId}/modules/${module.moduleNumber}/submissions`,
+      { submittedText: text, fileId, fileName }
+    )
+    const entry = learning.value[card.courseInstanceId]
+    if (entry) entry.submissions[module.moduleNumber] = data.submission
+    drafts[key] = { text: '', file: null, fileName: '' }
+  } catch (e) {
+    submitError[key] = e?.response?.data?.error || 'Kunde inte skicka inlämningen.'
+  } finally {
+    submitting[key] = false
+  }
 }
 
 const getStatusLabel = (status) => {
@@ -142,6 +297,14 @@ const loadCourseCards = async () => {
     const { data } = await client.get('/course-cards/mine')
     cards.value = data.cards || []
     student.value = data.student || null
+    for (const card of cards.value) {
+      for (const module of card.modules || []) {
+        if (module.assignment && (module.assignment.title || module.assignment.description)) {
+          initDraft(card, module)
+        }
+      }
+      if (card.courseInstanceId) loadLearning(card)
+    }
   } catch (e) {
     error.value = e?.response?.data?.error || 'Kunde inte hämta kurserna.'
   } finally {
@@ -367,6 +530,161 @@ onMounted(loadCourseCards)
 
 .section-description {
   color: #6b7280;
+}
+
+.section-instructions {
+  color: #374151;
+  white-space: pre-wrap;
+  flex: 1;
+}
+
+.progress-block {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: #374151;
+  font-weight: 600;
+}
+
+.progress-track {
+  margin-top: 0.3rem;
+  height: 0.5rem;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #16a34a;
+  border-radius: 999px;
+}
+
+.assignment-block {
+  margin: 0.6rem 0 0.2rem 1rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #4338ca;
+  border-radius: 0.4rem;
+  background: #f9fafb;
+}
+
+.assignment-heading {
+  font-size: 0.9rem;
+}
+
+.assignment-description {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  white-space: pre-wrap;
+}
+
+.submission-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.submission-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.feedback-chip {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+}
+
+.feedback-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.feedback-rework {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.feedback-pending {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.feedback-comment {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #374151;
+  white-space: pre-wrap;
+}
+
+.submission-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.submission-textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.35rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.submission-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.file-picker {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4338ca;
+  cursor: pointer;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-name {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.submit-btn {
+  margin-left: auto;
+  background: #4338ca;
+  color: #fff;
+  border: none;
+  border-radius: 0.35rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submit-error {
+  font-size: 0.8rem;
+  color: #b91c1c;
 }
 
 .loading-state,

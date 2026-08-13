@@ -32,6 +32,7 @@ const TEST = () => import('@/views/Admin/TEST.vue')
 // Lazy-loaded Teacher Views
 const FullCalendar = () => import('@/views/Teacher/ExamCalendar.vue')
 const BetygSattning = () => import('@/views/Teacher/BetygSattning.vue')
+const Submissions = () => import('@/views/Teacher/Submissions.vue')
 const ProfilePage = () => import('@/views/Teacher/ProfilePage.vue')
 const RoleBasedAppointments = () => import('@/views/Appointments/RoleBasedAppointments.vue')
 
@@ -311,6 +312,13 @@ const routes = [
     name: 'CourseCards',
     component: CourseCards,
     meta: { title: 'Mina kurser', role: 'student' },
+  },
+
+  {
+    path: '/submissions',
+    name: 'Submissions',
+    component: Submissions,
+    meta: { title: 'Inlämningar', role: ['teacher', 'admin', 'systemadmin'] },
   },
 
   // Utility Routes (General Access)

@@ -1,6 +1,5 @@
 import express from "express";
 import User from "../models/User.js";
-import nodemailer from "nodemailer";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
@@ -20,14 +19,6 @@ const resetPasswordSchema = {
     token: { type: "string", required: true },
     newPassword: { type: "string", required: true, password: true },
 };
-
-const transporter = nodemailer.createTransport({
-    service: "Gmail",
-    auth: {
-        user: "newmindful.development@gmail.com",
-        pass: process.env.GOOGLE_PWD,
-    },
-});
 
 router.post("/register", validate(registerSchema), async (req, res) => {
     try {
@@ -248,6 +239,23 @@ router.post(
 
             await newUser.save();
 
+            // Send the temp password to the student (fire-and-log; a failure
+            // must never break user creation). The password stays in the
+            // response for the admin to see.
+            try {
+                const { sendEmail, renderTempPasswordEmail } = await import(
+                    "../services/emailService.js"
+                );
+                const { subject, text } = renderTempPasswordEmail({
+                    studentName: name || student.name,
+                    email,
+                    tempPassword,
+                });
+                await sendEmail({ to: email, subject, text });
+            } catch (emailError) {
+                logger.warn({ err: emailError }, "Temp-password email skipped (non-fatal)");
+            }
+
             res.status(201).send({
                 message: "User created successfully for student.",
                 user: {
@@ -256,8 +264,9 @@ router.post(
                     username: newUser.username,
                     roles: newUser.roles,
                 },
-                // Note: In production, you might want to send the password via email
-                tempPassword: tempPassword, // Only for development/admin use
+                // The temp password is emailed to the student AND returned here
+                // so the admin can pass it along if the mail cannot be delivered.
+                tempPassword: tempPassword,
             });
         } catch (error) {
             logger.error({ err: error }, "Error creating user for student");

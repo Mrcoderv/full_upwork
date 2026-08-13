@@ -94,6 +94,16 @@ vi.mock("../../src/models/Event.js", () => ({
     },
 }));
 
+const CourseTemplateMock = {
+    findOne: vi.fn(() => ({ sort: vi.fn(() => Promise.resolve(null)) })),
+    find: vi.fn(),
+    findById: vi.fn(),
+};
+vi.mock("../../src/models/CourseTemplate.js", () => ({
+    __esModule: true,
+    default: CourseTemplateMock,
+}));
+
 vi.mock("../../src/utils/logger.js", () => ({
     __esModule: true,
     default: loggerMock,
@@ -112,6 +122,9 @@ const resetMocks = () => {
     CoursePackageMock.findById.mockReset();
     CourseMock.find.mockReset();
     CourseMock.findById.mockReset();
+    CourseTemplateMock.findOne.mockReset();
+    CourseTemplateMock.find.mockReset();
+    CourseTemplateMock.findById.mockReset();
     StudentEnrollmentMock.findOne.mockReset();
     StudentEnrollmentMock.findById.mockReset();
     StudentMock.findById.mockReset();
@@ -128,6 +141,9 @@ const resetMocks = () => {
 beforeEach(() => {
     resetMocks();
     CourseInstanceMock.findOne.mockResolvedValue(null);
+    CourseTemplateMock.findOne.mockReturnValue({
+        sort: vi.fn(() => Promise.resolve(null)),
+    });
     StudentEnrollmentMock.findOne.mockResolvedValue(null);
     StudentEnrollmentMock.findById.mockImplementation(async (id) => {
         const found = StudentEnrollmentMock.instances.find(
@@ -283,6 +299,154 @@ describe("CourseMatchingService.findOrCreateCourseInstance", () => {
             )
         ).rejects.toThrow("Main course not found: missing-course");
     });
+
+    it("auto-copies the course template modules into a new instance (#31 Part B)", async () => {
+        CourseInstanceMock.findOne.mockResolvedValue(null);
+        CourseMock.findById.mockResolvedValue({
+            _id: "course-templated",
+            courseName: "Svenska som andraspråk 1",
+            courseCode: "SVASVE01",
+            coursePoints: "100",
+            courseExtent: "5",
+        });
+        CourseTemplateMock.findOne.mockReturnValue({
+            sort: vi.fn(() =>
+                Promise.resolve({
+                    _id: "template-1",
+                    modules: [
+                        {
+                            moduleNumber: 1,
+                            title: "Modul 1",
+                            sections: [
+                                { title: "S1", description: "d", instructions: "i" },
+                            ],
+                            assignment: {
+                                title: "Inlämningsuppgift 1",
+                                description: "Reflektion",
+                            },
+                        },
+                        {
+                            moduleNumber: 3,
+                            title: "Delprov",
+                            isPartialExam: true,
+                            isCaseStudy: false,
+                            sections: [],
+                        },
+                    ],
+                })
+            ),
+        });
+
+        const result = await CourseMatchingService.findOrCreateCourseInstance(
+            "course-templated",
+            new Date("2026-01-05"),
+            new Date("2026-02-09")
+        );
+
+        expect(result.wasCreated).toBe(true);
+        expect(result.instance.modules).toEqual([
+            {
+                moduleNumber: 1,
+                title: "Modul 1",
+                isPartialExam: false,
+                isCaseStudy: false,
+                sections: [
+                    { title: "S1", description: "d", instructions: "i" },
+                ],
+                assignment: {
+                    title: "Inlämningsuppgift 1",
+                    description: "Reflektion",
+                },
+            },
+            {
+                moduleNumber: 3,
+                title: "Delprov",
+                isPartialExam: true,
+                isCaseStudy: false,
+                sections: [],
+                assignment: undefined,
+            },
+        ]);
+        expect(CourseTemplateMock.findOne).toHaveBeenCalledWith({
+            courseId: "course-templated",
+        });
+    });
+
+    it("logs the no-template gap and creates an empty-modules instance (#31 Part B)", async () => {
+        CourseInstanceMock.findOne.mockResolvedValue(null);
+        CourseMock.findById.mockResolvedValue({
+            _id: "course-plain",
+            courseName: "Matte",
+            courseCode: "MAT101",
+            coursePoints: 5,
+            courseExtent: 5,
+        });
+        CourseTemplateMock.findOne.mockReturnValue({
+            sort: vi.fn(() => Promise.resolve(null)),
+        });
+
+        const result = await CourseMatchingService.findOrCreateCourseInstance(
+            "course-plain",
+            new Date("2026-03-02"),
+            new Date("2026-04-06")
+        );
+
+        expect(result.wasCreated).toBe(true);
+        expect(result.instance.modules).toEqual([]);
+        expect(
+            loggerMock.info.mock.calls.some(([, msg]) =>
+                msg.includes("no template — card created without content")
+            )
+        ).toBe(true);
+    });
+
+    it("never rewrites modules on an existing shared instance (#31 Part B)", async () => {
+        const existingInstance = {
+            _id: "ci-shared",
+            courseName: "Shared",
+            startDate: new Date("2026-01-05"),
+            endDate: new Date("2026-02-09"),
+            modules: [],
+        };
+        existingInstance.save = vi.fn().mockResolvedValue(existingInstance);
+        CourseInstanceMock.findOne.mockResolvedValue(existingInstance);
+        CourseTemplateMock.findOne.mockReturnValue({
+            sort: vi.fn(() =>
+                Promise.resolve({
+                    _id: "template-1",
+                    modules: [{ moduleNumber: 1, title: "Modul 1" }],
+                })
+            ),
+        });
+
+        const result = await CourseMatchingService.findOrCreateCourseInstance(
+            "course-templated",
+            new Date("2026-01-05"),
+            new Date("2026-02-09")
+        );
+
+        expect(result.wasCreated).toBe(false);
+        expect(result.instance.modules).toEqual([]);
+        expect(CourseTemplateMock.findOne).not.toHaveBeenCalled();
+    });
+
+    it("resolveCourseTemplate picks the most recently updated active template", async () => {
+        const active = { _id: "t-active", templateName: "Aktiv" };
+        CourseTemplateMock.findOne.mockReturnValue({
+            sort: vi.fn((sortSpec) => {
+                expect(sortSpec).toEqual({ isActive: -1, updatedAt: -1 });
+                return Promise.resolve(active);
+            }),
+        });
+
+        const result = await CourseMatchingService.resolveCourseTemplate(
+            "course-x"
+        );
+        expect(result).toBe(active);
+        expect(CourseTemplateMock.findOne).toHaveBeenCalledWith({
+            courseId: "course-x",
+        });
+    });
 });
 
 describe("CourseMatchingService.processStudentEducation", () => {
@@ -337,6 +501,85 @@ describe("CourseMatchingService.processStudentEducation", () => {
         expect(result.enrollments).toHaveLength(1);
         expect(result.enrollments[0].courseInstanceName).toBe("Matte");
         expect(studentDoc.save).toHaveBeenCalled();
+        findMatchSpy.mockRestore();
+    });
+
+    it("individual course flow auto-copies the course template modules (#31 Part B)", async () => {
+        CoursePackageMock.find.mockImplementation(() => ({
+            lean: vi.fn(() => Promise.resolve([])),
+        }));
+        CourseMock.findById.mockResolvedValue({
+            _id: "course-templated",
+            courseName: "Svenska som andraspråk 1",
+            courseCode: "SVASVE01",
+            coursePoints: 100,
+            courseExtent: 5,
+        });
+        CourseTemplateMock.findOne.mockReturnValue({
+            sort: vi.fn(() =>
+                Promise.resolve({
+                    _id: "template-ind",
+                    modules: [
+                        {
+                            moduleNumber: 1,
+                            title: "Modul 1",
+                            sections: [{ title: "S1", description: "", instructions: "läsa" }],
+                            assignment: { title: "Uppgift", description: "Reflektion" },
+                        },
+                    ],
+                })
+            ),
+        });
+
+        const match = {
+            course: {
+                _id: "course-templated",
+                courseName: "Svenska som andraspråk 1",
+                courseCode: "SVASVE01",
+                courseExtent: "5",
+            },
+            score: 1,
+        };
+        const findMatchSpy = vi
+            .spyOn(CourseMatchingService, "findBestCourseMatch")
+            .mockResolvedValue(match);
+
+        const studentDoc = {
+            _id: "stu-templated",
+            education: [],
+            teacherId: null,
+            email: "templated@student.com",
+            save: vi.fn().mockResolvedValue(null),
+        };
+        StudentMock.findById.mockResolvedValue(studentDoc);
+
+        await CourseMatchingService.processStudentEducation(
+            "stu-templated",
+            [
+                {
+                    type: "Course",
+                    name: "SVASVE01",
+                    startDate: "2025-01-15",
+                    endDate: "2025-02-15",
+                },
+            ],
+            "user1"
+        );
+
+        const created = courseInstanceSaveMock.mock.calls.map((c) => c[0]);
+        expect(created.length).toBeGreaterThan(0);
+        expect(created[0].modules).toEqual([
+            {
+                moduleNumber: 1,
+                title: "Modul 1",
+                isPartialExam: false,
+                isCaseStudy: false,
+                sections: [
+                    { title: "S1", description: "", instructions: "läsa" },
+                ],
+                assignment: { title: "Uppgift", description: "Reflektion" },
+            },
+        ]);
         findMatchSpy.mockRestore();
     });
 
@@ -433,6 +676,84 @@ describe("CourseMatchingService.processStudentEducation", () => {
         );
         expect(result.errors).toEqual([]);
         expect(studentDoc.save).toHaveBeenCalled();
+    });
+
+    it("course package flow auto-copies the course template modules (#31 Part B)", async () => {
+        const packageDoc = {
+            _id: "pkg-templated",
+            coursePackageName: "Mattepaket",
+            coursePackageCourses: [
+                {
+                    _id: "course-pack-t",
+                    courseName: "Pack Course",
+                    courseExtent: 5,
+                },
+            ],
+        };
+        coursePackages = [];
+        CourseInstanceMock.findOne.mockResolvedValue(null);
+        const packageQuery = {
+            populate: vi.fn().mockResolvedValue(packageDoc),
+        };
+        CoursePackageMock.findById.mockReturnValue(packageQuery);
+        const studentDoc = {
+            _id: "stu-pkg-t",
+            education: [],
+            teacherId: null,
+            email: "pkg-t@student.com",
+            save: vi.fn().mockResolvedValue(null),
+        };
+        StudentMock.findById.mockResolvedValue(studentDoc);
+        CourseMock.findById.mockResolvedValue({
+            _id: "course-pack-t",
+            courseName: "Pack Course",
+            courseCode: "PACKT",
+            courseExtent: 5,
+        });
+        CourseTemplateMock.findOne.mockReturnValue({
+            sort: vi.fn(() =>
+                Promise.resolve({
+                    _id: "template-pkg",
+                    modules: [
+                        {
+                            moduleNumber: 5,
+                            title: "Case",
+                            isCaseStudy: true,
+                            sections: [{ title: "S1", description: "", instructions: "" }],
+                        },
+                    ],
+                })
+            ),
+        });
+
+        await CourseMatchingService.processStudentEducation(
+            "stu-pkg-t",
+            [
+                {
+                    type: "CoursePackage",
+                    name: "PACKT",
+                    refId: "pkg-templated",
+                    startDate: "2025-02-01",
+                    endDate: "2025-04-01",
+                },
+            ],
+            "userPkg"
+        );
+
+        const created = courseInstanceSaveMock.mock.calls.map((c) => c[0]);
+        expect(created.length).toBeGreaterThan(0);
+        expect(created[0].modules).toEqual([
+            {
+                moduleNumber: 5,
+                title: "Case",
+                isPartialExam: false,
+                isCaseStudy: true,
+                sections: [
+                    { title: "S1", description: "", instructions: "" },
+                ],
+                assignment: undefined,
+            },
+        ]);
     });
 
     it("skips excluded courses when a package is revised by checklist", async () => {

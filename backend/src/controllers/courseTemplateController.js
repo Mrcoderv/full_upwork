@@ -76,8 +76,16 @@ export const createCourseTemplate = async (req, res) => {
                           ? m.sections.map((s) => ({
                                 title: s.title ?? "",
                                 description: s.description ?? "",
+                                instructions: s.instructions ?? "",
                             }))
                           : [],
+                      assignment:
+                          m.assignment?.title || m.assignment?.description
+                              ? {
+                                    title: m.assignment.title ?? "",
+                                    description: m.assignment.description ?? "",
+                                }
+                              : undefined,
                   }))
                 : buildDefaultModules();
 
@@ -136,8 +144,16 @@ export const updateCourseTemplate = async (req, res) => {
                     ? m.sections.map((s) => ({
                           title: s.title ?? "",
                           description: s.description ?? "",
+                          instructions: s.instructions ?? "",
                       }))
                     : [],
+                assignment:
+                    m.assignment?.title || m.assignment?.description
+                        ? {
+                              title: m.assignment.title ?? "",
+                              description: m.assignment.description ?? "",
+                          }
+                        : undefined,
             }));
         }
 

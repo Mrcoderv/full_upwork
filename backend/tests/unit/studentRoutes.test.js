@@ -80,6 +80,17 @@ vi.mock("../../src/controllers/authController.js", () => {
     };
 });
 
+vi.mock("../../src/services/emailService.js", () => ({
+    __esModule: true,
+    maybeSendLarteametEmail: vi.fn(),
+    getStudentMunicipality: vi.fn((municipality) =>
+        typeof municipality === "string"
+            ? municipality
+            : municipality?.type || null
+    ),
+    SOLLENTUNA_MUNICIPALITY: "Sollentuna",
+}));
+
 const loggerMock = vi.hoisted(() => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -170,6 +181,7 @@ import Course from "../../src/models/Course.js";
 import Program from "../../src/models/Program.js";
 import { sendDropoutNotification } from "../../src/controllers/notificationController.js";
 import { authenticateUser } from "../../src/controllers/authController.js";
+import { maybeSendLarteametEmail } from "../../src/services/emailService.js";
 import router from "../../src/router/studentRoutes.js";
 
 const findRouteHandler = (path, method) => {
@@ -224,6 +236,8 @@ beforeEach(() => {
     sendDropoutNotification.mockReset();
     CourseMatchingServiceMock.default.processStudentEducation.mockReset();
     calendarEventSyncMock.syncCalendarEventsForStudent.mockReset();
+    maybeSendLarteametEmail.mockReset();
+    maybeSendLarteametEmail.mockResolvedValue({ sent: true });
     TeacherMock.findOne.mockReset();
     StudentEnrollmentQuery = {
         populate: vi.fn().mockReturnThis(),
@@ -840,6 +854,86 @@ describe("POST /student", () => {
             error: "Missing required fields",
         });
         expect(Student).not.toHaveBeenCalled();
+    });
+
+    it("fires the Lärteamet email exactly once for a new Sollentuna student", async () => {
+        const handler = findRouteHandler("/student", "POST");
+        const req = {
+            body: {
+                name: "Sollentuna Student",
+                email: "sollentuna@example.com",
+                personalNumber: "20010101-1111",
+                municipality: "Sollentuna",
+            },
+        };
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(201);
+        expect(maybeSendLarteametEmail).toHaveBeenCalledTimes(1);
+        expect(maybeSendLarteametEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                student: expect.objectContaining({
+                    name: "Sollentuna Student",
+                    email: "sollentuna@example.com",
+                    municipality: { type: "Sollentuna" },
+                }),
+            })
+        );
+    });
+
+    it("does not fire the Lärteamet email for a non-Sollentuna student", async () => {
+        const handler = findRouteHandler("/student", "POST");
+        const req = {
+            body: {
+                name: "Solna Student",
+                email: "solna@example.com",
+                personalNumber: "20010101-2222",
+                municipality: "Solna",
+            },
+        };
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(201);
+        expect(maybeSendLarteametEmail).not.toHaveBeenCalled();
+    });
+
+    it("does not re-fire the Lärteamet email when an existing student is re-registered", async () => {
+        const handler = findRouteHandler("/student", "POST");
+        const existing = {
+            _id: "existing-larteamet",
+            name: "Returning",
+            email: "returning@example.com",
+            personalNumber: "19990101-1111",
+            save: vi.fn().mockImplementation(function () {
+                return Promise.resolve(this);
+            }),
+            toObject: vi.fn().mockImplementation(function () {
+                return { ...this };
+            }),
+        };
+        Student.findOne.mockResolvedValue(existing);
+
+        const req = {
+            body: {
+                name: "Returning",
+                email: "returning@example.com",
+                personalNumber: "19990101-1111",
+                municipality: "Sollentuna",
+            },
+        };
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(200);
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({ alreadyExists: true })
+        );
+        expect(maybeSendLarteametEmail).not.toHaveBeenCalled();
     });
 
     it("creates a student and processes education when provided", async () => {

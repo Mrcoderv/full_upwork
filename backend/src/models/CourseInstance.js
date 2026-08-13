@@ -58,6 +58,11 @@ const courseInstanceSchema = new mongoose.Schema(
         // Copied modules from a course template (course card content)
         modules: { type: [courseModuleSchema], default: [] },
 
+        // Auto-generated section start dates (weeks from course start, one per module)
+        // Populated at instance creation from teacher's saved schedule parameters,
+        // or evenly-spaced defaults if no parameters exist.
+        sectionDates: [{ type: Date }],
+
         // Statistics tracking
         enrollmentCount: {
             type: Number,

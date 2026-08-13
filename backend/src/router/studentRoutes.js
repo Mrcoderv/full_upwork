@@ -22,6 +22,7 @@ import { hasRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
 import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
+import { maybeSendLarteametEmail, getStudentMunicipality, SOLLENTUNA_MUNICIPALITY } from "../services/emailService.js";
 
 const router = Router();
 
@@ -478,6 +479,13 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
         for (const field of allowedStudentCreateFields) {
             if (req.body[field] !== undefined) studentData[field] = req.body[field];
         }
+        // The Student model stores municipality as { type: "..." }. The API also
+        // accepts a plain string; normalize it here so it survives mongoose
+        // casting (a raw string would otherwise be silently dropped as {} and
+        // break the Sollentuna Lärteamet email trigger below).
+        if (typeof studentData.municipality === "string") {
+            studentData.municipality = { type: studentData.municipality };
+        }
         // Re-registration (returning student): if a student with the same
         // personalNumber or email already exists, auto-fill their record with
         // the submitted details and register the new courses instead of
@@ -550,6 +558,18 @@ router.post("/student", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), validate
                 ? savedStudent.toObject()
                 : savedStudent;
             return res.status(200).json({ ...existingPayload, alreadyExists: true });
+        }
+
+        // Requirement #26: a newly created Sollentuna student triggers the
+        // Lärteamet admission email. Deliberately NOT fired on the
+        // alreadyExists/re-registration branch — once per student, on creation.
+        // Email failures must never break student creation, so this is fire-and-log.
+        if (getStudentMunicipality(savedStudent.municipality) === SOLLENTUNA_MUNICIPALITY) {
+            try {
+                await maybeSendLarteametEmail({ student: savedStudent });
+            } catch (emailError) {
+                logger.error({ err: emailError }, "Lärteamet email trigger failed (non-fatal)");
+            }
         }
 
         res.status(201).json(savedStudent);

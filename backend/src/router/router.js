@@ -19,11 +19,13 @@ import statsRoutes from "./statsRoutes.js";
 import actionPlanRoutes from "./actionPlanRoutes.js";
 import courseMatchingRoutes from "./courseMatchingRoutes.js";
 import courseTemplateRoutes from "./courseTemplateRoutes.js";
+import teacherScheduleParameterRoutes from "./teacherScheduleParameterRoutes.js";
 import studentDetailsRoutes from "./studentDetailsRoutes.js";
 import gradeReportRoutes from "./gradeReportRoutes.js";
 import gradeCatalogRoutes from "./gradeCatalogRoutes.js";
 import analyticsRoutes from "./analyticsRoutes.js";
 import messagingRoutes from "./messagingRoutes.js";
+import learningRoutes from "./learningRoutes.js";
 
 const router = Router();
 
@@ -49,10 +51,12 @@ router.use("/api/stats", statsRoutes);
 router.use("/api", actionPlanRoutes);
 router.use("/api", courseMatchingRoutes);
 router.use("/api", courseTemplateRoutes);
+router.use("/api", teacherScheduleParameterRoutes);
 router.use("/api", studentDetailsRoutes);
 router.use("/api", gradeReportRoutes);
 router.use("/api", gradeCatalogRoutes);
 router.use("/api/analytics", analyticsRoutes);
 router.use("/api", messagingRoutes);
+router.use("/api", learningRoutes);
 
 export default router;

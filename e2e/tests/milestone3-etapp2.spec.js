@@ -1,7 +1,14 @@
 import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
+
+// exceljs ships in backend's node_modules; used to build the admission XLSX.
+const nodeRequire = createRequire(import.meta.url);
+const ExcelJS = nodeRequire(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'backend', 'node_modules', 'exceljs')
+);
 
 // Etapp 2 live verification (MILESTONE-3-CHECKLIST.md items 19, 27, 30, 31, 35, 38, 40).
 // Sessions are bootstrapped by the "setup" project (tests/auth.setup.js) which
@@ -99,6 +106,133 @@ test.describe('Etapp 2 student (course cards)', () => {
     await expect(card.locator('.chip-tag', { hasText: 'Case' })).toBeVisible();
 
     await page.screenshot({ path: path.join(SHOT_DIR, 'item31-course-cards.png'), fullPage: true });
+  });
+});
+
+test.describe('Etapp 2 item 31 Part B (admission auto-generates card content)', () => {
+  test.use({ storageState: adminState });
+
+  test('Item 31 Part B — admission enrolls a student and auto-builds the card from the course template', async ({ page, browser }) => {
+    // Unique per run so stale data from earlier runs never collides.
+    const runId = `${Date.now()}`;
+    const courseName = `PartB Testkurs ${runId}`;
+    const courseCode = `PARTB${runId}`;
+    const studentEmail = `partb.${runId}@example.com`;
+    const studentName = 'PartB TestElev';
+    const personalNumber = `19950101-${runId.slice(-4)}`;
+    const start = new Date();
+    start.setDate(start.getDate() + 60);
+    start.setHours(0, 0, 0, 0);
+    const dow = start.getDay();
+    if (dow !== 1) start.setDate(start.getDate() + ((8 - dow) % 7)); // next Monday
+    const end = new Date(start);
+    end.setDate(end.getDate() + 35); // 5-week course
+
+    // 1. Setup: a course with an associated template (admin content, one-time).
+    const courseResp = await page.request.post('/api/course', {
+      data: { courseName, courseCode },
+    });
+    expect(courseResp.status()).toBe(201);
+    const course = await courseResp.json();
+
+    const templateModules = Array.from({ length: 5 }, (_, i) => {
+      const n = i + 1;
+      return {
+        moduleNumber: n,
+        title: n === 3 ? 'Delprov' : n === 5 ? 'Case' : `Modul ${n}`,
+        isPartialExam: n === 3,
+        isCaseStudy: n === 5,
+        sections: [
+          { title: 'Sektion 1', description: '', instructions: 'Läs avsnittet.' },
+          { title: 'Sektion 2', description: '', instructions: '' },
+        ],
+      };
+    });
+    const templateResp = await page.request.post('/api/course-templates', {
+      data: { templateName: `PartB mall ${runId}`, courseId: course._id, modules: templateModules },
+    });
+    expect(templateResp.status()).toBe(201);
+
+    // 2. Admission via the actual UI flow: the admin uploads the student on /course-matching.
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Studenter');
+    ws.addRow(['NAMN', 'PERSONNUMMER', 'KURS/PAKET', 'START', 'SLUT', 'KOMMUN/PRIVAT', 'MAIL', 'Lärare']);
+    ws.addRow([studentName, personalNumber, courseCode, start, end, 'Sollentuna', studentEmail, 'Eva Nahi']);
+    const xlsxPath = path.join(SHOT_DIR, `item31-partb-upload-${runId}.xlsx`);
+    fs.writeFileSync(xlsxPath, Buffer.from(await wb.xlsx.writeBuffer()));
+
+    await page.goto('/course-matching');
+    await page.setInputFiles('#studentFile', xlsxPath);
+    const uploadRespPromise = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().includes('/api/upload-students')
+    );
+    await page.locator('.process-btn', { hasText: 'Bearbeta studenter' }).click();
+    const uploadResp = await uploadRespPromise;
+    expect(uploadResp.status()).toBe(200);
+    const uploadBody = await uploadResp.json();
+    expect(uploadBody.success).toBe(true);
+    expect(uploadBody.results.errors).toEqual([]);
+
+    const newStudent = uploadBody.results.students.find((s) => s.email === studentEmail);
+    expect(newStudent, 'the uploaded student should be created').toBeTruthy();
+    const enrollment = uploadBody.results.enrollments.find((e) => e.studentEmail === studentEmail);
+    expect(enrollment, 'the student should be enrolled').toBeTruthy();
+
+    // 3. The instance created at admission carries the template modules — no
+    // templateId is ever sent by the upload/admission flow (auto-resolution).
+    const instancesResp = await page.request.get('/api/course-instances');
+    expect(instancesResp.status()).toBe(200);
+    const { instances } = await instancesResp.json();
+    const instance = instances.find((i) => i._id === enrollment.courseInstanceId);
+    expect(instance, 'admission-created course instance should exist').toBeTruthy();
+    expect(instance.modules).toHaveLength(5);
+    expect(instance.modules.find((m) => m.moduleNumber === 3).isPartialExam).toBe(true); // Delprov
+    expect(instance.modules.find((m) => m.moduleNumber === 5).isCaseStudy).toBe(true);   // Case
+
+    // 4. The student's course card is built with the auto-generated content.
+    const cardsResp = await page.request.get(`/api/students/${newStudent._id}/course-cards`);
+    expect(cardsResp.status()).toBe(200);
+    const { cards } = await cardsResp.json();
+    const card = cards.find((c) => c.courseName === courseName);
+    expect(card, 'course card should be built for the enrolled course').toBeTruthy();
+    expect(card.modules).toHaveLength(5);
+    expect(card.modules.find((m) => m.moduleNumber === 3).isPartialExam).toBe(true);
+    expect(card.modules.find((m) => m.moduleNumber === 5).isCaseStudy).toBe(true);
+
+    // 5. The student logs in and sees the card UI (Delprov/Case chips).
+    const userResp = await page.request.post('/api/users/create-for-student', {
+      data: { studentId: newStudent._id, email: studentEmail, name: studentName },
+    });
+    expect(userResp.status()).toBe(201);
+    const { tempPassword } = await userResp.json();
+
+    const studentCtx = await browser.newContext();
+    const studentPage = await studentCtx.newPage();
+    trackPage(studentPage);
+    await studentPage.goto('/login');
+    await studentPage.fill('#email', studentEmail);
+    await studentPage.fill('#password', tempPassword);
+    await studentPage.locator('.login-btn').click();
+    // mustChangePassword → forced to /change-password before the app is usable.
+    await expect(studentPage).toHaveURL(/\/change-password/, { timeout: 20000 });
+    await studentPage.fill('#currentPassword', tempPassword);
+    const newPassword = 'Partb123!';
+    await studentPage.fill('#newPassword', newPassword);
+    await studentPage.fill('#confirmPassword', newPassword);
+    const changeRespPromise = studentPage.waitForResponse(
+      (r) => r.request().method() === 'PUT' && r.url().includes('/api/auth/change-password')
+    );
+    await studentPage.locator('.login-btn').click();
+    await changeRespPromise;
+
+    await studentPage.goto('/course-cards');
+    await expect(studentPage.locator('.student-name')).toContainText(studentName, { timeout: 20000 });
+    const cardEl = studentPage.locator('.course-card', { hasText: courseName }).first();
+    await expect(cardEl).toBeVisible();
+    await expect(cardEl.locator('.chip-tag', { hasText: 'Delprov' })).toBeVisible();
+    await expect(cardEl.locator('.chip-tag', { hasText: 'Case' })).toBeVisible();
+    await studentPage.screenshot({ path: path.join(SHOT_DIR, 'item31-partb-course-card.png'), fullPage: true });
+    await studentCtx.close();
   });
 });
 

@@ -14,6 +14,19 @@ describe("courseModuleSchema helpers", () => {
         }
     });
 
+    it("seeds empty instructions and assignment on every default module/section", () => {
+        const modules = buildDefaultModules();
+
+        for (const module of modules) {
+            for (const section of module.sections) {
+                expect(section).toHaveProperty("instructions", "");
+            }
+            expect(module).toHaveProperty("assignment");
+            expect(module.assignment.title).toBe("");
+            expect(module.assignment.description).toBe("");
+        }
+    });
+
     it("flags module 3 as partial exams and module 5 as case study", () => {
         const modules = buildDefaultModules();
 
@@ -53,10 +66,46 @@ describe("courseModuleSchema helpers", () => {
                 title: "Delprov",
                 isPartialExam: true,
                 isCaseStudy: false,
-                sections: [{ title: "S1", description: "d1" }],
+                sections: [{ title: "S1", description: "d1", instructions: "" }],
             },
         ]);
         expect(cloned[0]).not.toBe(original[0]);
         expect(cloned[0].sections[0]).not.toBe(original[0].sections[0]);
+    });
+
+    it("clones section instructions and module assignment", () => {
+        const original = [
+            {
+                moduleNumber: 1,
+                title: "Modul 1",
+                sections: [
+                    { title: "S1", description: "d1", instructions: "Läs texten." },
+                    { title: "S2", description: "d2" },
+                ],
+                assignment: { title: "Inlämning", description: "Skriv en text." },
+            },
+        ];
+        const cloned = cloneModules(original);
+
+        expect(cloned[0].sections[0].instructions).toBe("Läs texten.");
+        expect(cloned[0].sections[1].instructions).toBe("");
+        expect(cloned[0].assignment).toEqual({
+            title: "Inlämning",
+            description: "Skriv en text.",
+        });
+    });
+
+    it("omits empty assignment objects when cloning", () => {
+        const original = [
+            {
+                moduleNumber: 2,
+                title: "Modul 2",
+                sections: [{ title: "S1" }],
+                assignment: { title: "", description: "" },
+            },
+        ];
+        const cloned = cloneModules(original);
+
+        expect(cloned[0].assignment).toBeUndefined();
     });
 });

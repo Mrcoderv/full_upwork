@@ -626,10 +626,49 @@ describe("Upload Routes - Auth Enforcement", () => {
                 .expect(401);
         });
 
-        it("returns 403 for student role", async () => {
-            const fileId = new mongoose.Types.ObjectId().toString();
-            await request(studentApp)
+        it("lets a student upload and download their own file (self-access)", async () => {
+            const studentId = new mongoose.Types.ObjectId();
+            await mongoose.connection.db.collection("students").insertOne({
+                _id: studentId,
+                name: "Anna",
+                email: "student@example.com",
+            });
+
+            const uploadResponse = await uploadTestFile(
+                studentId.toString(),
+                "own.txt",
+                "own content",
+                studentApp
+            );
+            expect(uploadResponse.status).toBe(200);
+            const fileId = uploadResponse.body.file._id;
+
+            const response = await request(studentApp)
                 .get(`/api/uploads/download/${fileId}`)
+                .expect(200);
+            expect(response.body.toString()).toBe("own content");
+        });
+
+        it("forbids a student from downloading another student's file", async () => {
+            await mongoose.connection.db.collection("students").insertOne({
+                _id: new mongoose.Types.ObjectId(),
+                name: "Anna",
+                email: "student@example.com",
+            });
+            const otherStudentId = new mongoose.Types.ObjectId().toString();
+            await mongoose.connection.db.collection("fs.files").insertOne({
+                _id: new mongoose.Types.ObjectId(),
+                filename: "other.txt",
+                contentType: "text/plain",
+                uploadDate: new Date(),
+                metadata: { studentId: otherStudentId },
+            });
+
+            const otherFile = await mongoose.connection.db
+                .collection("fs.files")
+                .findOne({ filename: "other.txt" });
+            await request(studentApp)
+                .get(`/api/uploads/download/${otherFile._id}`)
                 .expect(403);
         });
 
@@ -648,11 +687,28 @@ describe("Upload Routes - Auth Enforcement", () => {
                 .expect(401);
         });
 
-        it("returns 403 for student role", async () => {
-            const fileId = new mongoose.Types.ObjectId().toString();
-            await request(studentApp)
+        it("forbids a student from deleting a file", async () => {
+            await mongoose.connection.db.collection("students").insertOne({
+                _id: new mongoose.Types.ObjectId(),
+                name: "Anna",
+                email: "student@example.com",
+            });
+            const testerApp = buildApp();
+            const otherStudentId = new mongoose.Types.ObjectId().toString();
+            const uploaded = await uploadTestFile(
+                otherStudentId,
+                "other.txt",
+                "other content",
+                testerApp
+            );
+            const fileId = uploaded.body.file._id;
+
+            const response = await request(studentApp)
                 .delete(`/api/uploads/${fileId}`)
                 .expect(403);
+            expect(response.body).toEqual({
+                error: "Forbidden: Students can only download their own files.",
+            });
         });
 
         it("returns 400 for invalid file ID", async () => {

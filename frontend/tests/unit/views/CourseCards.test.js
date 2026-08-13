@@ -5,6 +5,7 @@ import CourseCards from '@/views/Student/CourseCards.vue'
 vi.mock('@/api/client.js', () => ({
     default: {
         get: vi.fn(),
+        post: vi.fn(),
         interceptors: {
             request: { use: vi.fn() },
             response: { use: vi.fn() },
@@ -110,6 +111,88 @@ describe('CourseCards.vue', () => {
         client.get.mockRejectedValue(new Error('network'))
         const wrapper = await mountView()
         expect(wrapper.text()).toContain('Kunde inte hämta kurserna.')
+        wrapper.unmount()
+    })
+
+    const cardWithAssignment = {
+        ...sampleCard,
+        modules: [
+            {
+                moduleNumber: 1,
+                title: 'Modul 1',
+                isPartialExam: false,
+                isCaseStudy: false,
+                sections: [
+                    {
+                        title: 'Sektion 1',
+                        description: 'Innehåll',
+                        instructions: 'Läs texten på sidan 5.',
+                    },
+                ],
+                assignment: { title: 'Inlämning 1', description: 'Skriv en reflektion.' },
+            },
+        ],
+    }
+
+    const studentData = { student: { _id: '000000000000000000000001', name: 'Anna Andersson' } }
+
+    it('renders section instructions and the assignment form', async () => {
+        client.get.mockResolvedValue({ data: { ...studentData, cards: [cardWithAssignment] } })
+        const wrapper = await mountView()
+        expect(wrapper.text()).toContain('Läs texten på sidan 5.')
+        expect(wrapper.text()).toContain('Inlämning 1')
+        expect(wrapper.text()).toContain('Skriv en reflektion.')
+        expect(wrapper.find('textarea.submission-textarea').exists()).toBe(true)
+        wrapper.unmount()
+    })
+
+    it('submits an assignment and shows the pending status', async () => {
+        client.get.mockResolvedValue({ data: { ...studentData, cards: [cardWithAssignment] } })
+        client.post.mockResolvedValue({
+            data: { submission: { submittedAt: '2026-08-13T10:00:00.000Z', feedback: null } },
+        })
+        const wrapper = await mountView()
+        await wrapper.find('textarea.submission-textarea').setValue('Min reflektion...')
+        await wrapper.find('button.submit-btn').trigger('click')
+        await flushPromises()
+        expect(client.post).toHaveBeenCalledWith(
+            '/learning/instances/111111111111111111111111/modules/1/submissions',
+            expect.objectContaining({ submittedText: 'Min reflektion...' })
+        )
+        expect(wrapper.text()).toContain('Väntar på återkoppling')
+        expect(wrapper.text()).toContain('Inlämnat')
+        wrapper.unmount()
+    })
+
+    it('shows feedback on an existing submission', async () => {
+        client.get.mockImplementation((url) => {
+            if (url.includes('/learning/instances/')) {
+                return Promise.resolve({
+                    data: {
+                        submissions: {
+                            1: {
+                                submittedAt: '2026-08-01T09:00:00.000Z',
+                                feedback: { status: 'godkänd', comment: 'Bra jobbat!' },
+                            },
+                        },
+                        enrollmentId: 'enrA',
+                    },
+                })
+            }
+            return Promise.resolve({ data: { ...studentData, cards: [cardWithAssignment] } })
+        })
+        const wrapper = await mountView()
+        await flushPromises()
+        expect(wrapper.text()).toContain('Godkänd')
+        expect(wrapper.text()).toContain('Bra jobbat!')
+        wrapper.unmount()
+    })
+
+    it('renders course progress', async () => {
+        const card = { ...sampleCard, progress: { completed: 1, total: 2, percent: 50 } }
+        client.get.mockResolvedValue({ data: { ...studentData, cards: [card] } })
+        const wrapper = await mountView()
+        expect(wrapper.text()).toContain('Framsteg: 1/2 (50%)')
         wrapper.unmount()
     })
 })

@@ -8,6 +8,7 @@ vi.mock("../../src/utils/courseMatchingService.js", () => ({
         updateCourseInstanceStats: vi.fn(),
         getCourseStatistics: vi.fn(),
         findOrCreateCourseInstance: vi.fn(),
+        resolveCourseTemplate: vi.fn(),
     },
 }));
 vi.mock("../../src/models/Student.js", () => {
@@ -78,6 +79,12 @@ vi.mock("../../src/models/User.js", () => ({
         find: vi.fn(),
     },
 }));
+vi.mock("../../src/models/AssignmentSubmission.js", () => ({
+    __esModule: true,
+    default: {
+        find: vi.fn(),
+    },
+}));
 vi.mock("../../src/utils/parseStudentExcel.js", () => ({
     __esModule: true,
     parseStudentExcel: vi.fn(),
@@ -128,12 +135,10 @@ import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import User from "../../src/models/User.js";
 import CourseTemplate from "../../src/models/CourseTemplate.js";
 import CourseMatchingService from "../../src/utils/courseMatchingService.js";
-import {
-    normalizeCodeForMatching,
-    parseStudentExcel,
-} from "../../src/utils/parseStudentExcel.js";
+import { normalizeCodeForMatching, parseStudentExcel } from "../../src/utils/parseStudentExcel.js";
 import { calculateSlutprovDate } from "../../src/utils/slutprovDateCalculator.js";
 import { createOrFindTeacher } from "../../src/utils/teacherService.js";
+import AssignmentSubmission from "../../src/models/AssignmentSubmission.js";
 
 const createRes = () => {
     const res = {
@@ -182,6 +187,7 @@ beforeEach(() => {
         errors: [],
     });
     CourseMatchingService.findBestCourseMatch.mockResolvedValue(null);
+    CourseMatchingService.resolveCourseTemplate.mockResolvedValue(null);
     Student.findOne.mockResolvedValue(null);
     Student.findById.mockReturnValue({
         lean: vi.fn().mockResolvedValue({ _id: "stu1", education: [] }),
@@ -2145,7 +2151,7 @@ describe("createCourseInstance", () => {
                 title: "Delprov",
                 isPartialExam: true,
                 isCaseStudy: false,
-                sections: [{ title: "S1", description: "d1" }],
+                sections: [{ title: "S1", description: "d1", instructions: "" }],
             },
             {
                 moduleNumber: 5,
@@ -2153,8 +2159,8 @@ describe("createCourseInstance", () => {
                 isPartialExam: false,
                 isCaseStudy: true,
                 sections: [
-                    { title: "S1", description: "" },
-                    { title: "S2", description: "" },
+                    { title: "S1", description: "", instructions: "" },
+                    { title: "S2", description: "", instructions: "" },
                 ],
             },
         ]);
@@ -2168,6 +2174,115 @@ describe("createCourseInstance", () => {
                 startDate: "2025-01-01",
                 endDate: "2025-02-01",
                 templateId: "missing-template",
+            },
+            user: { userId: "user1" },
+        };
+        const res = createRes();
+
+        await createCourseInstance(req, res);
+
+        const payload = res.json.mock.calls[0][0];
+        expect(payload.success).toBe(true);
+        expect(payload.instance.modules).toEqual([]);
+    });
+
+    it("auto-resolves the course template when no templateId is provided (#31 Part B)", async () => {
+        CourseMatchingService.resolveCourseTemplate.mockResolvedValueOnce({
+            _id: "template-auto",
+            modules: [
+                {
+                    moduleNumber: 3,
+                    title: "Delprov",
+                    isPartialExam: true,
+                    sections: [{ title: "S1", description: "d1" }],
+                },
+            ],
+        });
+        const req = {
+            body: {
+                mainCourseId: "course1",
+                startDate: "2025-01-01",
+                endDate: "2025-02-01",
+            },
+            user: { userId: "user1" },
+        };
+        const res = createRes();
+
+        await createCourseInstance(req, res);
+
+        expect(
+            CourseMatchingService.resolveCourseTemplate
+        ).toHaveBeenCalledWith("course1");
+        const payload = res.json.mock.calls[0][0];
+        expect(payload.success).toBe(true);
+        expect(payload.instance.modules).toEqual([
+            {
+                moduleNumber: 3,
+                title: "Delprov",
+                isPartialExam: true,
+                isCaseStudy: false,
+                sections: [
+                    { title: "S1", description: "d1", instructions: "" },
+                ],
+                assignment: undefined,
+            },
+        ]);
+    });
+
+    it("explicit templateId wins over auto-resolution (#31 Part B)", async () => {
+        const explicitTemplate = {
+            _id: "template-explicit",
+            modules: [
+                {
+                    moduleNumber: 1,
+                    title: "Explicit",
+                    sections: [],
+                },
+            ],
+        };
+        CourseTemplate.findById.mockResolvedValueOnce(explicitTemplate);
+        CourseMatchingService.resolveCourseTemplate.mockResolvedValueOnce({
+            _id: "template-auto",
+            modules: [{ moduleNumber: 5, title: "Auto" }],
+        });
+        const req = {
+            body: {
+                mainCourseId: "course1",
+                startDate: "2025-01-01",
+                endDate: "2025-02-01",
+                templateId: "template-explicit",
+            },
+            user: { userId: "user1" },
+        };
+        const res = createRes();
+
+        await createCourseInstance(req, res);
+
+        expect(CourseTemplate.findById).toHaveBeenCalledWith(
+            "template-explicit"
+        );
+        expect(
+            CourseMatchingService.resolveCourseTemplate
+        ).not.toHaveBeenCalled();
+        const payload = res.json.mock.calls[0][0];
+        expect(payload.instance.modules).toEqual([
+            {
+                moduleNumber: 1,
+                title: "Explicit",
+                isPartialExam: false,
+                isCaseStudy: false,
+                sections: [],
+                assignment: undefined,
+            },
+        ]);
+    });
+
+    it("creates empty modules when auto-resolution finds no template (#31 Part B)", async () => {
+        const req = {
+            body: {
+                mainCourseId: "course1",
+                startDate: "2025-01-01",
+                endDate: "2025-02-01",
             },
             user: { userId: "user1" },
         };
@@ -2452,6 +2567,103 @@ describe("getMyCourseCards", () => {
         expect(cards[1].students[0].name).toBe("Anna Andersson");
 
         expect(Student.findOne).toHaveBeenCalledWith({ email: "anna@mindful.se" });
+    });
+
+    it("attaches per-card learning progress from accepted submissions", async () => {
+        const validEnrollmentId = "999999999999999999999999";
+        const instance1 = {
+            _id: INSTANCE_1,
+            courseName: "Svenska 1",
+            courseCode: "SVEENG01",
+            coursePoints: "100",
+            courseExtent: "5",
+            startDate: new Date("2026-01-05"),
+            endDate: new Date("2026-02-09"),
+            responsibleTeacher: { _id: "t1", name: "Mirsada", email: "mirsada@mindful.se" },
+            mainCourseId: { _id: "c1", courseName: "Svenska 1", courseCode: "SVEENG01" },
+            modules: [
+                {
+                    moduleNumber: 1,
+                    title: "Modul 1",
+                    sections: [{ title: "S1", description: "d", instructions: "Läs." }],
+                    assignment: { title: "Inlämning", description: "Skriv." },
+                },
+                {
+                    moduleNumber: 2,
+                    title: "Modul 2",
+                    sections: [{ title: "S1" }],
+                    assignment: { title: "Inlämning 2", description: "Skriv mer." },
+                },
+                {
+                    moduleNumber: 3,
+                    title: "Modul 3",
+                    sections: [{ title: "S1" }],
+                },
+            ],
+        };
+        const ownEnrollments = [
+            {
+                _id: validEnrollmentId,
+                studentId: STUDENT_1,
+                courseInstanceId: instance1,
+                mainCourseId: { _id: "c1", courseName: "Svenska 1", courseCode: "SVEENG01" },
+                startDate: instance1.startDate,
+                endDate: instance1.endDate,
+                status: "active",
+            },
+        ];
+        const sharedEnrollments = [
+            { courseInstanceId: INSTANCE_1, studentId: { _id: STUDENT_1, name: "Anna Andersson", email: "a@mindful.se" } },
+        ];
+
+        Student.findOne.mockReturnValue({
+            select: vi.fn().mockResolvedValue({ _id: STUDENT_1, name: "Anna Andersson" }),
+        });
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain(ownEnrollments));
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain(sharedEnrollments));
+        AssignmentSubmission.find.mockResolvedValue([
+            // Module 1 accepted → counts; module 2 pending feedback → not counted.
+            {
+                moduleNumber: 1,
+                enrollmentId: validEnrollmentId,
+                feedback: { status: "godkänd" },
+            },
+            {
+                moduleNumber: 2,
+                enrollmentId: validEnrollmentId,
+                feedback: { status: "" },
+            },
+        ]);
+
+        const req = { user: { userId: "user1", role: "student", email: "anna@mindful.se" } };
+        const res = createRes();
+
+        await getMyCourseCards(req, res);
+
+        const { cards } = res.json.mock.calls[0][0];
+        expect(cards).toHaveLength(1);
+        expect(cards[0].progress).toEqual({ completed: 1, total: 2, percent: 50 });
+        expect(AssignmentSubmission.find).toHaveBeenCalledWith({
+            enrollmentId: { $in: [validEnrollmentId] },
+        });
+    });
+
+    it("reports null progress for cards without any assignment", async () => {
+        const { ownEnrollments, sharedEnrollments } = buildCardData();
+
+        Student.findOne.mockReturnValue({
+            select: vi.fn().mockResolvedValue({ _id: STUDENT_1, name: "Anna Andersson" }),
+        });
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain(ownEnrollments));
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain(sharedEnrollments));
+
+        const req = { user: { userId: "user1", role: "student", email: "anna@mindful.se" } };
+        const res = createRes();
+
+        await getMyCourseCards(req, res);
+
+        const { cards } = res.json.mock.calls[0][0];
+        expect(cards[0].progress).toBeNull();
     });
 
     it("returns 400 when the account has no email", async () => {

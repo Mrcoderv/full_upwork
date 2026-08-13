@@ -47,9 +47,19 @@ vi.mock("../../src/models/Student.js", () => ({
     },
 }));
 
+vi.mock("../../src/services/emailService.js", () => ({
+    __esModule: true,
+    sendEmail: vi.fn().mockResolvedValue({ success: true }),
+    renderTempPasswordEmail: vi.fn().mockReturnValue({
+        subject: "Välkommen till Mindful Learning — inloggningsuppgifter",
+        text: "temp password email body",
+    }),
+}));
+
 import bcrypt from "bcrypt";
 import User from "../../src/models/User.js";
 import Student from "../../src/models/Student.js";
+import { sendEmail, renderTempPasswordEmail } from "../../src/services/emailService.js";
 import userRoutes from "../../src/router/userRoutes.js";
 
 const buildApp = () => {
@@ -278,6 +288,51 @@ describe("userRoutes", () => {
                 username: "Student User",
                 roles: ["student"],
             });
+            expect(res.body.tempPassword).toBeTruthy();
+        });
+
+        it("emails the temporary password to the student", async () => {
+            Student.findById.mockResolvedValueOnce({ _id: "stu-1", name: "Stu" });
+            User.findOne.mockResolvedValueOnce(null);
+            vi.spyOn(Math, "random").mockReturnValue(0.4242424242);
+
+            const res = await request(app)
+                .post("/api/users/create-for-student")
+                .send({
+                    studentId: "stu-1",
+                    email: "student@example.com",
+                    name: "Student User",
+                })
+                .expect(201);
+
+            expect(res.body.tempPassword).toBeTruthy();
+            expect(renderTempPasswordEmail).toHaveBeenCalledWith({
+                studentName: "Student User",
+                email: "student@example.com",
+                tempPassword: res.body.tempPassword,
+            });
+            expect(sendEmail).toHaveBeenCalledWith({
+                to: "student@example.com",
+                subject: "Välkommen till Mindful Learning — inloggningsuppgifter",
+                text: "temp password email body",
+            });
+        });
+
+        it("still creates the user when the email send fails", async () => {
+            Student.findById.mockResolvedValueOnce({ _id: "stu-1", name: "Stu" });
+            User.findOne.mockResolvedValueOnce(null);
+            sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+
+            const res = await request(app)
+                .post("/api/users/create-for-student")
+                .send({
+                    studentId: "stu-1",
+                    email: "student@example.com",
+                    name: "Student User",
+                })
+                .expect(201);
+
+            expect(res.body.message).toBe("User created successfully for student.");
             expect(res.body.tempPassword).toBeTruthy();
         });
 

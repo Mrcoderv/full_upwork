@@ -3,23 +3,31 @@ import Student from "../models/Student.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import User from "../models/User.js";
 import Teacher from "../models/Teacher.js";
+import { sendEmail, renderMessageCopyEmail } from "./emailService.js";
 
 /**
- * Stub for sending email copy of a message.
- * PART B of the spec.
+ * Send an email copy of an internal message to a student recipient.
+ * PART B of the spec: "students also receive a copy of messages by email,
+ * since some students may not log in every day."
  * @param {Object} message - The message object
  * @param {Object} recipient - The recipient user object
+ * @param {{ senderName?: string }} [options]
  */
-export const sendEmailCopyOfMessage = async (message, recipient) => {
+export const sendEmailCopyOfMessage = async (message, recipient, options = {}) => {
   if (recipient.roles.includes("student")) {
-    logger.info(
-      { 
-        messageId: message._id, 
-        recipientId: recipient._id,
-        recipientEmail: recipient.email 
-      },
-      "Email copy skipped — outbound email not yet configured (#26)"
-    );
+    if (!recipient.email) {
+      logger.warn(
+        { recipientId: recipient._id },
+        "Email copy skipped — student recipient has no email address"
+      );
+      return;
+    }
+    const { subject, text } = renderMessageCopyEmail({
+      senderName: options.senderName,
+      messageBody: message.body || "",
+      subject: message.conversationSubject,
+    });
+    await sendEmail({ to: recipient.email, subject, text });
   }
 };
 

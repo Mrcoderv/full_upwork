@@ -10,6 +10,7 @@ import Course from "../models/Course.js";
 import User from "../models/User.js";
 import CourseTemplate from "../models/CourseTemplate.js";
 import { distance } from "fastest-levenshtein";
+import { cloneModules } from "../models/courseModuleSchema.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 
@@ -19,6 +20,7 @@ import logger from "../utils/logger.js";
  * Relies on CourseMatchingService and related models/utilities.
  */
 import CoursePackage from "../models/CoursePackage.js";
+import AssignmentSubmission from "../models/AssignmentSubmission.js";
 
 logger.debug("courseMatchingController.js loaded");
 
@@ -1591,6 +1593,46 @@ const buildCourseCards = async (studentId) => {
             };
         });
 
+    // Per-card learning progress: accepted ("godkänd") submissions over the
+    // modules that carry an assignment. Cards without any assignment report null.
+    const enrollmentIds = cards
+        .map((c) => c.enrollmentId)
+        .filter((id) => mongoose.isValidObjectId(id));
+    const submissionsByEnrollment = new Map();
+    if (enrollmentIds.length > 0) {
+        const submissions = await AssignmentSubmission.find({
+            enrollmentId: { $in: enrollmentIds },
+        });
+        for (const submission of submissions) {
+            const key = String(submission.enrollmentId);
+            const list = submissionsByEnrollment.get(key) || [];
+            list.push(submission);
+            submissionsByEnrollment.set(key, list);
+        }
+    }
+
+    for (const card of cards) {
+        const assignmentModules = (card.modules || []).filter(
+            (m) => m.assignment?.title || m.assignment?.description
+        );
+        const total = assignmentModules.length;
+        if (total === 0) {
+            card.progress = null;
+            continue;
+        }
+        const moduleNumbers = new Set(assignmentModules.map((m) => m.moduleNumber));
+        const accepted = (
+            submissionsByEnrollment.get(String(card.enrollmentId)) || []
+        ).filter(
+            (s) => s.feedback?.status === "godkänd" && moduleNumbers.has(s.moduleNumber)
+        ).length;
+        card.progress = {
+            completed: accepted,
+            total,
+            percent: Math.round((accepted / total) * 100),
+        };
+    }
+
     return cards;
 };
 
@@ -2121,21 +2163,25 @@ export const createCourseInstance = async (req, res) => {
             });
         }
 
-        // Duplicate the template's module structure into the new course card/instance
+        // Duplicate the template's module structure into the new course card/instance.
+        // Explicit templateId (manual admin flow) ALWAYS wins over auto-resolution;
+        // auto-resolution (item #31 Part B) only applies when no templateId is given,
+        // which is the admission-time scenario. Both paths copy via cloneModules.
         let duplicatedModules = [];
         if (templateId) {
             const template = await CourseTemplate.findById(templateId);
             if (template) {
-                duplicatedModules = template.modules.map((m) => ({
-                    moduleNumber: m.moduleNumber,
-                    title: m.title ?? "",
-                    isPartialExam: !!m.isPartialExam,
-                    isCaseStudy: !!m.isCaseStudy,
-                    sections: (m.sections || []).map((s) => ({
-                        title: s.title ?? "",
-                        description: s.description ?? "",
-                    })),
-                }));
+                duplicatedModules = cloneModules(template.modules);
+            } else {
+                logger.warn({ templateId }, "Course template not found for provided templateId — creating instance with empty modules");
+            }
+        } else {
+            const template = await CourseMatchingService.resolveCourseTemplate(mainCourseId);
+            if (template) {
+                duplicatedModules = cloneModules(template.modules);
+                logger.info({ courseName: finalCourseName, templateId: template._id, moduleCount: duplicatedModules.length }, "Auto-generated course card content from course template (no explicit templateId)");
+            } else {
+                logger.info({ courseName: finalCourseName, mainCourseId }, "course has no template — card created without content");
             }
         }
 

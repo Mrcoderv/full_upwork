@@ -147,7 +147,9 @@ export const sendMessage = async (req, res) => {
     });
 
     for (const recipient of recipients) {
-      await sendEmailCopyOfMessage(newMessage, recipient);
+      await sendEmailCopyOfMessage(newMessage, recipient, {
+        senderName: req.user?.name,
+      });
     }
 
     res.status(201).json(newMessage);

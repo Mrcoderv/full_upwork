@@ -19,6 +19,7 @@ import Exam from "../src/models/Provning.js";
 import GradingScale from "../src/models/GradingScale.js";
 import Program from "../src/models/Program.js";
 import Notification from "../src/models/Notification.js";
+import AssignmentSubmission from "../src/models/AssignmentSubmission.js";
 import { buildDefaultModules, cloneModules } from "../src/models/courseModuleSchema.js";
 
 const hash = (pw) => bcrypt.hash(pw, 12);
@@ -72,6 +73,7 @@ async function main() {
     await GradingScale.deleteMany({});
     await Program.deleteMany({});
     await Notification.deleteMany({});
+    await AssignmentSubmission.deleteMany({});
     await mongoose.connection.db.collection("fs.files").deleteMany({});
     await mongoose.connection.db.collection("fs.chunks").deleteMany({});
 
@@ -120,10 +122,28 @@ async function main() {
     const svasve01 = await new Course({ courseName: "Svenska som andraspråk 1", courseCode: "SVASVE01", coursePoints: "100", courseExtent: "5", isActive: true }).save();
     const matmat01 = await new Course({ courseName: "Matematik 1a", courseCode: "MATMAT01a", coursePoints: "100", courseExtent: "10", isActive: true }).save();
 
+    const seededModules = buildDefaultModules().map((module) => ({
+        ...module,
+        sections: module.sections.map((section, si) => ({
+            ...section,
+            instructions:
+                section.instructions ||
+                `Lektionsinnehåll modul ${module.moduleNumber}, sektion ${si + 1}: läs avsnittet i läroboken och arbeta med övningarna innan nästa lektion.`,
+        })),
+        assignment:
+            module.moduleNumber === 1
+                ? {
+                      title: "Inlämningsuppgift 1 – Reflektion",
+                      description:
+                          "Skriv en reflektion (minst 150 ord) över vad du har lärt dig i modulen. Klistra in texten eller ladda upp ett dokument.",
+                  }
+                : module.assignment,
+    }));
+
     const template = await new CourseTemplate({
         templateName: "Svenska som andraspråk 1 - mall",
         courseId: svasve01._id,
-        modules: buildDefaultModules(),
+        modules: seededModules,
         createdBy: adminUser._id,
         isActive: true,
     }).save();
