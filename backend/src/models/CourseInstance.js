@@ -63,6 +63,23 @@ const courseInstanceSchema = new mongoose.Schema(
         // or evenly-spaced defaults if no parameters exist.
         sectionDates: [{ type: Date }],
 
+        // Course card content (instructions, assignment descriptions, etc.)
+        // Admins/systemadmin and the responsible teacher can view/edit all content.
+        // Students can view content that is not hidden; hidden content is replaced
+        // with a "blickat ej" placeholder.
+        content: {
+            type: Map,
+        of: {
+                title: String,
+                instructions: String,
+                isHiddenFromStudent: {
+                    type: Boolean,
+                    default: false,
+                },
+            },
+            default: new Map(),
+        },
+
         // Statistics tracking
         enrollmentCount: {
             type: Number,

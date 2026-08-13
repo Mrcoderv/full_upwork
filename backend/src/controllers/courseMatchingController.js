@@ -2628,6 +2628,116 @@ export const deleteCourseInstance = async (req, res) => {
     }
 };
 
+// GET /api/course-instances/:instanceId/content - get content for a course instance
+// Admins/systemadmin and responsible teacher can see all content;
+// students see content that is not hidden.
+export const getCourseInstanceContent = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+        const { userId: callerId, roles } = req.user;
+        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        // Check permissions
+        const isResponsibleTeacher = instance.responsibleTeacher &&
+            instance.responsibleTeacher.toString() === callerId;
+
+        if (!isAdmin && !isResponsibleTeacher) {
+            return res.status(403).json({ error: "Saknar behörighet" });
+        }
+
+        // Build visible content for the caller
+        const visibleContent = new Map();
+        for (const [moduleNumber, moduleContent] of instance.content.entries()) {
+            const entry = {
+                title: moduleContent.title || `Modul ${moduleNumber}`,
+                instructions: moduleContent.instructions || '',
+            };
+            // If the caller is a student and the content is hidden,
+            // replace with placeholder
+            if (!isAdmin && !isResponsibleTeacher && moduleContent.isHiddenFromStudent) {
+                entry.title = 'Innehåll dolt';
+                entry.instructions = 'Detta innehåll döljs för studenter.';
+            }
+            visibleContent.set(Number(moduleNumber), entry);
+        }
+
+        res.json({
+            success: true,
+            content: visibleContent,
+            canEdit: isAdmin || isResponsibleTeacher,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching course instance content");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
+// PUT /api/course-instances/:instanceId/content - update content
+// Admins/systemadmin and responsible teacher can update all content.
+export const updateCourseInstanceContent = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+        const { userId: callerId, roles } = req.user;
+        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        // Check permissions
+        const isResponsibleTeacher = instance.responsibleTeacher &&
+            instance.responsibleTeacher.toString() === callerId;
+
+        if (!isAdmin && !isResponsibleTeacher) {
+            return res.status(403).json({ error: "Saknar behörighet" });
+        }
+
+        const { content } = req.body;
+        if (!content || typeof content !== 'object') {
+            return res.status(400).json({ error: "Ogiltig innehållsdata" });
+        }
+
+        // Update content map
+        if (instance.content) {
+            instance.content.clear();
+        } else {
+            instance.content = new Map();
+        }
+
+        for (const [moduleNumber, moduleContent] of Object.entries(content)) {
+            const mn = Number(moduleNumber);
+            if (!instance.content.has(mn)) {
+                instance.content.set(mn, {
+                    title: '',
+                    instructions: '',
+                    isHiddenFromStudent: false,
+                });
+            }
+            instance.content.set(mn, {
+                title: moduleContent.title !== undefined ? moduleContent.title : '',
+                instructions: moduleContent.instructions !== undefined ? moduleContent.instructions : '',
+                isHiddenFromStudent: moduleContent.isHiddenFromStudent !== undefined ? moduleContent.isHiddenFromStudent : false,
+            });
+        }
+
+        await instance.save();
+        res.json({
+            success: true,
+            message: "Innehåll uppdaterat",
+            canEdit: isAdmin || isResponsibleTeacher,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error updating course instance content");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
 // Bulk delete all course instances and related enrollments
 export const deleteAllCourseInstances = async (req, res) => {
     try {

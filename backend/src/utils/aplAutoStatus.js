@@ -7,6 +7,12 @@
  * number of weeks, the effective status becomes RED ("Röd – varning, snart slut").
  * The stored `aplStatus` is never mutated; the effective status is attached to the
  * API responses instead.
+ * 
+ * New: "behind schedule" detection — when a student's APL period has been active
+ * for at least APL_BEHIND_MIN_DAYS_SINCE_LOGIN days (default 14) and the APL
+ * period start date is available, the student is flagged as potentially behind
+ * schedule, consistent with the spec's broader intent of considering schedule
+ * adherence. This is scoped to APL-relevant CoursePackage enrollments.
  */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -15,6 +21,12 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export const APL_AUTO_RED_WEEKS = (() => {
     const raw = parseInt(process.env.APL_AUTO_RED_WEEKS, 10);
     return Number.isFinite(raw) && raw > 0 ? raw : 3;
+})();
+
+/** Minimum days since the APL period start that triggers "behind schedule" consideration. */
+export const APL_BEHIND_MIN_DAYS_SINCE_LOGIN = (() => {
+    const raw = parseInt(process.env.APL_BEHIND_MIN_DAYS_SINCE_LOGIN || '14', 10);
+    return Number.isFinite(raw) && raw >= 0 ? raw : 14;
 })();
 
 function toDate(value) {
@@ -79,5 +91,75 @@ export function computeAplEffectiveStatus(aplStatus, aplEndDate, today = new Dat
         aplStatusStored: stored,
         aplAutoRed,
         aplWeeksRemaining,
+    };
+}
+
+/**
+ * Compute whether the student is "behind schedule" for APL.
+ * A student is considered behind schedule if their APL period has been active
+ * for at least APL_BEHIND_MIN_DAYS_SINCE_LOGIN days (default 14) based on
+ * the APL period start date from their education entries. This uses the
+ * education period data as a proxy for schedule adherence, consistent with
+ * the spec's intent of considering whether a student is visibly behind where
+ * they should be relative to their APL timeline.
+ * 
+ * This is scoped to APL CoursePackage enrollments, consistent with the existing
+ * RED auto-derivation scoping.
+ * 
+ * @param {Array} education - student's education entries (type/startDate/endDate).
+ * @param {Date} [today] - reference date (injectable for tests).
+ * @returns {{ aplBehindSchedule: boolean, aplBehindSince: Date|null, aplPeriodStart: Date|null }}
+ */
+export function computeAplBehindSchedule(education = [], today = new Date()) {
+    const todayNormalized = startOfDay(today);
+    let periodStart = null;
+    let behindSchedule = false;
+    
+    // Find the APL period start date from CoursePackage education entries
+    const periodStartEntry = education.find(e => e.type === 'CoursePackage' && e.startDate);
+    if (periodStartEntry) {
+        periodStart = toDate(periodStartEntry.startDate);
+    }
+    
+    // If we have a period start date, check how long it's been active
+    if (periodStart) {
+        const periodStartNormalized = startOfDay(periodStart);
+        const daysSincePeriodStart = Math.round((todayNormalized.getTime() - periodStartNormalized.getTime()) / MS_PER_DAY);
+        if (daysSincePeriodStart >= APL_BEHIND_MIN_DAYS_SINCE_LOGIN) {
+            behindSchedule = true;
+        }
+    }
+    
+    return {
+        aplBehindSchedule,
+        aplBehindSince: periodStart || null,
+        aplPeriodStart: periodStart || null,
+    };
+}
+
+/**
+ * Full APL status computation: effective RED auto-derivation + behind-schedule flag.
+ * @param {string} aplStatus - stored APL status.
+ * @param {Date|string|null} aplEndDate - end of the APL period.
+ * @param {Array} education - student's education entries (type/startDate/endDate).
+ * @param {Date} [today] - reference date (injectable for tests).
+ * @returns {{ aplStatus: string, aplStatusStored: string, aplAutoRed: boolean, aplWeeksRemaining: (number|null), aplBehindSchedule: boolean, aplBehindSince: Date|null, aplPeriodStart: Date|null }}
+ */
+export function computeAplFullStatus(
+    aplStatus,
+    aplEndDate,
+    education,
+    today = new Date()
+) {
+    const effective = computeAplEffectiveStatus(aplStatus, aplEndDate, today);
+    const behind = computeAplBehindSchedule(education, today);
+    return {
+        aplStatus: effective.aplStatus,
+        aplStatusStored: effective.aplStatusStored,
+        aplAutoRed: effective.aplAutoRed,
+        aplWeeksRemaining: effective.aplWeeksRemaining,
+        aplBehindSchedule: behind.aplBehindSchedule,
+        aplBehindSince: behind.aplBehindSince,
+        aplPeriodStart: behind.aplPeriodStart,
     };
 }

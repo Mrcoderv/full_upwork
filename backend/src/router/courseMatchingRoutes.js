@@ -22,6 +22,8 @@ import {
     addStudentsToInstance,
     getMyCourseCards,
     getStudentCourseCards,
+    getCourseInstanceContent,
+    updateCourseInstanceContent,
 } from "../controllers/courseMatchingController.js";
 import logger from "../utils/logger.js";
 
@@ -146,6 +148,16 @@ router.get(
     "/students/:studentId/course-cards",
     isAuthenticated,
     asyncHandler(getStudentCourseCards)
+);
+router.get(
+    "/course-instances/:instanceId/content",
+    isAuthenticated,
+    asyncHandler(getCourseInstanceContent)
+);
+router.put(
+    "/course-instances/:instanceId/content",
+    isAuthenticated,
+    asyncHandler(updateCourseInstanceContent)
 );
 
 // Statistics routes
