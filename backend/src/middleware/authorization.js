@@ -18,7 +18,7 @@ export const can = (permission) => {
   return (req, res, next) => {
     // Assuming user object is attached to req by a previous auth middleware
     if (!req.user) {
-      logger.warn(`🚫 Authentication required for access to ${req.originalUrl}`);
+      logger.warn(`Authentication required for access to ${req.originalUrl}`);
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
@@ -36,7 +36,7 @@ export const can = (permission) => {
     }
 
     logger.warn(
-      `🚫 Authorization DENIED for user ${req.user.userId || req.user.email || 'unknown'} (${roles.join(', ')}) attempting ${req.method} ${req.originalUrl} - Missing permission: "${permission}"`
+      ` Authorization DENIED for user ${req.user.userId || req.user.email || 'unknown'} (${roles.join(', ')}) attempting ${req.method} ${req.originalUrl} - Missing permission: "${permission}"`
     );
 
     return res.status(403).json({ message: 'Forbidden: You do not have the required permission.' });

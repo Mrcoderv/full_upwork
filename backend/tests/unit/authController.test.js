@@ -95,6 +95,7 @@ describe("authController", () => {
         };
         vi.spyOn(User, "findOne").mockResolvedValueOnce(user);
         vi.spyOn(bcrypt, "compare").mockResolvedValueOnce(true);
+        vi.spyOn(User, "updateOne").mockResolvedValueOnce({ modifiedCount: 1 });
         const token = "jwt-token";
         vi.spyOn(jwt, "sign").mockReturnValueOnce(token);
 
@@ -102,6 +103,11 @@ describe("authController", () => {
         const res = buildRes();
 
         await authController.login(req, res);
+
+        expect(User.updateOne).toHaveBeenCalledWith(
+            { _id: user._id },
+            expect.objectContaining({ $set: expect.objectContaining({ lastLoginAt: expect.any(Date) }) })
+        );
 
         expect(res.cookies[AUTH_COOKIE_NAME].value).toBe(token);
         expect(res.body).toEqual({
@@ -129,6 +135,7 @@ describe("authController", () => {
         };
         vi.spyOn(User, "findOne").mockResolvedValueOnce(user);
         vi.spyOn(bcrypt, "compare").mockResolvedValueOnce(true);
+        vi.spyOn(User, "updateOne").mockResolvedValueOnce({ modifiedCount: 1 });
         vi.spyOn(jwt, "sign").mockReturnValueOnce("jwt-token");
 
         const req = { body: { email: "admin@example.com", password: "mindful" } };

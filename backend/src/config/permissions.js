@@ -12,6 +12,7 @@ export const PERMISSION_FEATURES = {
   HIERARCHY_MANAGEMENT: 'hierarchy_management',
   OWN_SETTINGS: 'own_settings',
   ADD_MUNICIPALITIES_COURSES: 'add_municipalities_courses',
+  COURSE_TEMPLATES: 'course_templates',
 };
 
 export const ROLES = {
@@ -101,6 +102,15 @@ export const PERMISSION_MATRIX = {
     [ROLES.COORDINATOR]: 'Nej',
     [ROLES.STUDENT]: 'Nej',
   },
+  [PERMISSION_FEATURES.COURSE_TEMPLATES]: {
+    [ROLES.SYSTEMADMIN]: 'Ja',
+    [ROLES.ADMIN]: 'Ja',
+    [ROLES.TEACHER]: 'Skapa (utvalda lärare)',
+    [ROLES.SYV]: 'Nej',
+    [ROLES.SPECPED]: 'Nej',
+    [ROLES.COORDINATOR]: 'Nej',
+    [ROLES.STUDENT]: 'Nej',
+  },
 };
 
 /**
@@ -141,6 +151,7 @@ export const FEATURE_LABELS = {
   [PERMISSION_FEATURES.HIERARCHY_MANAGEMENT]: 'Hierarkihantering?',
   [PERMISSION_FEATURES.OWN_SETTINGS]: 'Egna inställningar (ex profilbild)',
   [PERMISSION_FEATURES.ADD_MUNICIPALITIES_COURSES]: 'Lägga till kommuner, kurser etc',
+  [PERMISSION_FEATURES.COURSE_TEMPLATES]: 'Kursmallar (kursmoduler)',
 };
 
 /**

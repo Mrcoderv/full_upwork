@@ -554,6 +554,39 @@ export const setStudentDropout = async (req, res) => {
         // Save student (even if already dropout, to ensure data is fresh)
         await student.save();
 
+        // Cascade dropout to enrollments: flip every non-terminal enrollment to "dropped"
+        // so the course-instance participant list automatically reflects the withdrawal.
+        // "completed" and "dropped" enrollments are left untouched.
+        let droppedEnrollments = 0;
+        try {
+            const enrollmentsToDrop = await StudentEnrollment.find({
+                studentId: student._id,
+                status: {
+                    $in: ["enrolled", "active", "inactive", "suspended", "reviderad"],
+                },
+            });
+            for (const enrollment of enrollmentsToDrop) {
+                await enrollment.changeStatus(
+                    "dropped",
+                    "Student marked as dropout (Avbrott)",
+                    null,
+                    userId
+                );
+                droppedEnrollments++;
+            }
+            if (droppedEnrollments > 0) {
+                logger.info(
+                    { count: droppedEnrollments, name: student.name },
+                    "Cascaded dropout to enrollments"
+                );
+            }
+        } catch (cascadeError) {
+            logger.error(
+                { err: cascadeError, name: student.name },
+                "Error cascading dropout to enrollments"
+            );
+        }
+
         // Remove from APL lists (by excluding from APL queries - handled automatically)
         // The APL board already filters by excluding dropout students
 
@@ -838,6 +871,7 @@ export const setStudentDropout = async (req, res) => {
             deletedEmptyExams: deletedEmptyExams,
             removedFromEvents,
             deletedEmptyEvents,
+            droppedEnrollments,
         });
     } catch (error) {
         logger.error({ err: error }, "Error setting student as dropout");

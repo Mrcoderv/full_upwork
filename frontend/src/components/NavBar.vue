@@ -166,6 +166,28 @@
           <span v-if="totalNotifications > 0" class="notis-badge">{{ totalNotifications }}</span>
         </div>
 
+        <!-- Messages icon -->
+        <router-link
+          v-if="isLoggedIn"
+          to="/messages"
+          class="notification-icon"
+          title="Meddelanden"
+          style="color: inherit; text-decoration: none;"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </router-link>
+
+
         <!-- Burger menu button -->
         <button
           v-if="isLoggedIn"
@@ -745,6 +767,7 @@
         { name: 'Specped Samtal', link: '/specped/appointments', role: ['specped', 'admin', 'systemadmin'] },
         { name: 'Kurspaket', link: '/programsandpackages', role: 'admin' },
         { name: 'Kurser', link: '/programsandcourses', role: 'admin' },
+        { name: 'Kursmallar', link: '/course-templates', role: ['admin', 'teacher'] },
         { name: 'Kursinstanser', link: '/course-instances', role: 'admin' },
         { name: 'Kursmatchning', link: '/course-matching', role: 'admin' },
         { name: 'Lägg till Lärare', link: '/lagg-till-larare', role: 'admin' },
@@ -756,7 +779,10 @@
         { name: 'Betyg', link: '/betyg', role: 'teacher' },
         { name: 'Hantera Prövningar', link: '/provningar', role: 'admin' },
         { name: 'Prövningar', link: '/examform', role: 'student' },
+        { name: 'Mina kurser', link: '/course-cards', role: 'student' },
+        { name: 'Meddelanden', link: '/messages', role: ['student', 'teacher', 'syv', 'specped', 'admin', 'systemadmin', 'coordinator'] },
       ]
+
       const filteredMenuItems = computed(() => {
         if (!isLoggedIn.value) return []
         const userRole = store.getters.userRole

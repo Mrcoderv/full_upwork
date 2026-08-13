@@ -100,6 +100,25 @@ Omitting `SYSTEM_ADMIN_PASSWORD` creates the account with the known default
 password `mindful` and forces a password change on first login (see
 [Security](#security)).
 
+### Load education data (programs, courses, course packages)
+
+Seed or refresh the education catalog from an Excel workbook. The scripts read
+`MONGODB_URI` from `backend/.env.development`:
+
+```sh
+cd backend
+set -a; source .env.development; set +a
+cd scripts
+node dropData.js          # wipe Programs, Courses, CoursePackages
+node updateEducation.js   # import them from the Excel workbook
+```
+
+`updateEducation.js` imports from the workbook path hardcoded at the bottom of
+the script (`backend/scripts/updateEducation.js:118`, default `./test.xlsx`), so
+run it from `backend/scripts/` — or change that path to point at e.g.
+`backend/scripts/EducationData.xlsx`. Run `dropData.js` first to start from a
+clean catalog.
+
 ## Health checks
 
 | Endpoint | Purpose | Expected (ready) |

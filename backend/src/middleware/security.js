@@ -227,7 +227,9 @@ export const uploadRateLimiter = createRateLimiter(
 // Create apiRateLimiter with skip for login endpoint (login has its own rate limiter)
 const apiRateLimiterConfig = {
     windowMs: process.env.NODE_ENV === "test" ? 60 * 1000 : 60 * 1000, // 1 minute
-    max: process.env.NODE_ENV === "test" ? 3 : 60, // lower threshold in tests
+    max: process.env.API_RATE_LIMIT_MAX
+        ? parseInt(process.env.API_RATE_LIMIT_MAX, 10)
+        : process.env.NODE_ENV === "test" ? 3 : 60, // lower threshold in tests; e2e can raise via env
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {

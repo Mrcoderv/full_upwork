@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
+import { courseModuleSchema } from "./courseModuleSchema.js";
 
 const courseInstanceSchema = new mongoose.Schema(
     {
@@ -53,6 +54,9 @@ const courseInstanceSchema = new mongoose.Schema(
         },
         notes: String,
         slutprovDate: Date,
+
+        // Copied modules from a course template (course card content)
+        modules: { type: [courseModuleSchema], default: [] },
 
         // Statistics tracking
         enrollmentCount: {

@@ -18,10 +18,12 @@ import documentRoutes from "./documentRoutes.js";
 import statsRoutes from "./statsRoutes.js";
 import actionPlanRoutes from "./actionPlanRoutes.js";
 import courseMatchingRoutes from "./courseMatchingRoutes.js";
+import courseTemplateRoutes from "./courseTemplateRoutes.js";
 import studentDetailsRoutes from "./studentDetailsRoutes.js";
 import gradeReportRoutes from "./gradeReportRoutes.js";
 import gradeCatalogRoutes from "./gradeCatalogRoutes.js";
 import analyticsRoutes from "./analyticsRoutes.js";
+import messagingRoutes from "./messagingRoutes.js";
 
 const router = Router();
 
@@ -46,9 +48,11 @@ router.use("/api", documentRoutes);
 router.use("/api/stats", statsRoutes);
 router.use("/api", actionPlanRoutes);
 router.use("/api", courseMatchingRoutes);
+router.use("/api", courseTemplateRoutes);
 router.use("/api", studentDetailsRoutes);
 router.use("/api", gradeReportRoutes);
 router.use("/api", gradeCatalogRoutes);
 router.use("/api/analytics", analyticsRoutes);
+router.use("/api", messagingRoutes);
 
 export default router;

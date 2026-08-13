@@ -20,6 +20,8 @@ import {
     deleteAllCourseInstances,
     getMyCourseInstances,
     addStudentsToInstance,
+    getMyCourseCards,
+    getStudentCourseCards,
 } from "../controllers/courseMatchingController.js";
 import logger from "../utils/logger.js";
 
@@ -131,6 +133,19 @@ router.put(
     isAuthenticated,
     hasRole(["admin", "systemadmin", "teacher"]),
     asyncHandler(updateStudyplanTempo)
+);
+
+// Course cards routes
+router.get(
+    "/course-cards/mine",
+    isAuthenticated,
+    hasRole(["student"]),
+    asyncHandler(getMyCourseCards)
+);
+router.get(
+    "/students/:studentId/course-cards",
+    isAuthenticated,
+    asyncHandler(getStudentCourseCards)
 );
 
 // Statistics routes

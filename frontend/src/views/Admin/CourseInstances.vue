@@ -245,6 +245,27 @@
                   </div>
                 </div>
 
+                <div v-if="!editingInstance" class="row">
+                  <div class="col-md-12">
+                    <div class="form-group">
+                      <label for="templateId">Kursmall (kopierar moduler)</label>
+                      <select
+                        id="templateId"
+                        v-model="instanceForm.templateId"
+                        class="form-control"
+                      >
+                        <option value="">Ingen mall</option>
+                        <option v-for="template in templates" :key="template._id" :value="template._id">
+                          {{ template.templateName }}
+                          <template v-if="template.courseId?.courseName">
+                            ({{ template.courseId.courseName }})
+                          </template>
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="row">
                   <div class="col-md-4">
                     <div class="form-group">
@@ -549,6 +570,7 @@
                       <th>Status</th>
                       <th>Startdatum</th>
                       <th>Slutdatum</th>
+                      <th>Senaste inloggning</th>
                       <th>Betyg</th>
                       <th>Närvaro</th>
                       <th>Åtgärder</th>
@@ -573,6 +595,7 @@
                       </td>
                       <td>{{ formatDate(enrollment.startDate) }}</td>
                       <td>{{ formatDate(enrollment.endDate) }}</td>
+                      <td>{{ enrollment.lastLoginAt ? formatDate(enrollment.lastLoginAt) : '-' }}</td>
                       <td>{{ enrollment.grade || '-' }}</td>
                       <td>
                         {{
@@ -670,11 +693,13 @@
         courseExtent: '',
         notes: '',
         isActive: true,
+        templateId: '',
       })
       const durationWeeks = ref('')
       const showAssistantTeacher = ref(false)
 
       const teachers = ref([])
+      const templates = ref([])
 
       // Add Student Modal state
       const selectedInstanceForAddStudent = ref(null)
@@ -951,6 +976,16 @@
         } catch (error) {
           console.error('Error loading teachers:', error)
           teachers.value = []
+        }
+      }
+
+      const loadTemplates = async () => {
+        try {
+          const response = await client.get('/course-templates')
+          templates.value = response.data.templates || []
+        } catch (error) {
+          console.error('Error loading course templates:', error)
+          templates.value = []
         }
       }
 
@@ -1267,6 +1302,7 @@
         loadCourses()
         loadInstances()
         loadTeachers()
+        loadTemplates()
       })
 
       // Watch instances to update filter options

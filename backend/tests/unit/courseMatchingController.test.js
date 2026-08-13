@@ -65,6 +65,19 @@ vi.mock("../../src/models/Course.js", () => ({
         findById: vi.fn(),
     },
 }));
+vi.mock("../../src/models/CourseTemplate.js", () => ({
+    __esModule: true,
+    default: {
+        find: vi.fn(),
+        findById: vi.fn(),
+    },
+}));
+vi.mock("../../src/models/User.js", () => ({
+    __esModule: true,
+    default: {
+        find: vi.fn(),
+    },
+}));
 vi.mock("../../src/utils/parseStudentExcel.js", () => ({
     __esModule: true,
     parseStudentExcel: vi.fn(),
@@ -96,6 +109,8 @@ import {
     getCourseInstanceEnrollments,
     getCourseInstances,
     getCourseStatistics,
+    getMyCourseCards,
+    getStudentCourseCards,
     getStudentEnrollments,
     processStudentEducation,
     updateCourseInstance,
@@ -110,6 +125,8 @@ import CourseInstance from "../../src/models/CourseInstance.js";
 import CoursePackage from "../../src/models/CoursePackage.js";
 import Student from "../../src/models/Student.js";
 import StudentEnrollment from "../../src/models/StudentEnrollment.js";
+import User from "../../src/models/User.js";
+import CourseTemplate from "../../src/models/CourseTemplate.js";
 import CourseMatchingService from "../../src/utils/courseMatchingService.js";
 import {
     normalizeCodeForMatching,
@@ -1750,7 +1767,8 @@ describe("getCourseInstanceEnrollments", () => {
         const mockEnrollments = [{ _id: "e1" }];
         const chain = {
             populate: vi.fn().mockReturnThis(),
-            sort: vi.fn().mockResolvedValue(mockEnrollments),
+            sort: vi.fn().mockReturnThis(),
+            lean: vi.fn().mockResolvedValue(mockEnrollments),
         };
         StudentEnrollment.find.mockReturnValue(chain);
 
@@ -1770,6 +1788,51 @@ describe("getCourseInstanceEnrollments", () => {
         expect(res.json).toHaveBeenCalledWith(
             expect.objectContaining({ success: true, enrollments: mockEnrollments })
         );
+    });
+
+    it("attaches lastLoginAt from the linked user account for each enrollment", async () => {
+        const mockEnrollments = [
+            {
+                _id: "e1",
+                studentId: { _id: "s1", name: "Student One", email: "s1@example.com", dropout: false },
+            },
+            {
+                _id: "e2",
+                studentId: { _id: "s2", name: "Student Two", email: "s2@example.com", dropout: false },
+            },
+            {
+                _id: "e3",
+                studentId: { _id: "s3", name: "Student Three", email: "s3@example.com", dropout: false },
+            },
+        ];
+        const chain = {
+            populate: vi.fn().mockReturnThis(),
+            sort: vi.fn().mockReturnThis(),
+            lean: vi.fn().mockResolvedValue(mockEnrollments),
+        };
+        StudentEnrollment.find.mockReturnValue(chain);
+
+        const lastLoginDate = new Date("2026-07-01T12:00:00.000Z");
+        const userQueryChain = {
+            select: vi.fn().mockReturnThis(),
+            lean: vi.fn().mockResolvedValue([
+                { email: "s1@example.com", lastLoginAt: lastLoginDate },
+                { email: "s3@example.com", lastLoginAt: null },
+            ]),
+        };
+        User.find.mockReturnValue(userQueryChain);
+
+        const req = { params: { instanceId: "inst1" }, query: {} };
+        const res = createRes();
+
+        await getCourseInstanceEnrollments(req, res);
+
+        expect(User.find).toHaveBeenCalledWith({
+            email: { $in: ["s1@example.com", "s2@example.com", "s3@example.com"] },
+        });
+        expect(mockEnrollments[0].lastLoginAt).toEqual(lastLoginDate);
+        expect(mockEnrollments[1].lastLoginAt).toBeNull();
+        expect(mockEnrollments[2].lastLoginAt).toBeNull();
     });
 
     it("handles errors when fetching course instance enrollments", async () => {
@@ -2036,6 +2099,86 @@ describe("createCourseInstance", () => {
         expect(res.status).toHaveBeenCalledWith(404);
         expect(res.json).toHaveBeenCalledWith({ error: "Main course not found" });
     });
+
+    it("duplicates template modules into the new instance when templateId is provided", async () => {
+        CourseTemplate.findById.mockResolvedValueOnce({
+            _id: "template1",
+            modules: [
+                {
+                    moduleNumber: 3,
+                    title: "Delprov",
+                    isPartialExam: true,
+                    isCaseStudy: false,
+                    sections: [{ title: "S1", description: "d1" }],
+                },
+                {
+                    moduleNumber: 5,
+                    title: "Case",
+                    isPartialExam: false,
+                    isCaseStudy: true,
+                    sections: [
+                        { title: "S1", description: "" },
+                        { title: "S2", description: "" },
+                    ],
+                },
+            ],
+        });
+
+        const req = {
+            body: {
+                mainCourseId: "course1",
+                startDate: "2025-01-01",
+                endDate: "2025-02-01",
+                templateId: "template1",
+            },
+            user: { userId: "user1" },
+        };
+        const res = createRes();
+
+        await createCourseInstance(req, res);
+
+        const payload = res.json.mock.calls[0][0];
+        expect(payload.success).toBe(true);
+        expect(payload.instance.modules).toEqual([
+            {
+                moduleNumber: 3,
+                title: "Delprov",
+                isPartialExam: true,
+                isCaseStudy: false,
+                sections: [{ title: "S1", description: "d1" }],
+            },
+            {
+                moduleNumber: 5,
+                title: "Case",
+                isPartialExam: false,
+                isCaseStudy: true,
+                sections: [
+                    { title: "S1", description: "" },
+                    { title: "S2", description: "" },
+                ],
+            },
+        ]);
+    });
+
+    it("creates the instance without modules when templateId is missing or template not found", async () => {
+        CourseTemplate.findById.mockResolvedValueOnce(null);
+        const req = {
+            body: {
+                mainCourseId: "course1",
+                startDate: "2025-01-01",
+                endDate: "2025-02-01",
+                templateId: "missing-template",
+            },
+            user: { userId: "user1" },
+        };
+        const res = createRes();
+
+        await createCourseInstance(req, res);
+
+        const payload = res.json.mock.calls[0][0];
+        expect(payload.success).toBe(true);
+        expect(payload.instance.modules).toEqual([]);
+    });
 });
 
 describe("updateCourseInstance", () => {
@@ -2196,5 +2339,222 @@ describe("deleteAllCourseInstances", () => {
 
         expect(res.status).toHaveBeenCalledWith(500);
         expect(res.json).toHaveBeenCalledWith({ error: "Internal server error" });
+    });
+});
+
+const createSelectChain = (result) => {
+    const chain = {
+        populate: vi.fn(() => chain),
+        sort: vi.fn(() => Promise.resolve(result)),
+        select: vi.fn(() => Promise.resolve(result)),
+    };
+    return chain;
+};
+
+const STUDENT_1 = "000000000000000000000001";
+const INSTANCE_1 = "111111111111111111111111";
+const INSTANCE_2 = "222222222222222222222222";
+
+const buildCardData = () => {
+    const instance1 = {
+        _id: INSTANCE_1,
+        courseName: "Svenska 1",
+        courseCode: "SVEENG01",
+        coursePoints: "100",
+        courseExtent: "5",
+        startDate: new Date("2026-01-05"),
+        endDate: new Date("2026-02-09"),
+        responsibleTeacher: { _id: "t1", name: "Mirsada", email: "mirsada@mindful.se" },
+        mainCourseId: { _id: "c1", courseName: "Svenska 1", courseCode: "SVEENG01" },
+        modules: [],
+    };
+    const instance2 = {
+        _id: INSTANCE_2,
+        courseName: "Matematik 1",
+        courseCode: "MATMAT01",
+        coursePoints: "100",
+        courseExtent: "10",
+        startDate: new Date("2026-03-02"),
+        endDate: new Date("2026-05-11"),
+        responsibleTeacher: { _id: "t2", name: "Allan", email: "allan@mindful.se" },
+        mainCourseId: { _id: "c2", courseName: "Matematik 1", courseCode: "MATMAT01" },
+        modules: [],
+    };
+    const ownEnrollments = [
+        {
+            _id: "enrA",
+            studentId: STUDENT_1,
+            courseInstanceId: instance1,
+            mainCourseId: { _id: "c1", courseName: "Svenska 1", courseCode: "SVEENG01" },
+            startDate: instance1.startDate,
+            endDate: instance1.endDate,
+            status: "active",
+        },
+        {
+            _id: "enrB",
+            studentId: STUDENT_1,
+            courseInstanceId: instance2,
+            mainCourseId: { _id: "c2", courseName: "Matematik 1", courseCode: "MATMAT01" },
+            startDate: instance2.startDate,
+            endDate: instance2.endDate,
+            status: "enrolled",
+        },
+    ];
+    const sharedEnrollments = [
+        { courseInstanceId: INSTANCE_1, studentId: { _id: STUDENT_1, name: "Anna Andersson", email: "a@mindful.se" } },
+        { courseInstanceId: INSTANCE_1, studentId: { _id: "000000000000000000000002", name: "Berta Berg", email: "b@mindful.se" } },
+        { courseInstanceId: INSTANCE_1, studentId: { _id: "000000000000000000000003", name: "Calle Carlsson", email: "c@mindful.se" } },
+        { courseInstanceId: INSTANCE_2, studentId: { _id: STUDENT_1, name: "Anna Andersson", email: "a@mindful.se" } },
+    ];
+    return { instance1, instance2, ownEnrollments, sharedEnrollments };
+};
+
+describe("getMyCourseCards", () => {
+    it("returns the student's cards aggregated per course instance with shared students", async () => {
+        const { ownEnrollments, sharedEnrollments } = buildCardData();
+
+        Student.findOne.mockReturnValue({
+            select: vi.fn().mockResolvedValue({ _id: STUDENT_1, name: "Anna Andersson" }),
+        });
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain(ownEnrollments));
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain(sharedEnrollments));
+
+        const req = { user: { userId: "user1", role: "student", email: "anna@mindful.se" } };
+        const res = createRes();
+
+        await getMyCourseCards(req, res);
+
+        expect(res.json).toHaveBeenCalledTimes(1);
+        const { success, student, cards } = res.json.mock.calls[0][0];
+        expect(success).toBe(true);
+        expect(student).toEqual({ _id: STUDENT_1, name: "Anna Andersson" });
+
+        expect(cards).toHaveLength(2);
+        expect(cards[0].courseName).toBe("Svenska 1");
+        expect(cards[0].courseCode).toBe("SVEENG01");
+        expect(cards[0].coursePoints).toBe("100");
+        expect(cards[0].weeks).toBe(5);
+        expect(cards[0].studyPeriod).toBe(1);
+        expect(cards[0].responsibleTeacher).toBe("Mirsada");
+        expect(cards[0].students).toHaveLength(3);
+        expect(cards[0].students.map((s) => s.name)).toEqual([
+            "Anna Andersson",
+            "Berta Berg",
+            "Calle Carlsson",
+        ]);
+
+        expect(cards[1].courseName).toBe("Matematik 1");
+        expect(cards[1].courseCode).toBe("MATMAT01");
+        expect(cards[1].weeks).toBe(10);
+        expect(cards[1].studyPeriod).toBe(2);
+        expect(cards[1].responsibleTeacher).toBe("Allan");
+        expect(cards[1].students).toHaveLength(1);
+        expect(cards[1].students[0].name).toBe("Anna Andersson");
+
+        expect(Student.findOne).toHaveBeenCalledWith({ email: "anna@mindful.se" });
+    });
+
+    it("returns 400 when the account has no email", async () => {
+        const req = { user: { userId: "user1", role: "student" } };
+        const res = createRes();
+
+        await getMyCourseCards(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: "Konto saknar e-postadress" });
+    });
+
+    it("returns 404 when no student profile matches the account email", async () => {
+        Student.findOne.mockReturnValue({ select: vi.fn().mockResolvedValue(null) });
+        const req = { user: { userId: "user1", role: "student", email: "unknown@mindful.se" } };
+        const res = createRes();
+
+        await getMyCourseCards(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({
+            error: "Ingen elevprofil hittades för kontot",
+        });
+    });
+});
+
+describe("getStudentCourseCards", () => {
+    const mockEmptyCardData = () => {
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain([]));
+        StudentEnrollment.find.mockReturnValueOnce(createSelectChain([]));
+    };
+
+    it("allows a student to fetch their own cards", async () => {
+        Student.findOne.mockReturnValue({ select: vi.fn().mockResolvedValue({ _id: STUDENT_1 }) });
+        mockEmptyCardData();
+        const req = {
+            params: { studentId: STUDENT_1 },
+            user: { userId: "user1", role: "student", email: "anna@mindful.se" },
+        };
+        const res = createRes();
+
+        await getStudentCourseCards(req, res);
+
+        expect(Student.findOne).toHaveBeenCalledWith({ email: "anna@mindful.se" });
+        expect(res.json).toHaveBeenCalledWith({ success: true, cards: [] });
+    });
+
+    it("forbids a student from fetching another student's cards", async () => {
+        Student.findOne.mockReturnValue({
+            select: vi.fn().mockResolvedValue({ _id: "000000000000000000000002" }),
+        });
+        const req = {
+            params: { studentId: STUDENT_1 },
+            user: { userId: "user1", role: "student", email: "anna@mindful.se" },
+        };
+        const res = createRes();
+
+        await getStudentCourseCards(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(res.json).toHaveBeenCalledWith({
+            error: "Forbidden: You can only view your own course cards",
+        });
+        expect(StudentEnrollment.find).not.toHaveBeenCalled();
+    });
+
+    it("forbids a student whose account has no email", async () => {
+        const req = {
+            params: { studentId: STUDENT_1 },
+            user: { userId: "user1", role: "student" },
+        };
+        const res = createRes();
+
+        await getStudentCourseCards(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(Student.findOne).not.toHaveBeenCalled();
+    });
+
+    it("allows staff roles to fetch any student's cards", async () => {
+        mockEmptyCardData();
+        const req = {
+            params: { studentId: STUDENT_1 },
+            user: { userId: "admin1", role: "admin" },
+        };
+        const res = createRes();
+
+        await getStudentCourseCards(req, res);
+
+        expect(Student.findOne).not.toHaveBeenCalled();
+        expect(res.json).toHaveBeenCalledWith({ success: true, cards: [] });
+    });
+
+    it("returns 400 for an invalid student id", async () => {
+        const req = {
+            params: { studentId: "not-a-valid-id" },
+            user: { userId: "admin1", role: "admin" },
+        };
+        const res = createRes();
+
+        await getStudentCourseCards(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ error: "Invalid student id" });
     });
 });

@@ -2,6 +2,9 @@ import express from "express";
 const router = express.Router();
 import Teacher from "../models/Teacher.js";
 import User from "../models/User.js";
+import Student from "../models/Student.js";
+import StudentEnrollment from "../models/StudentEnrollment.js";
+import CourseInstance from "../models/CourseInstance.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { isAuthenticated } from "../middleware/auth.js";
@@ -389,6 +392,34 @@ router.put(
     }
 );
 
+// Unassign a teacher from all students, enrollments and course instances.
+// Returns counts keyed by model so callers can surface how many records were affected.
+async function unassignTeacherFromAll(id) {
+    const studentResult = await Student.updateMany(
+        { teacherId: id },
+        { $set: { teacherId: null } }
+    );
+    const enrollmentResult = await StudentEnrollment.updateMany(
+        { teacherId: id },
+        { $set: { teacherId: null } }
+    );
+    const responsibleResult = await CourseInstance.updateMany(
+        { responsibleTeacher: id },
+        { $set: { responsibleTeacher: null } }
+    );
+    const assistantResult = await CourseInstance.updateMany(
+        { assistantTeacher: id },
+        { $set: { assistantTeacher: null } }
+    );
+
+    return {
+        students: studentResult.modifiedCount || 0,
+        enrollments: enrollmentResult.modifiedCount || 0,
+        responsibleCourses: responsibleResult.modifiedCount || 0,
+        assistantCourses: assistantResult.modifiedCount || 0,
+    };
+}
+
 // DELETE /teachers/:id - Delete teacher
 router.delete(
     "/teachers/:id",
@@ -404,16 +435,9 @@ router.delete(
                 return res.status(404).json({ error: "Teacher not found." });
             }
 
-            // Check if teacher has assigned students
-            const Student = (await import("../models/Student.js")).default;
-            const studentCount = await Student.countDocuments({
-                teacherId: id,
-            });
-            if (studentCount > 0) {
-                return res.status(400).json({
-                    error: `Cannot delete teacher. ${studentCount} student(s) are assigned to this teacher.`,
-                });
-            }
+            // Cascade: unassign the departing teacher from all students,
+            // enrollments and course instances before deleting the account.
+            const unassigned = await unassignTeacherFromAll(id);
 
             // Delete teacher and user
             await Teacher.findByIdAndDelete(id);
@@ -422,6 +446,7 @@ router.delete(
             res.json({
                 success: true,
                 message: "Teacher deleted successfully",
+                unassigned,
             });
         } catch (error) {
             logger.error({ err: error.message }, "Error deleting teacher")
@@ -438,9 +463,12 @@ router.put(
     async (req, res) => {
         try {
             const { id } = req.params;
-            const Student = (await import("../models/Student.js")).default;
-            const result = await Student.updateMany({ teacherId: id }, { $set: { teacherId: null } });
-            res.json({ success: true, message: `Unassigned ${result.modifiedCount} students from teacher.` });
+            const unassigned = await unassignTeacherFromAll(id);
+            res.json({
+                success: true,
+                message: `Unassigned ${unassigned.students} students from teacher.`,
+                unassigned,
+            });
         } catch (error) {
             logger.error({ err: error }, "Error unassigning students from teacher")
             res.status(500).json({ error: "Internal server error." });

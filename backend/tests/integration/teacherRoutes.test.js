@@ -16,6 +16,9 @@ import app from "../../index.js";
 import Teacher from "../../src/models/Teacher.js";
 import User from "../../src/models/User.js";
 import Student from "../../src/models/Student.js";
+import Course from "../../src/models/Course.js";
+import CourseInstance from "../../src/models/CourseInstance.js";
+import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import {
     connectTestDatabase,
     disconnectTestDatabase,
@@ -579,21 +582,76 @@ describe("Teacher Routes", () => {
             expect(response.body).toEqual({ error: "Teacher not found." });
         });
 
-        it("returns 400 when students are assigned", async () => {
-            const { teacher } = await createTeacher({ password: hashedPassword });
+        it("cascades unassign when students are assigned, then deletes teacher", async () => {
+            const { teacher, user } = await createTeacher({ password: hashedPassword });
             await Student.create({
                 name: "Student One",
                 email: "student1@example.com",
                 personalNumber: "19900101-1234",
                 teacherId: teacher._id,
             });
+            const course = await Course.create({
+                courseName: "Matematik",
+                courseCode: "MAT",
+            });
+            const courseInstance = await CourseInstance.create({
+                mainCourseId: course._id,
+                courseName: "Matematik",
+                courseCode: "MAT",
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+                responsibleTeacher: teacher._id,
+            });
+            const otherCourseInstance = await CourseInstance.create({
+                mainCourseId: course._id,
+                courseName: "Svenska",
+                courseCode: "SVE",
+                startDate: new Date("2026-03-01T00:00:00.000Z"),
+                endDate: new Date("2026-06-30T00:00:00.000Z"),
+                assistantTeacher: teacher._id,
+            });
+            const student = await Student.create({
+                name: "Student Two",
+                email: "student2@example.com",
+                personalNumber: "19900202-2345",
+                teacherId: teacher._id,
+            });
+            await StudentEnrollment.create({
+                studentId: student._id,
+                courseInstanceId: courseInstance._id,
+                mainCourseId: course._id,
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+                status: "active",
+                teacherId: teacher._id,
+            });
 
             const response = await request(app)
                 .delete(`/api/teachers/${teacher._id}`)
                 .set(buildAuthHeader("admin"))
-                .expect(400);
+                .expect(200);
 
-            expect(response.body.error).toContain("Cannot delete teacher.");
+            expect(response.body.success).toBe(true);
+            expect(response.body.unassigned).toEqual({
+                students: 2,
+                enrollments: 1,
+                responsibleCourses: 1,
+                assistantCourses: 1,
+            });
+
+            const removedTeacher = await Teacher.findById(teacher._id);
+            const removedUser = await User.findById(user._id);
+            expect(removedTeacher).toBeNull();
+            expect(removedUser).toBeNull();
+
+            const remaining = await Student.find({ teacherId: teacher._id });
+            expect(remaining).toHaveLength(0);
+
+            const refreshedInstance = await CourseInstance.findById(courseInstance._id);
+            expect(refreshedInstance.responsibleTeacher).toBeNull();
+
+            const refreshedAssistant = await CourseInstance.findById(otherCourseInstance._id);
+            expect(refreshedAssistant.assistantTeacher).toBeNull();
         });
 
         it("deletes a teacher and user", async () => {
@@ -607,6 +665,12 @@ describe("Teacher Routes", () => {
             expect(response.body).toEqual({
                 success: true,
                 message: "Teacher deleted successfully",
+                unassigned: {
+                    students: 0,
+                    enrollments: 0,
+                    responsibleCourses: 0,
+                    assistantCourses: 0,
+                },
             });
 
             const removedTeacher = await Teacher.findById(teacher._id);
@@ -632,7 +696,7 @@ describe("Teacher Routes", () => {
     describe("PUT /api/teachers/:id/unassign-all-students", () => {
         it("unassigns all students for a teacher", async () => {
             const { teacher } = await createTeacher({ password: hashedPassword });
-            await Student.create([
+            const students = await Student.create([
                 {
                     name: "Student One",
                     email: "student1@example.com",
@@ -646,6 +710,27 @@ describe("Teacher Routes", () => {
                     teacherId: teacher._id,
                 },
             ]);
+            const course = await Course.create({
+                courseName: "Matematik",
+                courseCode: "MAT",
+            });
+            const courseInstance = await CourseInstance.create({
+                mainCourseId: course._id,
+                courseName: "Matematik",
+                courseCode: "MAT",
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+                responsibleTeacher: teacher._id,
+            });
+            await StudentEnrollment.create({
+                studentId: students[0]._id,
+                courseInstanceId: courseInstance._id,
+                mainCourseId: course._id,
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+                status: "active",
+                teacherId: teacher._id,
+            });
 
             const response = await request(app)
                 .put(`/api/teachers/${teacher._id}/unassign-all-students`)
@@ -655,10 +740,19 @@ describe("Teacher Routes", () => {
             expect(response.body).toEqual({
                 success: true,
                 message: "Unassigned 2 students from teacher.",
+                unassigned: {
+                    students: 2,
+                    enrollments: 1,
+                    responsibleCourses: 1,
+                    assistantCourses: 0,
+                },
             });
 
             const remaining = await Student.find({ teacherId: teacher._id });
             expect(remaining).toHaveLength(0);
+
+            const refreshedInstance = await CourseInstance.findById(courseInstance._id);
+            expect(refreshedInstance.responsibleTeacher).toBeNull();
         });
 
         it("returns 500 when unassign fails", async () => {

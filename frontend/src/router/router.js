@@ -23,6 +23,7 @@ const SearchResultDetails = () => import('@/views/Admin/SearchResultDetails.vue'
 const EarningsOverview = () => import('@/views/Admin/EarningsOverview.vue')
 const CoursesStats = () => import('@/views/Admin/CoursesStats.vue')
 const CourseInstances = () => import('@/views/Admin/CourseInstances.vue')
+const CourseTemplates = () => import('@/views/Admin/CourseTemplates.vue')
 const CourseMatching = () => import('@/views/Admin/CourseMatching.vue')
 const StudentEnrollments = () => import('@/views/Admin/StudentEnrollments.vue')
 const TeacherManagement = () => import('@/views/Admin/TeacherManagement.vue')
@@ -40,6 +41,9 @@ import APLView from '@/views/APLView.vue'
 import GradeStudent from '../views/Admin/gradeStudent.vue'
 import ExamForm from '../views/Exams/ExamOverview.vue'
 import EducationDetails from '../views/Admin/EducationDetails.vue'
+import CourseCards from '@/views/Student/CourseCards.vue'
+const MessagingView = () => import('@/views/MessagingView.vue')
+
 
 const routes = [
   // Public Routes
@@ -190,6 +194,12 @@ const routes = [
     meta: { title: 'Course Instances', role: 'admin' },
   },
   {
+    path: '/course-templates',
+    name: 'CourseTemplates',
+    component: CourseTemplates,
+    meta: { title: 'Kursmallar', role: ['admin', 'teacher'] },
+  },
+  {
     path: '/course-matching',
     name: 'CourseMatching',
     component: CourseMatching,
@@ -296,6 +306,13 @@ const routes = [
     meta: { title: 'Exam Form', role: 'student' },
   },
 
+  {
+    path: '/course-cards',
+    name: 'CourseCards',
+    component: CourseCards,
+    meta: { title: 'Mina kurser', role: 'student' },
+  },
+
   // Utility Routes (General Access)
   {
     path: '/apl',
@@ -303,6 +320,17 @@ const routes = [
     component: APLView,
     meta: { title: 'APL List', role: ['admin', 'teacher', 'coordinator'] },
   },
+
+  {
+    path: '/messages',
+    name: 'Messaging',
+    component: MessagingView,
+    meta: {
+      title: 'Meddelanden',
+      role: ['student', 'teacher', 'syv', 'specped', 'admin', 'systemadmin', 'coordinator'],
+    },
+  },
+
   // Remove duplicate /betyg route
   // { path: '/betyg', name: 'Betyg', component: GradeStudent, meta: { title: 'Grade Student', role: 'teacher' } },
 

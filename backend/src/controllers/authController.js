@@ -78,6 +78,16 @@ export const login = async (req, res) => {
             return res.status(401).json({ error: "Fel email eller lösenord" });
         }
 
+        // Record last login time (best-effort; failure must not block login).
+        try {
+            await User.updateOne(
+                { _id: user._id },
+                { $set: { lastLoginAt: new Date() } }
+            );
+        } catch (loginError) {
+            logger.error({ err: loginError }, "Failed to record last login time");
+        }
+
         const tokenPayload = {
             userId: user._id,
             roles: user.roles,

@@ -6,6 +6,9 @@ const roles = {
         "assignments:grade",
         "students:view_list:assigned",
         "students:view_grades:assigned",
+        "courseTemplates:create",
+        "courseTemplates:read",
+        "courseTemplates:update",
     ],
     admin: [
         "users:create",
@@ -18,6 +21,10 @@ const roles = {
         "teachers:delete",
         "teachers:unassign",
         "analytics:read",
+        "courseTemplates:create",
+        "courseTemplates:read",
+        "courseTemplates:update",
+        "courseTemplates:delete",
     ],
     systemadmin: [
         "users:create",
@@ -36,6 +43,10 @@ const roles = {
         "students:view_list:assigned",
         "students:view_grades:assigned",
         "analytics:read",
+        "courseTemplates:create",
+        "courseTemplates:read",
+        "courseTemplates:update",
+        "courseTemplates:delete",
     ],
     // ... other roles
 };

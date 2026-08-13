@@ -7,6 +7,8 @@ import { createOrFindTeacher } from "../utils/teacherService.js";
 import { createGlobalNotification } from "../controllers/notificationController.js";
 import { normalizeMunicipalityName } from "./studentController.js";
 import Course from "../models/Course.js";
+import User from "../models/User.js";
+import CourseTemplate from "../models/CourseTemplate.js";
 import { distance } from "fastest-levenshtein";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
@@ -1470,6 +1472,190 @@ export const getStudentEnrollments = async (req, res) => {
     }
 };
 
+/**
+ * Build course cards for a student from their enrollments.
+ * Cards are aggregated from StudentEnrollments grouped by CourseInstance
+ * (which is unique per course + dates + responsible teacher), so the same
+ * course over the same period shares a single card. Course content (modules)
+ * comes from the course instance, which already holds the duplicated template
+ * modules created at admission.
+ */
+const buildCourseCards = async (studentId) => {
+    const enrollments = await StudentEnrollment.find({ studentId })
+        .populate({
+            path: "courseInstanceId",
+            populate: [
+                {
+                    path: "responsibleTeacher",
+                    populate: { path: "userId", select: "username" },
+                },
+                { path: "mainCourseId" },
+            ],
+        })
+        .populate("mainCourseId")
+        .sort({ startDate: 1 });
+
+    // Group by course instance so the same course + dates share one card.
+    const byInstance = new Map();
+    for (const enrollment of enrollments) {
+        const instanceId = enrollment.courseInstanceId?._id?.toString();
+        if (!instanceId) continue;
+        const existing = byInstance.get(instanceId);
+        if (!existing || new Date(enrollment.startDate) > new Date(existing.startDate)) {
+            byInstance.set(instanceId, enrollment);
+        }
+    }
+
+    // Every student enrolled on the same course instance shares that card, so
+    // collect them per instance (aggregated from StudentEnrollment + Student).
+    const sharedStudents = new Map();
+    if (byInstance.size > 0) {
+        const instanceIds = [...byInstance.keys()];
+        const sharedEnrollments = await StudentEnrollment.find({
+            courseInstanceId: { $in: instanceIds },
+        })
+            .populate("studentId", "name email")
+            .select("courseInstanceId studentId");
+        for (const shared of sharedEnrollments) {
+            const rawInstanceId =
+                shared.courseInstanceId?._id || shared.courseInstanceId;
+            const instanceId = rawInstanceId?.toString();
+            if (!instanceId || !byInstance.has(instanceId)) continue;
+            const student = shared.studentId;
+            if (!student?._id) continue;
+            const students = sharedStudents.get(instanceId) || [];
+            if (!students.some((s) => s._id.toString() === student._id.toString())) {
+                students.push({
+                    _id: student._id,
+                    name: student.name || "Okänd elev",
+                    email: student.email || null,
+                });
+            }
+            sharedStudents.set(instanceId, students);
+        }
+        for (const students of sharedStudents.values()) {
+            students.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        }
+    }
+
+    const cards = [...byInstance.values()]
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+        .map((enrollment, index) => {
+            const instance = enrollment.courseInstanceId;
+            const startDate = instance?.startDate || enrollment.startDate;
+            const endDate = instance?.endDate || enrollment.endDate;
+            const weeks = Math.ceil(
+                (new Date(endDate) - new Date(startDate)) / (7 * 24 * 60 * 60 * 1000)
+            );
+            const instanceId = instance?._id?.toString();
+
+            return {
+                courseInstanceId: instance?._id || null,
+                enrollmentId: enrollment._id,
+                students: sharedStudents.get(instanceId) || [],
+                courseName:
+                    instance?.courseName ||
+                    instance?.mainCourseId?.courseName ||
+                    enrollment.mainCourseId?.courseName ||
+                    "",
+                courseCode:
+                    instance?.courseCode ||
+                    instance?.mainCourseId?.courseCode ||
+                    enrollment.mainCourseId?.courseCode ||
+                    "",
+                coursePoints:
+                    instance?.coursePoints ||
+                    instance?.mainCourseId?.coursePoints ||
+                    enrollment.mainCourseId?.coursePoints ||
+                    "",
+                courseExtent:
+                    instance?.courseExtent ||
+                    instance?.mainCourseId?.courseExtent ||
+                    enrollment.mainCourseId?.courseExtent ||
+                    "",
+                responsibleTeacher:
+                    instance?.responsibleTeacher?.userId?.username ||
+                    instance?.responsibleTeacher?.name ||
+                    instance?.responsibleTeacher?.email ||
+                    "",
+                startDate,
+                endDate,
+                weeks: Number.isFinite(weeks) ? Math.max(0, weeks) : 0,
+                studyPeriod: index + 1,
+                status: enrollment.status,
+                isCurrentlyActive:
+                    enrollment.status === "active" &&
+                    new Date(startDate) <= new Date() &&
+                    new Date(endDate) >= new Date(),
+                modules: instance?.modules || [],
+            };
+        });
+
+    return cards;
+};
+
+/**
+ * GET /course-cards/mine
+ * Returns course cards for the currently logged-in student.
+ * The student login account is linked to a Student record by email.
+ */
+export const getMyCourseCards = async (req, res) => {
+    try {
+        const email = req.user?.email;
+        if (!email) {
+            return res.status(400).json({ error: "Konto saknar e-postadress" });
+        }
+
+        const student = await Student.findOne({ email }).select("_id name");
+        if (!student) {
+            return res.status(404).json({ error: "Ingen elevprofil hittades för kontot" });
+        }
+
+        const cards = await buildCourseCards(student._id);
+        res.json({ success: true, student: { _id: student._id, name: student.name }, cards });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching my course cards");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /students/:studentId/course-cards
+ * Returns course cards for a specific student. Staff roles may view any
+ * student; a student role may only view their own cards (matched by the
+ * login account's email → Student record, the same linkage used elsewhere).
+ */
+export const getStudentCourseCards = async (req, res) => {
+    try {
+        const { studentId } = req.params;
+        if (!mongoose.isValidObjectId(studentId)) {
+            return res.status(400).json({ error: "Invalid student id" });
+        }
+
+        const userRoles = req.user?.roles || (req.user?.role ? [req.user.role] : []);
+        if (userRoles.includes("student")) {
+            const email = req.user?.email;
+            if (!email) {
+                return res
+                    .status(403)
+                    .json({ error: "Forbidden: You can only view your own course cards" });
+            }
+            const ownStudent = await Student.findOne({ email }).select("_id");
+            if (!ownStudent || ownStudent._id.toString() !== studentId) {
+                return res
+                    .status(403)
+                    .json({ error: "Forbidden: You can only view your own course cards" });
+            }
+        }
+
+        const cards = await buildCourseCards(studentId);
+        res.json({ success: true, cards });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching student course cards");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const getCourseInstanceEnrollments = async (req, res) => {
     try {
         const { instanceId } = req.params;
@@ -1484,7 +1670,38 @@ export const getCourseInstanceEnrollments = async (req, res) => {
             .populate("mainCourseId", "courseName courseCode")
             .populate("teacherId", "username email")
             .populate("gradeBy", "username email")
-            .sort({ startDate: -1 });
+            .sort({ startDate: -1 })
+            .lean();
+
+        // Attach the student's last login time (participants "last-access" column).
+        // Students and staff are linked to login accounts by email; best-effort lookup.
+        try {
+            const studentEmails = [
+                ...new Set(
+                    enrollments
+                        .map((e) => e.studentId?.email)
+                        .filter((email) => email && typeof email === "string")
+                ),
+            ];
+            if (studentEmails.length > 0) {
+                const users = await User.find({ email: { $in: studentEmails } })
+                    .select("email lastLoginAt")
+                    .lean();
+                const lastLoginByEmail = new Map(
+                    users.map((u) => [u.email, u.lastLoginAt || null])
+                );
+                for (const enrollment of enrollments) {
+                    const email = enrollment.studentId?.email;
+                    if (email && lastLoginByEmail.has(email)) {
+                        enrollment.lastLoginAt = lastLoginByEmail.get(email);
+                    } else {
+                        enrollment.lastLoginAt = null;
+                    }
+                }
+            }
+        } catch (lastLoginError) {
+            logger.error({ err: lastLoginError }, "Error attaching lastLoginAt to enrollments");
+        }
 
         res.json({
             success: true,
@@ -1829,6 +2046,7 @@ export const createCourseInstance = async (req, res) => {
             slutprovDate,
             responsibleTeacher,
             assistantTeacher,
+            templateId,
         } = req.body;
         const userId = req.user?.userId;
 
@@ -1903,6 +2121,24 @@ export const createCourseInstance = async (req, res) => {
             });
         }
 
+        // Duplicate the template's module structure into the new course card/instance
+        let duplicatedModules = [];
+        if (templateId) {
+            const template = await CourseTemplate.findById(templateId);
+            if (template) {
+                duplicatedModules = template.modules.map((m) => ({
+                    moduleNumber: m.moduleNumber,
+                    title: m.title ?? "",
+                    isPartialExam: !!m.isPartialExam,
+                    isCaseStudy: !!m.isCaseStudy,
+                    sections: (m.sections || []).map((s) => ({
+                        title: s.title ?? "",
+                        description: s.description ?? "",
+                    })),
+                }));
+            }
+        }
+
         // Create the course instance
         const newInstance = new CourseInstance({
             mainCourseId,
@@ -1918,6 +2154,7 @@ export const createCourseInstance = async (req, res) => {
             slutprovDate: parseDate(slutprovDate),
             notes: notes || '',
             isActive: true,
+            modules: duplicatedModules,
         });
 
         await newInstance.save();

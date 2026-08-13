@@ -1336,6 +1336,52 @@ describe("studentDetailsController", () => {
             expect(removedOwnEvent).toBeNull();
         });
 
+        it("cascades dropout to active enrollments but keeps completed/dropped ones", async () => {
+            const student = await createStudent({ dropout: false });
+            const course = await Course.create({
+                courseName: "Matematik",
+                courseCode: "MAT",
+            });
+            const courseInstance = await CourseInstance.create({
+                mainCourseId: course._id,
+                courseName: "Matematik",
+                courseCode: "MAT",
+                startDate: new Date("2026-01-01T00:00:00.000Z"),
+                endDate: new Date("2026-12-31T00:00:00.000Z"),
+            });
+            const mkEnrollment = async (status) =>
+                StudentEnrollment.create({
+                    studentId: student._id,
+                    courseInstanceId: courseInstance._id,
+                    mainCourseId: course._id,
+                    startDate: new Date("2026-01-01T00:00:00.000Z"),
+                    endDate: new Date("2026-12-31T00:00:00.000Z"),
+                    status,
+                });
+
+            const active = await mkEnrollment("active");
+            const enrolled = await mkEnrollment("enrolled");
+            const completed = await mkEnrollment("completed");
+            const dropped = await mkEnrollment("dropped");
+
+            const req = buildReq({
+                params: { id: student._id.toString() },
+                user: adminUser(),
+            });
+            const res = buildRes();
+
+            await setStudentDropout(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.droppedEnrollments).toBe(2);
+
+            const refresh = async (e) => StudentEnrollment.findById(e._id);
+            expect((await refresh(active)).status).toBe("dropped");
+            expect((await refresh(enrolled)).status).toBe("dropped");
+            expect((await refresh(completed)).status).toBe("completed");
+            expect((await refresh(dropped)).status).toBe("dropped");
+        });
+
         it("re-adds student to calendar slutprov events after dropout removal", async () => {
             const student = await createStudent({
                 name: "Reactivated Student",
