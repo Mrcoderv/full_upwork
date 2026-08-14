@@ -7,12 +7,12 @@ import { createOrFindTeacher } from "../utils/teacherService.js";
 import { createGlobalNotification } from "../controllers/notificationController.js";
 import { normalizeMunicipalityName } from "./studentController.js";
 import Course from "../models/Course.js";
-import User from "../models/User.js";
 import CourseTemplate from "../models/CourseTemplate.js";
 import { distance } from "fastest-levenshtein";
 import { cloneModules } from "../models/courseModuleSchema.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
+import * as enrollmentService from "../services/enrollmentService.js";
 
 /**
  * Course Matching Controller
@@ -20,7 +20,6 @@ import logger from "../utils/logger.js";
  * Relies on CourseMatchingService and related models/utilities.
  */
 import CoursePackage from "../models/CoursePackage.js";
-import AssignmentSubmission from "../models/AssignmentSubmission.js";
 
 logger.debug("courseMatchingController.js loaded");
 
@@ -1446,23 +1445,12 @@ export const getStudentEnrollments = async (req, res) => {
         const { studentId } = req.params;
         const { status, startDate, endDate } = req.query;
 
-        const query = { studentId };
-
-        if (status) query.status = status;
-        if (startDate || endDate) {
-            query.$and = [];
-            if (startDate)
-                query.$and.push({ startDate: { $gte: new Date(startDate) } });
-            if (endDate)
-                query.$and.push({ endDate: { $lte: new Date(endDate) } });
-        }
-
-        const enrollments = await StudentEnrollment.find(query)
-            .populate("courseInstanceId")
-            .populate("mainCourseId")
-            .populate("teacherId", "username email")
-            .populate("gradeBy", "username email")
-            .sort({ startDate: -1 });
+        const enrollments = await enrollmentService.fetchStudentEnrollments({
+            studentId,
+            status,
+            startDate,
+            endDate,
+        });
 
         res.json({
             success: true,
@@ -1474,167 +1462,6 @@ export const getStudentEnrollments = async (req, res) => {
     }
 };
 
-/**
- * Build course cards for a student from their enrollments.
- * Cards are aggregated from StudentEnrollments grouped by CourseInstance
- * (which is unique per course + dates + responsible teacher), so the same
- * course over the same period shares a single card. Course content (modules)
- * comes from the course instance, which already holds the duplicated template
- * modules created at admission.
- */
-const buildCourseCards = async (studentId) => {
-    const enrollments = await StudentEnrollment.find({ studentId })
-        .populate({
-            path: "courseInstanceId",
-            populate: [
-                {
-                    path: "responsibleTeacher",
-                    populate: { path: "userId", select: "username" },
-                },
-                { path: "mainCourseId" },
-            ],
-        })
-        .populate("mainCourseId")
-        .sort({ startDate: 1 });
-
-    // Group by course instance so the same course + dates share one card.
-    const byInstance = new Map();
-    for (const enrollment of enrollments) {
-        const instanceId = enrollment.courseInstanceId?._id?.toString();
-        if (!instanceId) continue;
-        const existing = byInstance.get(instanceId);
-        if (!existing || new Date(enrollment.startDate) > new Date(existing.startDate)) {
-            byInstance.set(instanceId, enrollment);
-        }
-    }
-
-    // Every student enrolled on the same course instance shares that card, so
-    // collect them per instance (aggregated from StudentEnrollment + Student).
-    const sharedStudents = new Map();
-    if (byInstance.size > 0) {
-        const instanceIds = [...byInstance.keys()];
-        const sharedEnrollments = await StudentEnrollment.find({
-            courseInstanceId: { $in: instanceIds },
-        })
-            .populate("studentId", "name email")
-            .select("courseInstanceId studentId");
-        for (const shared of sharedEnrollments) {
-            const rawInstanceId =
-                shared.courseInstanceId?._id || shared.courseInstanceId;
-            const instanceId = rawInstanceId?.toString();
-            if (!instanceId || !byInstance.has(instanceId)) continue;
-            const student = shared.studentId;
-            if (!student?._id) continue;
-            const students = sharedStudents.get(instanceId) || [];
-            if (!students.some((s) => s._id.toString() === student._id.toString())) {
-                students.push({
-                    _id: student._id,
-                    name: student.name || "Okänd elev",
-                    email: student.email || null,
-                });
-            }
-            sharedStudents.set(instanceId, students);
-        }
-        for (const students of sharedStudents.values()) {
-            students.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-        }
-    }
-
-    const cards = [...byInstance.values()]
-        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
-        .map((enrollment, index) => {
-            const instance = enrollment.courseInstanceId;
-            const startDate = instance?.startDate || enrollment.startDate;
-            const endDate = instance?.endDate || enrollment.endDate;
-            const weeks = Math.ceil(
-                (new Date(endDate) - new Date(startDate)) / (7 * 24 * 60 * 60 * 1000)
-            );
-            const instanceId = instance?._id?.toString();
-
-            return {
-                courseInstanceId: instance?._id || null,
-                enrollmentId: enrollment._id,
-                students: sharedStudents.get(instanceId) || [],
-                courseName:
-                    instance?.courseName ||
-                    instance?.mainCourseId?.courseName ||
-                    enrollment.mainCourseId?.courseName ||
-                    "",
-                courseCode:
-                    instance?.courseCode ||
-                    instance?.mainCourseId?.courseCode ||
-                    enrollment.mainCourseId?.courseCode ||
-                    "",
-                coursePoints:
-                    instance?.coursePoints ||
-                    instance?.mainCourseId?.coursePoints ||
-                    enrollment.mainCourseId?.coursePoints ||
-                    "",
-                courseExtent:
-                    instance?.courseExtent ||
-                    instance?.mainCourseId?.courseExtent ||
-                    enrollment.mainCourseId?.courseExtent ||
-                    "",
-                responsibleTeacher:
-                    instance?.responsibleTeacher?.userId?.username ||
-                    instance?.responsibleTeacher?.name ||
-                    instance?.responsibleTeacher?.email ||
-                    "",
-                startDate,
-                endDate,
-                weeks: Number.isFinite(weeks) ? Math.max(0, weeks) : 0,
-                studyPeriod: index + 1,
-                status: enrollment.status,
-                isCurrentlyActive:
-                    enrollment.status === "active" &&
-                    new Date(startDate) <= new Date() &&
-                    new Date(endDate) >= new Date(),
-                modules: instance?.modules || [],
-            };
-        });
-
-    // Per-card learning progress: accepted ("godkänd") submissions over the
-    // modules that carry an assignment. Cards without any assignment report null.
-    const enrollmentIds = cards
-        .map((c) => c.enrollmentId)
-        .filter((id) => mongoose.isValidObjectId(id));
-    const submissionsByEnrollment = new Map();
-    if (enrollmentIds.length > 0) {
-        const submissions = await AssignmentSubmission.find({
-            enrollmentId: { $in: enrollmentIds },
-        });
-        for (const submission of submissions) {
-            const key = String(submission.enrollmentId);
-            const list = submissionsByEnrollment.get(key) || [];
-            list.push(submission);
-            submissionsByEnrollment.set(key, list);
-        }
-    }
-
-    for (const card of cards) {
-        const assignmentModules = (card.modules || []).filter(
-            (m) => m.assignment?.title || m.assignment?.description
-        );
-        const total = assignmentModules.length;
-        if (total === 0) {
-            card.progress = null;
-            continue;
-        }
-        const moduleNumbers = new Set(assignmentModules.map((m) => m.moduleNumber));
-        const accepted = (
-            submissionsByEnrollment.get(String(card.enrollmentId)) || []
-        ).filter(
-            (s) => s.feedback?.status === "godkänd" && moduleNumbers.has(s.moduleNumber)
-        ).length;
-        card.progress = {
-            completed: accepted,
-            total,
-            percent: Math.round((accepted / total) * 100),
-        };
-    }
-
-    return cards;
-};
 
 /**
  * GET /course-cards/mine
@@ -1653,7 +1480,7 @@ export const getMyCourseCards = async (req, res) => {
             return res.status(404).json({ error: "Ingen elevprofil hittades för kontot" });
         }
 
-        const cards = await buildCourseCards(student._id);
+        const cards = await enrollmentService.buildCourseCards(student._id);
         res.json({ success: true, student: { _id: student._id, name: student.name }, cards });
     } catch (error) {
         logger.error({ err: error }, "Error fetching my course cards");
@@ -1690,7 +1517,7 @@ export const getStudentCourseCards = async (req, res) => {
             }
         }
 
-        const cards = await buildCourseCards(studentId);
+        const cards = await enrollmentService.buildCourseCards(studentId);
         res.json({ success: true, cards });
     } catch (error) {
         logger.error({ err: error }, "Error fetching student course cards");
@@ -1703,47 +1530,10 @@ export const getCourseInstanceEnrollments = async (req, res) => {
         const { instanceId } = req.params;
         const { status } = req.query;
 
-        const query = { courseInstanceId: instanceId };
-
-        if (status) query.status = status;
-
-        const enrollments = await StudentEnrollment.find(query)
-            .populate("studentId", "name email dropout")
-            .populate("mainCourseId", "courseName courseCode")
-            .populate("teacherId", "username email")
-            .populate("gradeBy", "username email")
-            .sort({ startDate: -1 })
-            .lean();
-
-        // Attach the student's last login time (participants "last-access" column).
-        // Students and staff are linked to login accounts by email; best-effort lookup.
-        try {
-            const studentEmails = [
-                ...new Set(
-                    enrollments
-                        .map((e) => e.studentId?.email)
-                        .filter((email) => email && typeof email === "string")
-                ),
-            ];
-            if (studentEmails.length > 0) {
-                const users = await User.find({ email: { $in: studentEmails } })
-                    .select("email lastLoginAt")
-                    .lean();
-                const lastLoginByEmail = new Map(
-                    users.map((u) => [u.email, u.lastLoginAt || null])
-                );
-                for (const enrollment of enrollments) {
-                    const email = enrollment.studentId?.email;
-                    if (email && lastLoginByEmail.has(email)) {
-                        enrollment.lastLoginAt = lastLoginByEmail.get(email);
-                    } else {
-                        enrollment.lastLoginAt = null;
-                    }
-                }
-            }
-        } catch (lastLoginError) {
-            logger.error({ err: lastLoginError }, "Error attaching lastLoginAt to enrollments");
-        }
+        const enrollments = await enrollmentService.fetchCourseInstanceEnrollments({
+            instanceId,
+            status,
+        });
 
         res.json({
             success: true,
@@ -1763,46 +1553,29 @@ export const updateEnrollmentStatus = async (req, res) => {
 
         logger.debug({ enrollmentId, status }, "Updating enrollment status");
 
-        const enrollment = await StudentEnrollment.findById(enrollmentId);
-        if (!enrollment) {
-            return res.status(404).json({ error: "Enrollment not found" });
-        }
-
-        // Validate status
-        const validStatuses = ["enrolled", "active", "completed", "dropped", "inactive", "suspended", "reviderad"];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({ 
-                error: "Invalid status", 
-                validStatuses 
-            });
-        }
-
-        await enrollment.changeStatus(status, reason, notes, userId);
-
-        // Update course instance statistics (wrap in try-catch to not fail if this errors)
-        try {
-            await CourseMatchingService.updateCourseInstanceStats(
-                enrollment.courseInstanceId
-            );
-        } catch (statsError) {
-            logger.error({ err: statsError }, "Error updating course instance stats (non-fatal)");
-        }
-
-        // Reload enrollment to get updated data
-        const updatedEnrollment = await StudentEnrollment.findById(enrollmentId)
-            .populate("teacherId", "name email")
-            .populate("mainCourseId", "courseName courseCode");
+        const enrollment = await enrollmentService.updateEnrollmentStatus({
+            enrollmentId,
+            status,
+            reason,
+            notes,
+            userId,
+        });
 
         res.json({
             success: true,
             message: "Enrollment status updated successfully",
-            enrollment: updatedEnrollment,
+            enrollment,
         });
     } catch (error) {
+        if (error.statusCode) {
+            const body = { error: error.message };
+            if (error.validStatuses) body.validStatuses = error.validStatuses;
+            return res.status(error.statusCode).json(body);
+        }
         logger.error({ err: error }, "Error updating enrollment status");
-        res.status(500).json({ 
+        res.status(500).json({
             error: "Internal server error",
-            message: error.message 
+            message: error.message,
         });
     }
 };
@@ -1815,19 +1588,11 @@ export const updateEnrollmentDates = async (req, res) => {
         const { enrollmentId } = req.params;
         const { startDate, endDate } = req.body;
 
-        const enrollment = await StudentEnrollment.findById(enrollmentId);
-        if (!enrollment) {
-            return res.status(404).json({ error: "Enrollment not found" });
-        }
-
-        if (startDate !== undefined) {
-            enrollment.startDate = new Date(startDate);
-        }
-        if (endDate !== undefined) {
-            enrollment.endDate = new Date(endDate);
-        }
-
-        await enrollment.save();
+        const enrollment = await enrollmentService.updateEnrollmentDates({
+            enrollmentId,
+            startDate,
+            endDate,
+        });
 
         res.json({
             success: true,
@@ -1835,6 +1600,9 @@ export const updateEnrollmentDates = async (req, res) => {
             enrollment,
         });
     } catch (error) {
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
         logger.error({ err: error }, "Error updating enrollment dates");
         res.status(500).json({ error: "Internal server error" });
     }
@@ -1848,99 +1616,23 @@ export const deleteEnrollmentAndShift = async (req, res) => {
         const { studentId, enrollmentId } = req.params;
         const userId = req.user?.userId || null;
 
-        const student = await Student.findById(studentId).select("teacherId name");
-        if (!student) {
-            return res.status(404).json({ error: "Student not found" });
-        }
-
-        const enrollments = await StudentEnrollment.find({
-            studentId,
-            mainCourseId: { $exists: true, $ne: null },
-        }).sort({ startDate: 1, createdAt: 1 });
-
-        const targetIndex = enrollments.findIndex(
-            (enrollment) => String(enrollment._id) === String(enrollmentId)
-        );
-        if (targetIndex === -1) {
-            return res.status(404).json({ error: "Enrollment not found for student" });
-        }
-
-        const dateSlots = enrollments.map((enrollment) => ({
-            startDate: enrollment.startDate ? new Date(enrollment.startDate) : null,
-            endDate: enrollment.endDate ? new Date(enrollment.endDate) : null,
-        }));
-
-        const targetEnrollment = enrollments[targetIndex];
-        await StudentEnrollment.findByIdAndDelete(targetEnrollment._id);
-
-        if (targetEnrollment.courseInstanceId) {
-            const remainingForInstance = await StudentEnrollment.countDocuments({
-                courseInstanceId: targetEnrollment.courseInstanceId,
-            });
-            if (remainingForInstance === 0) {
-                await CourseInstance.findByIdAndDelete(targetEnrollment.courseInstanceId);
-            }
-        }
-
-        const remainingEnrollments = enrollments.filter(
-            (enrollment) => String(enrollment._id) !== String(enrollmentId)
-        );
-
-        const updatedEnrollments = [];
-        for (let i = 0; i < remainingEnrollments.length; i += 1) {
-            const enrollment = remainingEnrollments[i];
-            const slot = dateSlots[i];
-            if (!slot?.startDate || !slot?.endDate) continue;
-
-            const sameDates =
-                enrollment.startDate &&
-                enrollment.endDate &&
-                new Date(enrollment.startDate).getTime() === slot.startDate.getTime() &&
-                new Date(enrollment.endDate).getTime() === slot.endDate.getTime();
-
-            if (sameDates) continue;
-
-            const { instance } = await CourseMatchingService.findOrCreateCourseInstance(
-                enrollment.mainCourseId,
-                slot.startDate,
-                slot.endDate,
+        const { deletedEnrollmentId, updatedEnrollmentsCount } =
+            await enrollmentService.deleteEnrollmentAndShift({
+                studentId,
+                enrollmentId,
                 userId,
-                student.teacherId || enrollment.teacherId || null
-            );
-
-            const previousInstanceId = enrollment.courseInstanceId;
-            enrollment.startDate = slot.startDate;
-            enrollment.endDate = slot.endDate;
-            if (instance?._id) {
-                enrollment.courseInstanceId = instance._id;
-            }
-            if (!enrollment.teacherId && student.teacherId) {
-                enrollment.teacherId = student.teacherId;
-            }
-
-            await enrollment.save();
-            updatedEnrollments.push(enrollment);
-
-            if (
-                previousInstanceId &&
-                String(previousInstanceId) !== String(enrollment.courseInstanceId)
-            ) {
-                const remainingForPrevious = await StudentEnrollment.countDocuments({
-                    courseInstanceId: previousInstanceId,
-                });
-                if (remainingForPrevious === 0) {
-                    await CourseInstance.findByIdAndDelete(previousInstanceId);
-                }
-            }
-        }
+            });
 
         res.json({
             success: true,
             message: "Enrollment deleted and study plan updated",
-            deletedEnrollmentId: enrollmentId,
-            updatedEnrollmentsCount: updatedEnrollments.length,
+            deletedEnrollmentId,
+            updatedEnrollmentsCount,
         });
     } catch (error) {
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
         logger.error({ err: error }, "Error deleting enrollment and shifting dates");
         res.status(500).json({ error: "Internal server error" });
     }
@@ -1955,87 +1647,11 @@ export const updateStudyplanTempo = async (req, res) => {
         const { tempoWeeks } = req.body;
         const userId = req.user?.userId || null;
 
-        const validTempoWeeks = [5, 10, 20];
-        if (!validTempoWeeks.includes(Number(tempoWeeks))) {
-            return res.status(400).json({ error: "Invalid tempoWeeks" });
-        }
-
-        const student = await Student.findById(studentId).select("teacherId name");
-        if (!student) {
-            return res.status(404).json({ error: "Student not found" });
-        }
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const enrollments = await StudentEnrollment.find({
+        const { updatedCount } = await enrollmentService.updateStudyplanTempo({
             studentId,
-            mainCourseId: { $exists: true, $ne: null },
-        }).sort({ startDate: 1, createdAt: 1 });
-
-        const futureEnrollments = enrollments.filter((enrollment) => {
-            if (!enrollment.startDate) return false;
-            const startDate = new Date(enrollment.startDate);
-            return startDate.getTime() > today.getTime();
+            tempoWeeks,
+            userId,
         });
-
-        if (futureEnrollments.length === 0) {
-            return res.json({
-                success: true,
-                message: "Study plan tempo updated",
-                updatedCount: 0,
-            });
-        }
-
-        let nextStartDate = new Date(futureEnrollments[0].startDate);
-        let updatedCount = 0;
-        for (const enrollment of futureEnrollments) {
-            const startDate = new Date(nextStartDate);
-            const endDate = new Date(startDate);
-            endDate.setDate(endDate.getDate() + Number(tempoWeeks) * 7);
-
-            const { instance } = await CourseMatchingService.findOrCreateCourseInstance(
-                enrollment.mainCourseId,
-                startDate,
-                endDate,
-                userId,
-                student.teacherId || enrollment.teacherId || null
-            );
-
-            const previousInstanceId = enrollment.courseInstanceId;
-            const previousEnrollmentId = enrollment._id;
-
-            const newEnrollment = new StudentEnrollment({
-                studentId,
-                courseInstanceId: instance._id,
-                mainCourseId: enrollment.mainCourseId,
-                startDate,
-                endDate,
-                status: enrollment.status || "enrolled",
-                teacherId: enrollment.teacherId || student.teacherId || null,
-                notes: enrollment.notes || null,
-                needsSupport: enrollment.needsSupport || false,
-                examMode: enrollment.examMode || "on-site",
-                isReEnrollment: true,
-                previousEnrollmentId: previousEnrollmentId,
-            });
-
-            await newEnrollment.save();
-
-            await StudentEnrollment.findByIdAndDelete(previousEnrollmentId);
-
-            if (previousInstanceId) {
-                const remainingForPrevious = await StudentEnrollment.countDocuments({
-                    courseInstanceId: previousInstanceId,
-                });
-                if (remainingForPrevious === 0) {
-                    await CourseInstance.findByIdAndDelete(previousInstanceId);
-                }
-            }
-
-            updatedCount += 1;
-            nextStartDate = new Date(endDate);
-        }
 
         res.json({
             success: true,
@@ -2043,6 +1659,9 @@ export const updateStudyplanTempo = async (req, res) => {
             updatedCount,
         });
     } catch (error) {
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
         logger.error({ err: error }, "Error updating study plan tempo");
         res.status(500).json({ error: "Internal server error" });
     }
@@ -2521,80 +2140,11 @@ export const addStudentsToInstance = async (req, res) => {
     try {
         const { instanceId } = req.params;
         const { studentIds } = req.body;
-        const userId = req.user?.userId;
 
-        if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-            return res.status(400).json({ error: "Student IDs array is required" });
-        }
-
-        // Find the course instance
-        const instance = await CourseInstance.findById(instanceId);
-        if (!instance) {
-            return res.status(404).json({ error: "Course instance not found" });
-        }
-
-        // Get the main course to get course details
-        const mainCourse = await Course.findById(instance.mainCourseId);
-        if (!mainCourse) {
-            return res.status(404).json({ error: "Main course not found" });
-        }
-
-        const enrollments = [];
-        const errors = [];
-
-        for (const studentId of studentIds) {
-            try {
-                // Check if enrollment already exists
-                const existingEnrollment = await StudentEnrollment.findOne({
-                    studentId,
-                    courseInstanceId: instanceId,
-                });
-
-                if (existingEnrollment) {
-                    logger.debug({ studentId, instanceId }, "Enrollment already exists, skipping");
-                    continue;
-                }
-
-                // Get student to find teacherId
-                const student = await Student.findById(studentId);
-                if (!student) {
-                    errors.push(`Student ${studentId} not found`);
-                    continue;
-                }
-
-                // Create enrollment
-                const enrollment = new StudentEnrollment({
-                    studentId,
-                    courseInstanceId: instanceId,
-                    mainCourseId: instance.mainCourseId,
-                    startDate: instance.startDate,
-                    endDate: instance.endDate,
-                    status: "enrolled",
-                    teacherId: student.teacherId || instance.responsibleTeacher || null,
-                    // Copy slutprovDate from course instance if it exists
-                    slutprovDate: instance.slutprovDate || null,
-                });
-
-                await enrollment.save();
-                enrollments.push(enrollment);
-
-                logger.info({ studentName: student.name, courseName: instance.courseName }, "Created enrollment for student in course instance");
-
-                // Sync calendar event if enrollment has a slutprovDate
-                if (enrollment.slutprovDate) {
-                    try {
-                        const { syncCalendarEventFromEnrollment } = await import("../utils/calendarEventSync.js");
-                        await syncCalendarEventFromEnrollment(enrollment._id);
-                    } catch (calendarError) {
-                        logger.error({ err: calendarError, enrollmentId: enrollment._id }, "Error syncing calendar event for enrollment");
-                        // Don't fail the enrollment creation if calendar sync fails
-                    }
-                }
-            } catch (error) {
-                logger.error({ err: error, studentId }, "Error creating enrollment for student");
-                errors.push(`Failed to enroll student ${studentId}: ${error.message}`);
-            }
-        }
+        const { enrollments, errors } = await enrollmentService.addStudentsToInstance({
+            instanceId,
+            studentIds,
+        });
 
         res.json({
             success: true,
@@ -2603,6 +2153,9 @@ export const addStudentsToInstance = async (req, res) => {
             errors: errors.length > 0 ? errors : undefined,
         });
     } catch (error) {
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
         logger.error({ err: error }, "Error adding students to course instance");
         res.status(500).json({ error: "Internal server error" });
     }
