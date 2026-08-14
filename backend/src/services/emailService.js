@@ -235,6 +235,35 @@ export const renderTempPasswordEmail = ({ studentName, email, tempPassword }) =>
     return { subject, text };
 };
 
+/**
+ * Inactivity warning email (Etapp 2, Phase 4B). Sent to a flagged student by an
+ * admin, stating the specific date on which their registration will be withdrawn
+ * if they do not log in or make contact before then.
+ * @param {{ studentName?: string, withdrawalDate: Date|string }} ctx
+ */
+export const renderInactivityWarningEmail = ({ studentName, withdrawalDate }) => {
+    const greeting = studentName ? `Hej ${studentName}!` : "Hej!";
+    const dateLabel = new Date(withdrawalDate).toLocaleDateString("sv-SE", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+    });
+    const subject = "Påminnelse: aktivitet saknas i Mindful Learning";
+    const text = [
+        greeting,
+        "",
+        "Vi har noterat att du inte har loggat in eller varit aktiv i Mindful Learning på ett tag.",
+        "",
+        `Om du inte loggar in eller tar kontakt med din skola före ${dateLabel}, kommer din kursregistrering att avslutas.`,
+        "",
+        "Har du frågor, kontakta din lärare eller skolan.",
+        "",
+        "Vänliga hälsningar",
+        "Mindful Learning",
+    ].join("\n");
+    return { subject, text };
+};
+
 // ── Sollentuna trigger (requirement #26) ───────────────────────────────────
 
 /**
@@ -319,4 +348,28 @@ export const maybeSendLarteametEmail = async ({
         ...(brochure ? { attachments: [brochure] } : {}),
     });
     return { sent: result.success, result, brochureAttached: !!brochure };
+};
+
+/**
+ * Send the inactivity warning email to a student (Etapp 2, Phase 4B). Never
+ * throws; failures are logged by sendEmail and reported in the result.
+ * @param {{ studentName: string, email: string, withdrawalDate: Date|string }} args
+ * @returns {Promise<{sent: boolean, reason?: string, result?: Object}>}
+ */
+export const sendInactivityWarningEmail = async ({
+    studentName,
+    email,
+    withdrawalDate,
+}) => {
+    if (!email) {
+        logger.warn({ studentName }, "Inactivity warning skipped — no student email");
+        return { sent: false, reason: "no_email" };
+    }
+
+    const { subject, text } = renderInactivityWarningEmail({
+        studentName,
+        withdrawalDate,
+    });
+    const result = await sendEmail({ to: email, subject, text });
+    return { sent: result.success, result };
 };

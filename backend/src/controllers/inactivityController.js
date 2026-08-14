@@ -10,6 +10,7 @@ import {
     INACTIVITY_WARNING_DAYS,
     computeInactivitySignal,
 } from "../utils/inactivityStatus.js";
+import { sendInactivityWarningEmail } from "../services/emailService.js";
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 
@@ -17,6 +18,17 @@ const municipalityLabel = (value) => {
     if (typeof value === "string") return value;
     if (value && typeof value.type === "string") return value.type;
     return "";
+};
+
+const latestInactivityWarning = (student) => {
+    const entry = (student.changeHistory || [])
+        .filter((item) => item.changes && item.changes.includes("inactivity_warning_email"))
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+    if (!entry) return { warningSentAt: null, warnedWithdrawalDate: null };
+    return {
+        warningSentAt: entry.timestamp,
+        warnedWithdrawalDate: entry.newValues?.withdrawalDate || null,
+    };
 };
 
 const buildReport = (today) => ({
@@ -77,7 +89,7 @@ export const getInactivityReport = async (req, res) => {
 
     const [students, courseInstances, submissions] = await Promise.all([
         Student.find({ _id: { $in: studentIds } })
-            .select("name personalNumber email municipality")
+            .select("name personalNumber email municipality changeHistory")
             .lean(),
         CourseInstance.find({ _id: { $in: courseInstanceIds } })
             .select("courseName")
@@ -140,6 +152,8 @@ export const getInactivityReport = async (req, res) => {
         });
         if (!signal.evaluated) continue;
 
+        const { warningSentAt, warnedWithdrawalDate } = latestInactivityWarning(student);
+
         rows.push({
             studentId,
             name: student.name,
@@ -155,6 +169,8 @@ export const getInactivityReport = async (req, res) => {
             inactiveForWarning: signal.inactiveForWarning,
             daysUntilWithdraw: signal.daysUntilWithdraw,
             level: signal.level,
+            warningSentAt,
+            warnedWithdrawalDate,
             windowStart: signal.windowStart,
             windowEnd: signal.windowEnd,
             enrollments: studentEnrollments.map((enrollment) => ({
@@ -186,5 +202,53 @@ export const getInactivityReport = async (req, res) => {
             ok: rows.filter((r) => r.level === "ok").length,
         },
         students: rows,
+    });
+};
+
+/**
+ * POST /api/inactivity/:studentId/warning-email
+ * Admin action (Phase 4B): send the inactivity warning email to a flagged
+ * student, stating the withdrawal date (today + INACTIVITY_WITHDRAW_DAYS).
+ * Records the send in the student's change history; the report then surfaces
+ * warningSentAt/warnedWithdrawalDate.
+ */
+export const sendInactivityWarning = async (req, res) => {
+    const { studentId } = req.params;
+    const student = await Student.findById(studentId).select("name email changeHistory");
+    if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+    }
+    if (!student.email) {
+        return res.status(400).json({ error: "Student has no email address" });
+    }
+
+    const withdrawalDate = new Date();
+    withdrawalDate.setDate(withdrawalDate.getDate() + INACTIVITY_WITHDRAW_DAYS);
+
+    const result = await sendInactivityWarningEmail({
+        studentName: student.name,
+        email: student.email,
+        withdrawalDate,
+    });
+
+    let warningSentAt = null;
+    if (result.sent) {
+        warningSentAt = new Date();
+        if (!student.changeHistory) student.changeHistory = [];
+        student.changeHistory.push({
+            timestamp: warningSentAt,
+            changedBy: req.user.userId,
+            changedByRole: req.user.role,
+            changes: ["inactivity_warning_email"],
+            newValues: { withdrawalDate },
+        });
+        await student.save();
+    }
+
+    res.status(result.sent ? 200 : 502).json({
+        success: result.sent,
+        emailResult: result.result,
+        warningSentAt,
+        withdrawalDate,
     });
 };

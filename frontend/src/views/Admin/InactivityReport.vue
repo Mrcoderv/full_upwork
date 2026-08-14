@@ -77,20 +77,24 @@
               <th>Öppna inlämningar</th>
               <th>Kurser</th>
               <th>Status</th>
+              <th>Åtgärder</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="9" class="text-center">Laddar rapport...</td>
+              <td colspan="10" class="text-center">Laddar rapport...</td>
             </tr>
             <tr v-else-if="filteredStudents.length === 0">
-              <td colspan="9" class="text-center">Inga elever i rapporten</td>
+              <td colspan="10" class="text-center">Inga elever i rapporten</td>
             </tr>
             <tr v-for="student in filteredStudents" :key="student.studentId">
               <td>
                 <router-link :to="`/student/${student.studentId}`" class="student-name-link">
                   {{ student.name }}
                 </router-link>
+                <div v-if="student.warningSentAt" class="warning-sent-hint">
+                  Varning skickad {{ formatDate(student.warningSentAt) }}
+                </div>
               </td>
               <td>{{ student.personalNumber }}</td>
               <td>{{ student.email }}</td>
@@ -111,9 +115,44 @@
                 <span v-else-if="student.level === 'warning'" class="badge bg-warning text-dark">Varning</span>
                 <span v-else class="badge bg-success">OK</span>
               </td>
+              <td>
+                <div v-if="isAdmin" class="action-buttons">
+                  <button
+                    class="btn btn-warning btn-sm"
+                    :disabled="sendingWarningFor === student.studentId"
+                    @click="sendWarningEmail(student)"
+                  >
+                    {{ sendingWarningFor === student.studentId ? 'Skickar...' : 'Varningsmail' }}
+                  </button>
+                  <button
+                    class="btn btn-danger btn-sm"
+                    @click="openWithdrawDialog(student)"
+                  >
+                    Avsluta
+                  </button>
+                </div>
+                <span v-else class="text-muted">-</span>
+              </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Withdraw Confirmation Dialog -->
+      <div v-if="withdrawStudent" class="modal-overlay" @click.self="closeWithdrawDialog">
+        <div class="modal-box">
+          <h4>Avsluta elev?</h4>
+          <p>
+            {{ withdrawStudent.name }} avslutas som elev. Alla pågående kursregistreringar
+            markeras som avslutade och eleven tas bort från scheman och provanmälningar.
+          </p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" @click="closeWithdrawDialog">Avbryt</button>
+            <button class="btn btn-danger" :disabled="withdrawing" @click="confirmWithdraw">
+              {{ withdrawing ? 'Avslutar...' : 'Bekräfta avslut' }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -121,7 +160,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useStore } from 'vuex'
 import axios from 'axios'
+import { useToast } from '@/composables/useToast.js'
+
+const toast = useToast()
+const store = useStore()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -130,6 +174,11 @@ const filterTab = ref('all')
 const students = ref([])
 const summary = ref({ evaluated: 0, mustWithdraw: 0, inactiveForWarning: 0 })
 const thresholds = ref({ withdrawDays: 5, warningDays: 14 })
+const sendingWarningFor = ref(null)
+const withdrawStudent = ref(null)
+const withdrawing = ref(false)
+
+const isAdmin = computed(() => store.getters.isAdmin)
 
 const tabs = [
   { value: 'all', label: 'Alla' },
@@ -181,6 +230,43 @@ function loginLabel(student) {
     return 'Aldrig'
   }
   return `${daysLabel(student.daysSinceLastLogin)} (${formatDate(student.lastLoginAt)})`
+}
+
+async function sendWarningEmail(student) {
+  sendingWarningFor.value = student.studentId
+  try {
+    await axios.post(`/api/inactivity/${student.studentId}/warning-email`)
+    toast.success(`Varningsmail skickat till ${student.name}`)
+    await loadReport()
+  } catch (error) {
+    toast.error(error.response?.data?.error || 'Kunde inte skicka varningsmail')
+  } finally {
+    sendingWarningFor.value = null
+  }
+}
+
+function openWithdrawDialog(student) {
+  withdrawStudent.value = student
+}
+
+function closeWithdrawDialog() {
+  if (withdrawing.value) return
+  withdrawStudent.value = null
+}
+
+async function confirmWithdraw() {
+  if (!withdrawStudent.value) return
+  withdrawing.value = true
+  try {
+    await axios.post(`/api/student-details/${withdrawStudent.value.studentId}/dropout`)
+    toast.success(`${withdrawStudent.value.name} avslutades`)
+    await loadReport()
+    closeWithdrawDialog()
+  } catch (error) {
+    toast.error(error.response?.data?.error || 'Kunde inte avsluta eleven')
+  } finally {
+    withdrawing.value = false
+  }
 }
 
 onMounted(loadReport)
@@ -288,5 +374,45 @@ onMounted(loadReport)
 
 .student-name-link:hover {
   text-decoration: underline;
+}
+
+.warning-sent-hint {
+  font-size: 0.75rem;
+  color: #b8860b;
+  margin-top: 2px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 480px;
+  width: 90%;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 </style>

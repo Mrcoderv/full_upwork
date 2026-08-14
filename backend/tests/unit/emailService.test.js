@@ -19,6 +19,8 @@ import {
   sendEmail,
   renderLarteametEmail,
   renderMessageCopyEmail,
+  renderInactivityWarningEmail,
+  sendInactivityWarningEmail,
   maybeSendLarteametEmail,
   getStudentMunicipality,
   resolveLarteametBrochure,
@@ -285,5 +287,55 @@ describe("maybeSendLarteametEmail", () => {
     expect(result.sent).toBe(true);
     expect(result.brochureAttached).toBe(false);
     expect(sendMailMock.mock.calls[0][0].attachments).toBeUndefined();
+  });
+});
+
+describe("renderInactivityWarningEmail", () => {
+  it("states the withdrawal date in Swedish", () => {
+    const { subject, text } = renderInactivityWarningEmail({
+      studentName: "Anna Svensson",
+      withdrawalDate: new Date("2026-09-20"),
+    });
+
+    expect(subject).toContain("aktivitet saknas");
+    expect(text).toContain("Anna Svensson");
+    expect(text).toContain("20 september 2026");
+    expect(text).toContain("kursregistrering att avslutas");
+  });
+
+  it("greets without a name", () => {
+    const { text } = renderInactivityWarningEmail({ withdrawalDate: new Date("2026-09-20") });
+    expect(text).toContain("Hej!");
+  });
+});
+
+describe("sendInactivityWarningEmail", () => {
+  it("sends the warning to the student and reports success", async () => {
+    process.env.GOOGLE_PWD = "real-app-password-1234";
+
+    const result = await sendInactivityWarningEmail({
+      studentName: "Anna Svensson",
+      email: "anna@elev.se",
+      withdrawalDate: new Date("2026-09-20"),
+    });
+
+    expect(result.sent).toBe(true);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const call = sendMailMock.mock.calls[0][0];
+    expect(call.to).toBe("anna@elev.se");
+    expect(call.subject).toContain("aktivitet saknas");
+    expect(call.text).toContain("20 september 2026");
+  });
+
+  it("skips without an email address", async () => {
+    const result = await sendInactivityWarningEmail({
+      studentName: "Anna Svensson",
+      email: "",
+      withdrawalDate: new Date("2026-09-20"),
+    });
+
+    expect(result.sent).toBe(false);
+    expect(result.reason).toBe("no_email");
+    expect(sendMailMock).not.toHaveBeenCalled();
   });
 });

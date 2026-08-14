@@ -296,4 +296,56 @@ describe("Inactivity Report Routes Integration Tests", () => {
             expect(res.body.summary.evaluated).toBe(0);
         });
     });
+
+    describe("Warning email action", () => {
+        it("returns 401 for unauthenticated request", async () => {
+            await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .expect(401);
+        });
+
+        it("returns 403 for student tokens", async () => {
+            await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("student"))
+                .expect(403);
+        });
+
+        it("returns 403 for teacher tokens (decision UI is admin-only)", async () => {
+            await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("teacher"))
+                .expect(403);
+        });
+
+        it("returns 404 for an unknown student", async () => {
+            await request(app)
+                .post(`/api/inactivity/${new mongoose.Types.ObjectId()}/warning-email`)
+                .set(buildAuthHeader("admin"))
+                .expect(404);
+        });
+
+        it("sends the warning email and records it for the report", async () => {
+            const res = await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("admin"))
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            expect(res.body.warningSentAt).toBeTruthy();
+            expect(res.body.withdrawalDate).toBeTruthy();
+
+            const report = await request(app)
+                .get("/api/inactivity/report")
+                .set(buildAuthHeader("admin"))
+                .expect(200);
+
+            const anna = report.body.students.find(
+                (s) => s.studentId === studentA._id.toString()
+            );
+            expect(anna).toBeDefined();
+            expect(anna.warningSentAt).toBeTruthy();
+            expect(anna.warnedWithdrawalDate).toBeTruthy();
+        });
+    });
 });
