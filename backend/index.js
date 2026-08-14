@@ -72,6 +72,7 @@ import {
 } from "./src/utils/errorHandler.js";
 
 import { cacheManager, dbOptimizer, requestOptimizer } from "./src/utils/performance.js";
+import { startInactivityScheduler, stopInactivityScheduler } from "./src/services/scheduler.js";
 
 // Apply security headers
 app.use(securityHeaders);
@@ -291,6 +292,13 @@ async function shutdown(signal) {
         logger.error({ err }, "Error closing database connection");
     }
 
+    try {
+        stopInactivityScheduler();
+        logger.info("Background scheduler stopped");
+    } catch (err) {
+        logger.error({ err }, "Error stopping background scheduler");
+    }
+
     logger.info({ metrics: errorMonitor.getErrorStats() }, "Final metrics");
     process.exit(0);
 }
@@ -314,15 +322,18 @@ process.on("unhandledRejection", (err) => {
 
 // Start the server unless running tests
 if (process.env.NODE_ENV !== "test") {
-    server = app.listen(PORT, () => {
-        logger.info(
-            { port: PORT },
-            `API listening on http://localhost:${PORT} (resolved PORT=${PORT})`
-        );
-        logger.info("Security features active: rate limiting, CORS, helmet, input validation");
-        logger.info("Performance features active: caching, lazy loading, query optimization");
-        logger.info("Monitoring active: error tracking, performance metrics, health checks");
-    });
+        server = app.listen(PORT, () => {
+            logger.info(
+                { port: PORT },
+                `API listening on http://localhost:${PORT} (resolved PORT=${PORT})`
+            );
+            logger.info("Security features active: rate limiting, CORS, helmet, input validation");
+            logger.info("Performance features active: caching, lazy loading, query optimization");
+            logger.info("Monitoring active: error tracking, performance metrics, health checks");
+
+            // Daily inactivity automation (skipped in test mode / when disabled).
+            startInactivityScheduler();
+        });
 }
 
 export default app;

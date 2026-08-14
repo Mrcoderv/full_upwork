@@ -5,6 +5,8 @@ import { asyncHandler } from "../utils/errorHandler.js";
 import {
     getInactivityReport,
     sendInactivityWarning,
+    runInactivityScanHandler,
+    getInactivityScanStatus,
 } from "../controllers/inactivityController.js";
 
 const router = Router();
@@ -14,6 +16,20 @@ router.get(
     isAuthenticated,
     can("inactivity:read"),
     asyncHandler(getInactivityReport)
+);
+
+router.post(
+    "/scan",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(runInactivityScanHandler)
+);
+
+router.get(
+    "/scan-status",
+    isAuthenticated,
+    can("inactivity:read"),
+    asyncHandler(getInactivityScanStatus)
 );
 
 router.post(

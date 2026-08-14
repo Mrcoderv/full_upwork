@@ -121,12 +121,14 @@
                 <div class="action-buttons">
                   <template v-if="isAdmin">
                     <button
+                      v-if="!student.warningSentAt"
                       class="btn btn-warning btn-sm"
                       :disabled="sendingWarningFor === student.studentId"
                       @click="sendWarningEmail(student)"
                     >
                       {{ sendingWarningFor === student.studentId ? 'Skickar...' : 'Varningsmail' }}
                     </button>
+                    <span v-else class="badge bg-warning text-dark">Varning skickad</span>
                     <button
                       v-if="student.responsibleTeacherUserId"
                       class="btn btn-success btn-sm"

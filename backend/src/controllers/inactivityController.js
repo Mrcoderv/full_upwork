@@ -22,6 +22,10 @@ import {
     safeInactivitySideEffect,
     summarizeInactivitySignal,
 } from "../services/inactivityDiscussionService.js";
+import {
+    getLastScanSummary,
+    runInactivityScan,
+} from "../services/inactivityScanner.js";
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 
@@ -267,6 +271,36 @@ export const getInactivityReport = async (req, res) => {
             ok: rows.filter((r) => r.level === "ok").length,
         },
         students: rows,
+    });
+};
+
+/**
+ * POST /api/inactivity/scan
+ * Admin action (P0): run the inactivity automation scan on demand. Evaluates
+ * every active student in batch and auto-sends warning emails to those past
+ * the warning threshold that have not been warned yet. Idempotent — re-runs
+ * never send duplicate emails.
+ */
+export const runInactivityScanHandler = async (req, res) => {
+    const summary = await runInactivityScan();
+    res.status(200).json({
+        success: true,
+        message: "Inaktivitets-skanning klar",
+        summary,
+    });
+};
+
+/**
+ * GET /api/inactivity/scan-status
+ * Read-only view of the last scan run (when it ran and what it did), for
+ * staff auditing that the automation loop is alive.
+ */
+export const getInactivityScanStatus = async (_req, res) => {
+    const summary = getLastScanSummary();
+    res.status(200).json({
+        success: true,
+        autoWarningEnabled: process.env.INACTIVITY_AUTO_WARNING_ENABLED !== "false",
+        lastScan: summary,
     });
 };
 

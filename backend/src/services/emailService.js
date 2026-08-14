@@ -39,6 +39,15 @@ const defaultFromEmail = "newmindful.development@gmail.com";
 const EMAIL_FROM =
     process.env.EMAIL_FROM || `Mindful Learning <${defaultFromEmail}>`;
 
+/**
+ * School email signature used at the end of outgoing emails. Configurable via
+ * EMAIL_SIGNATURE (plain text, may span multiple lines); falls back to the
+ * school name. Kept out of the transporter so tests can override it freely.
+ * @returns {string}
+ */
+export const getEmailSignature = () =>
+    process.env.EMAIL_SIGNATURE || "Mindful Learning";
+
 let transporter = null;
 let transportMode = null;
 
@@ -187,7 +196,7 @@ export const renderLarteametEmail = ({
         contactEmail,
         "",
         "Vänliga hälsningar",
-        "Mindful Learning",
+        getEmailSignature(),
     ].join("\n");
     return { subject, text };
 };
@@ -208,6 +217,9 @@ export const renderMessageCopyEmail = ({
         messageBody || "",
         "",
         "Du kan svara direkt i Mindful Learning: logga in på https://localhost:5173 och öppna Meddelanden.",
+        "",
+        "Vänliga hälsningar",
+        getEmailSignature(),
     ].join("\n");
     return { subject, text };
 };
@@ -231,6 +243,9 @@ export const renderTempPasswordEmail = ({ studentName, email, tempPassword }) =>
         "",
         "Du måste byta lösenord första gången du loggar in.",
         "Logga in på: https://localhost:5173",
+        "",
+        "Vänliga hälsningar",
+        getEmailSignature(),
     ].join("\n");
     return { subject, text };
 };
@@ -259,7 +274,7 @@ export const renderInactivityWarningEmail = ({ studentName, withdrawalDate }) =>
         "Har du frågor, kontakta din lärare eller skolan.",
         "",
         "Vänliga hälsningar",
-        "Mindful Learning",
+        getEmailSignature(),
     ].join("\n");
     return { subject, text };
 };
