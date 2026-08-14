@@ -75,6 +75,11 @@ router.get("/notifications", authenticateUser, async (req, res) => {
       logger.debug({ queryTeacher: query.teacher.toString(), queryTeacherType: query.teacher.constructor.name, query }, "Query teacher details")
       
       // Debug: Check all dropout notifications to see what teacher IDs they have
+      // Debug-only diagnostic queries. These exist solely to log cross-checks
+      // between the query's teacher field and stored notifications; they run
+      // extra full-collection finds (and a per-dropout findOne = N+1) on every
+      // teacher request, so they MUST be skipped unless LOG_LEVEL=debug.
+      if (logger.level === "debug") {
       const allDropoutNotifications = await Notification.find({ 
         type: "dropout", 
         resolvedByUsers: { $nin: [userId] } // Not resolved by this user
@@ -100,11 +105,12 @@ router.get("/notifications", authenticateUser, async (req, res) => {
           }
         }
       }
+      }
     }
     
     // Execute query with explicit ObjectId casting for teacher field if present
-    if (query.teacher) {
-      // Try query with explicit ObjectId comparison
+    if (query.teacher && logger.level === "debug") {
+      // Debug-only: verify the explicit-ObjectId and string-match variants
       const mongoose = (await import("mongoose")).default;
       const notesWithExplicitId = await Notification.find({
         ...query,
@@ -124,6 +130,7 @@ router.get("/notifications", authenticateUser, async (req, res) => {
     
     const notes = await Notification.find(query);
     logger.debug({ count: notes.length, query }, "Found notifications matching query")
+    if (logger.level === "debug") {
     notes.forEach((note, idx) => {
       logger.debug({ index: idx + 1, type: note.type, teacher: note.teacher ? note.teacher.toString() : 'MISSING', student: note.meta?.studentId ? note.meta.studentId.toString() : 'MISSING', resolved: note.resolved }, "Notification detail")
       if (query.teacher && note.teacher) {
@@ -133,6 +140,7 @@ router.get("/notifications", authenticateUser, async (req, res) => {
         logger.debug({ noteTeacherId, queryTeacherId, match }, "Teacher ID match check")
       }
     });
+    }
 
     const uniqueNotes = [];
     const seenTypes = new Set();

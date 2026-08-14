@@ -83,6 +83,12 @@ app.use(requestTimeout(30));
 import cors from "cors";
 app.use(cors(corsConfig));
 
+// Cookie parsing must run BEFORE the rate limiters: their skip logic
+// (admin/systemadmin exemption) inspects req.cookies[token] via isAdminUser.
+// Mounted here, the admin-skip works; mounted later it silently never fires
+// and admins are rate limited like everyone else.
+app.use(cookieParser());
+
 // Rate limiting
 if (process.env.NODE_ENV !== "test") {
     app.use(rateLimiter);
@@ -108,7 +114,6 @@ import router from "./src/router/router.js";
 const PORT = process.env.PORT || 5010;
 
 // Middleware setup
-app.use(cookieParser());
 app.use(express.json({ limit: process.env.MAX_FILE_SIZE || "10mb" }));
 app.use(
     express.urlencoded({
@@ -178,6 +183,10 @@ app.get("/metrics", (_req, res) => {
             readyState: mongoose.connection.readyState,
             host: mongoose.connection.host,
             name: mongoose.connection.name,
+            maxPoolSize:
+                parseInt(process.env.MONGODB_POOL_SIZE, 10) ||
+                parseInt(process.env.MAX_CONCURRENT_REQUESTS, 10) ||
+                50,
         },
         system: {
             nodeVersion: process.version,
@@ -222,9 +231,13 @@ dbOptimizer.configurePool();
 // MongoDB Connection with enhanced error handling (skip during tests)
 if (process.env.NODE_ENV !== "test") {
     const mongoUri = process.env.MONGODB_URI;
+    const maxPoolSize =
+        parseInt(process.env.MONGODB_POOL_SIZE, 10) ||
+        parseInt(process.env.MAX_CONCURRENT_REQUESTS, 10) ||
+        50;
     mongoose
         .connect(mongoUri, {
-            maxPoolSize: parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 50,
+            maxPoolSize,
             serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
         })

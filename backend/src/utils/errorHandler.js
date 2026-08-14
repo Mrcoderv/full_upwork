@@ -56,6 +56,10 @@ export const errorMonitor = {
         slowQueries: [],
     },
 
+    // Per-route latency histogram (lightweight, in-memory). Buckets in ms:
+    // [<10, <50, <100, <250, <500, <1000, <2000, <5000, >=5000]
+    routeLatency: new Map(),
+
     // Record an error
     recordError(error, req = null) {
         const errorKey = `${error.constructor.name}:${error.message}`;
@@ -120,6 +124,29 @@ export const errorMonitor = {
         const totalRequests = this.performanceMetrics.requestCount;
         this.performanceMetrics.averageResponseTime =
             (currentAvg * (totalRequests - 1) + duration) / totalRequests;
+
+        // Per-route latency histogram
+        const bucketBoundaries = [10, 50, 100, 250, 500, 1000, 2000, 5000];
+        const entry = this.routeLatency.get(operation) || {
+            count: 0,
+            errorCount: 0,
+            totalMs: 0,
+            maxMs: 0,
+            buckets: new Array(bucketBoundaries.length + 1).fill(0),
+        };
+        entry.count++;
+        if (!success) entry.errorCount++;
+        entry.totalMs += duration;
+        if (duration > entry.maxMs) entry.maxMs = duration;
+        let bucketIndex = bucketBoundaries.length;
+        for (let i = 0; i < bucketBoundaries.length; i++) {
+            if (duration < bucketBoundaries[i]) {
+                bucketIndex = i;
+                break;
+            }
+        }
+        entry.buckets[bucketIndex]++;
+        this.routeLatency.set(operation, entry);
     },
 
     // Get error statistics
@@ -139,12 +166,23 @@ export const errorMonitor = {
                 .slice(0, 10)
                 .map(([error, count]) => ({ error, count })),
             performance: this.performanceMetrics,
+            routes: Array.from(this.routeLatency.entries())
+                .map(([operation, entry]) => ({
+                    operation,
+                    count: entry.count,
+                    errorCount: entry.errorCount,
+                    avgMs: Math.round(entry.totalMs / entry.count),
+                    maxMs: entry.maxMs,
+                    buckets: entry.buckets,
+                }))
+                .sort((a, b) => b.count - a.count),
         };
     },
 
     // Reset metrics (useful for testing)
     resetMetrics() {
         this.errorCounts.clear();
+        this.routeLatency.clear();
         this.performanceMetrics = {
             requestCount: 0,
             errorCount: 0,

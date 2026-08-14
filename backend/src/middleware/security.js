@@ -229,7 +229,7 @@ const apiRateLimiterConfig = {
     windowMs: process.env.NODE_ENV === "test" ? 60 * 1000 : 60 * 1000, // 1 minute
     max: process.env.API_RATE_LIMIT_MAX
         ? parseInt(process.env.API_RATE_LIMIT_MAX, 10)
-        : process.env.NODE_ENV === "test" ? 3 : 60, // lower threshold in tests; e2e can raise via env
+        : process.env.NODE_ENV === "test" ? 3 : 1000, // lower threshold in tests; e2e can raise via env. Default 1000/min/IP so a school NAT (hundreds of users behind one IP) isn't throttled; the auth rate limiter (5/15min) still guards login.
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {
