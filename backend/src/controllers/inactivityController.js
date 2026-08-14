@@ -4,13 +4,22 @@ import Teacher from "../models/Teacher.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import CourseInstance from "../models/CourseInstance.js";
 import AssignmentSubmission from "../models/AssignmentSubmission.js";
+import Conversation from "../models/Conversation.js";
 import {
     ACTIVE_ENROLLMENT_STATUSES,
     INACTIVITY_WITHDRAW_DAYS,
     INACTIVITY_WARNING_DAYS,
     computeInactivitySignal,
 } from "../utils/inactivityStatus.js";
-import { sendInactivityWarningEmail } from "../services/emailService.js";
+import {
+    sendInactivityWarningEmail,
+} from "../services/emailService.js";
+import {
+    ensureInactivityDiscussionThread,
+    notifyInactivityAction,
+    resolveResponsibleTeacher,
+    safeInactivitySideEffect,
+} from "../services/inactivityDiscussionService.js";
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 
@@ -86,8 +95,9 @@ export const getInactivityReport = async (req, res) => {
     const studentIds = uniq(enrollments.map((e) => e.studentId));
     const courseInstanceIds = uniq(enrollments.map((e) => e.courseInstanceId));
     const enrollmentIds = enrollments.map((e) => e._id);
+    const enrollmentTeacherIds = uniq(enrollments.map((e) => e.teacherId));
 
-    const [students, courseInstances, submissions] = await Promise.all([
+    const [students, courseInstances, submissions, teachers] = await Promise.all([
         Student.find({ _id: { $in: studentIds } })
             .select("name personalNumber email municipality changeHistory")
             .lean(),
@@ -97,7 +107,34 @@ export const getInactivityReport = async (req, res) => {
         AssignmentSubmission.find({ enrollmentId: { $in: enrollmentIds } })
             .select("studentId submittedAt feedback revisionDecision")
             .lean(),
+        enrollmentTeacherIds.length
+            ? Teacher.find({ _id: { $in: enrollmentTeacherIds } }).select("userId").lean()
+            : Promise.resolve([]),
     ]);
+    const teacherUserIds = enrollmentTeacherIds.length
+        ? uniq(teachers.map((t) => t.userId))
+        : [];
+    let teacherNames = [];
+    if (teacherUserIds.length) {
+        teacherNames = await User.find({ _id: { $in: teacherUserIds } })
+            .select("name email")
+            .lean();
+    }
+
+    const discussionThreads = await Conversation.find({ studentId: { $in: studentIds } })
+        .select("studentId participants")
+        .lean();
+    const threadByStudent = new Map();
+    for (const thread of discussionThreads) {
+        const key = thread.studentId?.toString();
+        if (!key) continue;
+        if (!threadByStudent.has(key) || thread.participants.length > threadByStudent.get(key).participantCount) {
+            threadByStudent.set(key, {
+                conversationId: thread._id.toString(),
+                participantCount: thread.participants.length,
+            });
+        }
+    }
 
     const emails = uniq(students.map((s) => s.email));
     const users = emails.length
@@ -109,6 +146,19 @@ export const getInactivityReport = async (req, res) => {
         courseInstances.map((c) => [c._id.toString(), c.courseName || ""])
     );
     const usersByEmail = new Map(users.map((u) => [String(u.email).toLowerCase(), u]));
+
+    const teacherByName = new Map(
+        teacherNames.map((u) => [u._id.toString(), u.name || u.email || ""])
+    );
+    const teacherIdToUser = new Map(teachers.map((t) => [t._id.toString(), t.userId?.toString()]));
+    const resolveTeacherForEnrollment = (enrollment) => {
+        const teacherUserId = teacherIdToUser.get(enrollment.teacherId?.toString());
+        if (!teacherUserId) return { teacherName: "", teacherUserId: null };
+        return {
+            teacherName: teacherByName.get(teacherUserId) || "",
+            teacherUserId,
+        };
+    };
 
     const submissionsByStudent = new Map();
     for (const submission of submissions) {
@@ -154,12 +204,19 @@ export const getInactivityReport = async (req, res) => {
 
         const { warningSentAt, warnedWithdrawalDate } = latestInactivityWarning(student);
 
+        const responsible = studentEnrollments
+            .map(resolveTeacherForEnrollment)
+            .find((entry) => entry.teacherName || entry.teacherUserId);
+
         rows.push({
             studentId,
             name: student.name,
             personalNumber: student.personalNumber,
             email: student.email,
             municipality: municipalityLabel(student.municipality),
+            responsibleTeacher: responsible?.teacherName || "",
+            responsibleTeacherUserId: responsible?.teacherUserId || null,
+            conversationId: threadByStudent.get(studentId)?.conversationId || null,
             lastLoginAt: user?.lastLoginAt || null,
             daysSinceLastLogin: signal.daysSinceLastLogin,
             daysSinceLastSubmission: signal.daysSinceLastSubmission,
@@ -173,14 +230,20 @@ export const getInactivityReport = async (req, res) => {
             warnedWithdrawalDate,
             windowStart: signal.windowStart,
             windowEnd: signal.windowEnd,
-            enrollments: studentEnrollments.map((enrollment) => ({
-                courseInstanceId: enrollment.courseInstanceId,
-                courseName: courseNameById.get(enrollment.courseInstanceId?.toString()) || "",
-                startDate: enrollment.startDate,
-                endDate: enrollment.endDate,
-                status: enrollment.status,
-                teacherId: enrollment.teacherId,
-            })),
+            enrollments: studentEnrollments.map((enrollment) => {
+                const { teacherName, teacherUserId: enrollmentTeacherUserId } =
+                    resolveTeacherForEnrollment(enrollment);
+                return {
+                    courseInstanceId: enrollment.courseInstanceId,
+                    courseName: courseNameById.get(enrollment.courseInstanceId?.toString()) || "",
+                    startDate: enrollment.startDate,
+                    endDate: enrollment.endDate,
+                    status: enrollment.status,
+                    teacherId: enrollment.teacherId,
+                    teacherName,
+                    teacherUserId: enrollmentTeacherUserId,
+                };
+            }),
         });
     }
 
@@ -232,6 +295,7 @@ export const sendInactivityWarning = async (req, res) => {
     });
 
     let warningSentAt = null;
+    let conversationId = null;
     if (result.sent) {
         warningSentAt = new Date();
         if (!student.changeHistory) student.changeHistory = [];
@@ -243,6 +307,27 @@ export const sendInactivityWarning = async (req, res) => {
             newValues: { withdrawalDate },
         });
         await student.save();
+
+        const thread = await safeInactivitySideEffect(async () => {
+            const responsible = await resolveResponsibleTeacher(studentId);
+            if (!responsible) return null;
+            await notifyInactivityAction({
+                studentId,
+                studentName: student.name,
+                teacherId: responsible.teacherId,
+                teacherUserId: responsible.userId,
+                adminUserId: req.user.userId,
+                action: "warning_email",
+            });
+            return ensureInactivityDiscussionThread({
+                studentId,
+                adminUserId: req.user.userId,
+                teacherUserId: responsible.userId,
+                studentName: student.name,
+                actionLabel: "Varningsmail om inaktivitet har skickats",
+            });
+        }, "notify_teacher_of_warning");
+        conversationId = thread?._id?.toString() || null;
     }
 
     res.status(result.sent ? 200 : 502).json({
@@ -250,5 +335,6 @@ export const sendInactivityWarning = async (req, res) => {
         emailResult: result.result,
         warningSentAt,
         withdrawalDate,
+        conversationId,
     });
 };

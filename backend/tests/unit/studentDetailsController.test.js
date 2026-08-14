@@ -1382,6 +1382,60 @@ describe("studentDetailsController", () => {
             expect((await refresh(dropped)).status).toBe("dropped");
         });
 
+        it("cascades dropout across every course in a course package (Phase 4C)", async () => {
+            const student = await createStudent({ dropout: false });
+            const coursePackage = await CoursePackage.create({
+                coursePackageName: "Ekonomiprogrammet",
+                coursePackageCode: "EK",
+                coursePackagePoints: "2500",
+                coursePackageExtent: "3 år",
+            });
+
+            const mkCourse = async (name, code) =>
+                Course.create({ courseName: name, courseCode: code });
+            const mkInstance = async (course) =>
+                CourseInstance.create({
+                    mainCourseId: course._id,
+                    courseName: course.courseName,
+                    courseCode: course.courseCode,
+                    startDate: new Date("2026-01-01T00:00:00.000Z"),
+                    endDate: new Date("2026-12-31T00:00:00.000Z"),
+                });
+            const mkEnrollment = async (instance, status) =>
+                StudentEnrollment.create({
+                    studentId: student._id,
+                    courseInstanceId: instance._id,
+                    mainCourseId: instance.mainCourseId,
+                    coursePackageId: coursePackage._id,
+                    startDate: new Date("2026-01-01T00:00:00.000Z"),
+                    endDate: new Date("2026-12-31T00:00:00.000Z"),
+                    status,
+                });
+
+            const mathCourse = await mkCourse("Matematik", "MAT");
+            const sweCourse = await mkCourse("Svenska", "SVE");
+            const mathInstance = await mkInstance(mathCourse);
+            const sweInstance = await mkInstance(sweCourse);
+
+            const mathEnr = await mkEnrollment(mathInstance, "active");
+            const sweEnr = await mkEnrollment(sweInstance, "enrolled");
+            const doneEnr = await mkEnrollment(sweInstance, "completed");
+
+            const req = buildReq({
+                params: { id: student._id.toString() },
+                user: adminUser(),
+            });
+            const res = buildRes();
+
+            await setStudentDropout(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body.droppedEnrollments).toBe(2);
+            expect((await StudentEnrollment.findById(mathEnr._id)).status).toBe("dropped");
+            expect((await StudentEnrollment.findById(sweEnr._id)).status).toBe("dropped");
+            expect((await StudentEnrollment.findById(doneEnr._id)).status).toBe("completed");
+        });
+
         it("re-adds student to calendar slutprov events after dropout removal", async () => {
             const student = await createStudent({
                 name: "Reactivated Student",

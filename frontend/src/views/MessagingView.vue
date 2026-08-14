@@ -171,6 +171,7 @@
 
 <script>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import store from '@/store/store.js'
 import { messagingApi } from '@/api/messaging'
 import MessageBubble from '@/components/MessageBubble.vue'
@@ -202,9 +203,17 @@ export default {
     const currentUserId = computed(
       () => store.state.user?.userId || store.state.user?._id
     )
+    const route = useRoute()
 
     onMounted(async () => {
       await loadConversations()
+      const requestedId = route.query.conversationId
+      if (requestedId) {
+        const target =
+          conversations.value.find((conv) => conv._id === requestedId) ||
+          conversations.value.find((conv) => conv._id?.toString() === requestedId)
+        if (target) await selectConversation(target)
+      }
     })
 
     const loadConversations = async () => {

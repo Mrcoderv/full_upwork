@@ -13,6 +13,10 @@ import CalendarEvent from "../models/Event.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
+import {
+    ensureInactivityDiscussionThread,
+    safeInactivitySideEffect,
+} from "../services/inactivityDiscussionService.js";
 
 /**
  * Student Details Controller
@@ -862,10 +866,22 @@ export const setStudentDropout = async (req, res) => {
             logger.debug({ teacherRecord, teacherUserId }, "Teacher lookup details");
         }
 
+        const thread = await safeInactivitySideEffect(async () => {
+            if (!teacherUserId) return null;
+            return ensureInactivityDiscussionThread({
+                studentId: id,
+                adminUserId: userId,
+                teacherUserId,
+                studentName: student.name,
+                actionLabel: "Eleven har avslutats (avbrott) på grund av inaktivitet",
+            });
+        }, "inactivity_discussion_thread_for_dropout");
+
         res.json({
             success: true,
             message: "Student marked as dropout successfully",
             student,
+            conversationId: thread?._id?.toString() || null,
             deletedExamAttendance: deletedExamAttendance.deletedCount,
             deletedProvning: deletedProvning.deletedCount,
             deletedEmptyExams: deletedEmptyExams,

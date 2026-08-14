@@ -72,6 +72,7 @@
               <th>Personnummer</th>
               <th>E-post</th>
               <th>Kommun</th>
+              <th>Lärare</th>
               <th>Senast inloggning</th>
               <th>Senast inlämning</th>
               <th>Öppna inlämningar</th>
@@ -99,6 +100,7 @@
               <td>{{ student.personalNumber }}</td>
               <td>{{ student.email }}</td>
               <td>{{ student.municipality || '-' }}</td>
+              <td>{{ student.responsibleTeacher || '-' }}</td>
               <td>{{ loginLabel(student) }}</td>
               <td>{{ daysLabel(student.daysSinceLastSubmission) }}</td>
               <td>
@@ -125,6 +127,13 @@
                     {{ sendingWarningFor === student.studentId ? 'Skickar...' : 'Varningsmail' }}
                   </button>
                   <button
+                    v-if="student.responsibleTeacherUserId"
+                    class="btn btn-success btn-sm"
+                    @click="discussStudent(student)"
+                  >
+                    Diskutera
+                  </button>
+                  <button
                     class="btn btn-danger btn-sm"
                     @click="openWithdrawDialog(student)"
                   >
@@ -145,6 +154,7 @@
           <p>
             {{ withdrawStudent.name }} avslutas som elev. Alla pågående kursregistreringar
             markeras som avslutade och eleven tas bort från scheman och provanmälningar.
+            Ansvarig lärare informeras och en diskussionstråd skapas.
           </p>
           <div class="modal-actions">
             <button class="btn btn-secondary" @click="closeWithdrawDialog">Avbryt</button>
@@ -161,11 +171,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useToast } from '@/composables/useToast.js'
 
 const toast = useToast()
 const store = useStore()
+const router = useRouter()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -232,12 +244,19 @@ function loginLabel(student) {
   return `${daysLabel(student.daysSinceLastLogin)} (${formatDate(student.lastLoginAt)})`
 }
 
+function discussStudent(student) {
+  router.push({ path: '/messages', query: student.conversationId ? { conversationId: student.conversationId } : {} })
+}
+
 async function sendWarningEmail(student) {
   sendingWarningFor.value = student.studentId
   try {
-    await axios.post(`/api/inactivity/${student.studentId}/warning-email`)
+    const response = await axios.post(`/api/inactivity/${student.studentId}/warning-email`)
     toast.success(`Varningsmail skickat till ${student.name}`)
     await loadReport()
+    if (response.data.conversationId) {
+      router.push({ path: '/messages', query: { conversationId: response.data.conversationId } })
+    }
   } catch (error) {
     toast.error(error.response?.data?.error || 'Kunde inte skicka varningsmail')
   } finally {
@@ -258,10 +277,13 @@ async function confirmWithdraw() {
   if (!withdrawStudent.value) return
   withdrawing.value = true
   try {
-    await axios.post(`/api/student-details/${withdrawStudent.value.studentId}/dropout`)
+    const response = await axios.post(`/api/student-details/${withdrawStudent.value.studentId}/dropout`)
     toast.success(`${withdrawStudent.value.name} avslutades`)
     await loadReport()
     closeWithdrawDialog()
+    if (response.data.conversationId) {
+      router.push({ path: '/messages', query: { conversationId: response.data.conversationId } })
+    }
   } catch (error) {
     toast.error(error.response?.data?.error || 'Kunde inte avsluta eleven')
   } finally {

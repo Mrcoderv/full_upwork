@@ -10,6 +10,9 @@ import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import User from "../../src/models/User.js";
 import Teacher from "../../src/models/Teacher.js";
 import AssignmentSubmission from "../../src/models/AssignmentSubmission.js";
+import Notification from "../../src/models/Notification.js";
+import Conversation from "../../src/models/Conversation.js";
+import Message from "../../src/models/Message.js";
 import { connectTestDatabase, disconnectTestDatabase } from "../helpers/mongoTest.js";
 
 const dayMs = 24 * 60 * 60 * 1000;
@@ -52,6 +55,9 @@ describe("Inactivity Report Routes Integration Tests", () => {
             User.deleteMany({}),
             Teacher.deleteMany({}),
             AssignmentSubmission.deleteMany({}),
+            Notification.deleteMany({}),
+            Conversation.deleteMany({}),
+            Message.deleteMany({}),
         ]);
 
         course = await Course.create({
@@ -346,6 +352,141 @@ describe("Inactivity Report Routes Integration Tests", () => {
             expect(anna).toBeDefined();
             expect(anna.warningSentAt).toBeTruthy();
             expect(anna.warnedWithdrawalDate).toBeTruthy();
+        });
+    });
+
+    describe("Phase 4D — teacher discussion loop", () => {
+        let teacherUser;
+        let teacher;
+        let adminUser;
+
+        beforeEach(async () => {
+            teacherUser = await User.create({
+                email: "loop-larare@mindful.se",
+                password: "hashed-placeholder",
+                roles: ["teacher"],
+            });
+            teacher = await Teacher.create({
+                userId: teacherUser._id,
+                subject: "Matematik",
+            });
+            adminUser = await User.create({
+                email: "loop-admin@mindful.se",
+                password: "hashed-placeholder",
+                roles: ["admin"],
+            });
+            await StudentEnrollment.updateOne(
+                { studentId: studentA._id, status: "active" },
+                { $set: { teacherId: teacher._id } }
+            );
+        });
+
+        it("sending a warning email notifies the teacher and opens a discussion thread", async () => {
+            const res = await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            expect(res.body.conversationId).toBeTruthy();
+
+            const notification = await Notification.findOne({
+                type: "inactivity_action",
+                teacher: teacher._id,
+                "meta.studentId": studentA._id,
+            }).lean();
+            expect(notification).toBeTruthy();
+            expect(notification.createdByAdmin.toString()).toBe(adminUser._id.toString());
+            expect(notification.message).toContain("Varningsmail");
+
+            const conversation = await Conversation.findById(res.body.conversationId).lean();
+            expect(conversation).toBeTruthy();
+            expect(conversation.studentId.toString()).toBe(studentA._id.toString());
+            const participantIds = conversation.participants.map((p) => p.toString());
+            expect(participantIds).toContain(teacherUser._id.toString());
+            expect(participantIds).toContain(adminUser._id.toString());
+
+            const firstMessage = await Message.findOne({ conversationId: conversation._id }).lean();
+            expect(firstMessage).toBeTruthy();
+            expect(firstMessage.senderId.toString()).toBe(adminUser._id.toString());
+        });
+
+        it("reuses an existing thread instead of duplicating it", async () => {
+            const first = await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .expect(200);
+
+            const second = await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .expect(200);
+
+            expect(second.body.conversationId).toBe(first.body.conversationId);
+            const count = await Conversation.countDocuments({
+                studentId: studentA._id,
+            });
+            expect(count).toBe(1);
+        });
+
+        it("does not open a thread when no responsible teacher exists", async () => {
+            await StudentEnrollment.updateOne(
+                { studentId: studentA._id, status: "active" },
+                { $unset: { teacherId: 1 } }
+            );
+
+            const res = await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            expect(res.body.conversationId).toBeNull();
+            expect(await Notification.countDocuments({ type: "inactivity_action" })).toBe(0);
+            expect(await Conversation.countDocuments({ studentId: studentA._id })).toBe(0);
+        });
+
+        it("surfaces the responsible teacher and thread in the report", async () => {
+            await request(app)
+                .post(`/api/inactivity/${studentA._id}/warning-email`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .expect(200);
+
+            const res = await request(app)
+                .get("/api/inactivity/report")
+                .set(buildAuthHeader("admin"))
+                .expect(200);
+
+            const anna = res.body.students.find(
+                (s) => s.studentId === studentA._id.toString()
+            );
+            expect(anna).toBeDefined();
+            expect(anna.responsibleTeacher).toBe("loop-larare@mindful.se");
+            expect(anna.conversationId).toBeTruthy();
+        });
+
+        it("creates a discussion thread when an admin withdraws the student", async () => {
+            await Student.updateOne({ _id: studentA._id }, { $set: { teacherId: teacher._id } });
+
+            const res = await request(app)
+                .post(`/api/student-details/${studentA._id}/dropout`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            expect(res.body.conversationId).toBeTruthy();
+
+            const conversation = await Conversation.findById(res.body.conversationId).lean();
+            const participantIds = conversation.participants.map((p) => p.toString());
+            expect(participantIds).toContain(teacherUser._id.toString());
+            expect(participantIds).toContain(adminUser._id.toString());
+
+            const dropoutNotification = await Notification.findOne({
+                type: "dropout",
+                teacher: teacher._id,
+                "meta.studentId": studentA._id,
+            }).lean();
+            expect(dropoutNotification).toBeTruthy();
         });
     });
 });
