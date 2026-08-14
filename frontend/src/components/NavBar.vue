@@ -774,6 +774,7 @@
         { name: 'Lärarhantering', link: '/teacher-management', role: 'admin' },
         { name: 'Elever', link: '/students', role: ['admin', 'teacher'] },
         { name: 'Inaktiva elever', link: '/inaktiva-elever', role: ['admin', 'systemadmin'] },
+        { name: 'Inaktivitetsrapport', link: '/admin/inactivity', role: ['admin', 'systemadmin', 'teacher'] },
         { name: 'Kurser (Lärarvy)', link: '/larare/kurser', role: 'teacher' },
         { name: 'Lägg till elev manuellt', link: '/manual-add-student', role: 'admin' },
         { name: 'Betyg', link: '/betyg', role: 'teacher' },

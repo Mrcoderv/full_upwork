@@ -243,6 +243,12 @@ const routes = [
     meta: { title: 'Rapporter & Analys', role: ['admin', 'systemadmin'] },
   },
   {
+    path: '/admin/inactivity',
+    name: 'InactivityReport',
+    component: () => import('@/views/Admin/InactivityReport.vue'),
+    meta: { title: 'Inaktivitetsrapport', role: ['admin', 'systemadmin', 'teacher'] },
+  },
+  {
     path: '/admin/reports',
     name: 'Reports',
     component: () => import('@/views/Admin/Reports.vue'),

@@ -1,5 +1,6 @@
 const roles = {
     teacher: [
+        "inactivity:read",
         "assignments:create",
         "assignments:read:own",
         "assignments:update:own",
@@ -21,6 +22,7 @@ const roles = {
         "teachers:delete",
         "teachers:unassign",
         "analytics:read",
+        "inactivity:read",
         "courseTemplates:create",
         "courseTemplates:read",
         "courseTemplates:update",
@@ -43,6 +45,7 @@ const roles = {
         "students:view_list:assigned",
         "students:view_grades:assigned",
         "analytics:read",
+        "inactivity:read",
         "courseTemplates:create",
         "courseTemplates:read",
         "courseTemplates:update",

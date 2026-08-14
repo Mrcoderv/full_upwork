@@ -24,6 +24,7 @@ import studentDetailsRoutes from "./studentDetailsRoutes.js";
 import gradeReportRoutes from "./gradeReportRoutes.js";
 import gradeCatalogRoutes from "./gradeCatalogRoutes.js";
 import analyticsRoutes from "./analyticsRoutes.js";
+import inactivityRoutes from "./inactivityRoutes.js";
 import messagingRoutes from "./messagingRoutes.js";
 import learningRoutes from "./learningRoutes.js";
 
@@ -56,6 +57,7 @@ router.use("/api", studentDetailsRoutes);
 router.use("/api", gradeReportRoutes);
 router.use("/api", gradeCatalogRoutes);
 router.use("/api/analytics", analyticsRoutes);
+router.use("/api/inactivity", inactivityRoutes);
 router.use("/api", messagingRoutes);
 router.use("/api", learningRoutes);
 
