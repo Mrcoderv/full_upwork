@@ -409,6 +409,8 @@ describe("Inactivity Report Routes Integration Tests", () => {
             const firstMessage = await Message.findOne({ conversationId: conversation._id }).lean();
             expect(firstMessage).toBeTruthy();
             expect(firstMessage.senderId.toString()).toBe(adminUser._id.toString());
+            expect(firstMessage.body).toContain("Senast inloggning: 6 dagar sedan");
+            expect(firstMessage.body).toContain("Ska avslutas");
         });
 
         it("reuses an existing thread instead of duplicating it", async () => {

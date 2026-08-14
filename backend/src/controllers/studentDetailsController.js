@@ -14,8 +14,10 @@ import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
 import {
+    computeLiveInactivitySignal,
     ensureInactivityDiscussionThread,
     safeInactivitySideEffect,
+    summarizeInactivitySignal,
 } from "../services/inactivityDiscussionService.js";
 
 /**
@@ -558,6 +560,21 @@ export const setStudentDropout = async (req, res) => {
         // Save student (even if already dropout, to ensure data is fresh)
         await student.save();
 
+        // Snapshot the live inactivity signal before the cascade drops the
+        // enrollments, so the teacher discussion thread can show the status
+        // that triggered the withdrawal.
+        let dropoutSignalSummary = "";
+        await safeInactivitySideEffect(async () => {
+            const signal = await computeLiveInactivitySignal({
+                studentId: student._id.toString(),
+                email: student.email,
+            });
+            if (signal) {
+                dropoutSignalSummary = summarizeInactivitySignal(signal, student.name);
+            }
+            return null;
+        }, "inactivity_signal_snapshot_for_dropout");
+
         // Cascade dropout to enrollments: flip every non-terminal enrollment to "dropped"
         // so the course-instance participant list automatically reflects the withdrawal.
         // "completed" and "dropped" enrollments are left untouched.
@@ -874,6 +891,7 @@ export const setStudentDropout = async (req, res) => {
                 teacherUserId,
                 studentName: student.name,
                 actionLabel: "Eleven har avslutats (avbrott) på grund av inaktivitet",
+                signalSummary: dropoutSignalSummary,
             });
         }, "inactivity_discussion_thread_for_dropout");
 

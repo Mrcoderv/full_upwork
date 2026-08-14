@@ -14,6 +14,8 @@ import {
     ensureInactivityDiscussionThread,
     notifyInactivityAction,
     safeInactivitySideEffect,
+    computeLiveInactivitySignal,
+    summarizeInactivitySignal,
 } from "../../src/services/inactivityDiscussionService.js";
 
 describe("inactivityDiscussionService", () => {
@@ -111,6 +113,7 @@ describe("inactivityDiscussionService", () => {
                 teacherUserId: teacherUser._id.toString(),
                 studentName: student.name,
                 actionLabel: "Varningsmail skickat",
+                signalSummary: "Test Elev — Senast inloggning: 6 dagar sedan.",
             });
 
             expect(conversation).toBeTruthy();
@@ -121,6 +124,7 @@ describe("inactivityDiscussionService", () => {
             expect(message).toBeTruthy();
             expect(message.senderId.toString()).toBe(adminUser._id.toString());
             expect(message.body).toContain("Varningsmail skickat");
+            expect(message.body).toContain("Senast inloggning: 6 dagar sedan");
         });
 
         it("reuses an existing thread with the same participants", async () => {
@@ -203,6 +207,70 @@ describe("inactivityDiscussionService", () => {
                     throw new Error("boom");
                 }, "test")
             ).toBeNull();
+        });
+    });
+
+    describe("computeLiveInactivitySignal", () => {
+        it("computes the live signal from a stale login", async () => {
+            await User.create({
+                email: student.email,
+                password: "hashed-placeholder",
+                roles: ["student"],
+                lastLoginAt: new Date("2026-06-01T08:00:00.000Z"),
+            });
+
+            const signal = await computeLiveInactivitySignal({
+                studentId: student._id.toString(),
+                email: student.email,
+                today: new Date("2026-06-15T12:00:00.000Z"),
+            });
+
+            expect(signal).not.toBeNull();
+            expect(signal.daysSinceLastLogin).toBe(14);
+            expect(signal.evaluated).toBe(true);
+        });
+
+        it("returns null when the student has no current enrollment", async () => {
+            await StudentEnrollment.deleteMany({ studentId: student._id });
+
+            const signal = await computeLiveInactivitySignal({
+                studentId: student._id.toString(),
+                email: student.email,
+            });
+            expect(signal).toBeNull();
+        });
+    });
+
+    describe("summarizeInactivitySignal", () => {
+        it("includes login, submission and level in Swedish", () => {
+            const summary = summarizeInactivitySignal(
+                {
+                    daysSinceLastLogin: 6,
+                    daysSinceLastSubmission: 4,
+                    openSubmissions: 1,
+                    level: "warning",
+                },
+                "Test Elev"
+            );
+
+            expect(summary).toContain("Test Elev");
+            expect(summary).toContain("Senast inloggning: 6 dagar sedan");
+            expect(summary).toContain("Senast inlämning: 4 dagar sedan");
+            expect(summary).toContain("Öppna inlämningar: 1");
+            expect(summary).toContain("Varningsnivå");
+        });
+
+        it("uses 'aldrig' for missing activity and flags withdraw level", () => {
+            const summary = summarizeInactivitySignal({
+                daysSinceLastLogin: null,
+                daysSinceLastSubmission: null,
+                openSubmissions: 0,
+                level: "withdraw",
+                daysUntilWithdraw: 0,
+            });
+
+            expect(summary).toContain("Senast inloggning: aldrig");
+            expect(summary).toContain("Ska avslutas");
         });
     });
 });

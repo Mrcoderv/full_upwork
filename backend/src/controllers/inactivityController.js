@@ -15,10 +15,12 @@ import {
     sendInactivityWarningEmail,
 } from "../services/emailService.js";
 import {
+    computeLiveInactivitySignal,
     ensureInactivityDiscussionThread,
     notifyInactivityAction,
     resolveResponsibleTeacher,
     safeInactivitySideEffect,
+    summarizeInactivitySignal,
 } from "../services/inactivityDiscussionService.js";
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
@@ -311,6 +313,13 @@ export const sendInactivityWarning = async (req, res) => {
         const thread = await safeInactivitySideEffect(async () => {
             const responsible = await resolveResponsibleTeacher(studentId);
             if (!responsible) return null;
+            const signal = await computeLiveInactivitySignal({
+                studentId,
+                email: student.email,
+            });
+            const signalSummary = signal
+                ? summarizeInactivitySignal(signal, student.name)
+                : "";
             await notifyInactivityAction({
                 studentId,
                 studentName: student.name,
@@ -318,6 +327,7 @@ export const sendInactivityWarning = async (req, res) => {
                 teacherUserId: responsible.userId,
                 adminUserId: req.user.userId,
                 action: "warning_email",
+                signalSummary,
             });
             return ensureInactivityDiscussionThread({
                 studentId,
@@ -325,6 +335,7 @@ export const sendInactivityWarning = async (req, res) => {
                 teacherUserId: responsible.userId,
                 studentName: student.name,
                 actionLabel: "Varningsmail om inaktivitet har skickats",
+                signalSummary,
             });
         }, "notify_teacher_of_warning");
         conversationId = thread?._id?.toString() || null;
