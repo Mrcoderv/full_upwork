@@ -429,6 +429,9 @@ describe("Inactivity Report Routes Integration Tests", () => {
                 studentId: studentA._id,
             });
             expect(count).toBe(1);
+            expect(
+                await Notification.countDocuments({ type: "inactivity_action" })
+            ).toBe(1);
         });
 
         it("does not open a thread when no responsible teacher exists", async () => {

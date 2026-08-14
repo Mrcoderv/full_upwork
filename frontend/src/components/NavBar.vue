@@ -385,8 +385,8 @@
 
           <div class="notis-list">
             <div v-for="notification in notifications" :key="notification._id" class="notis-item">
-              <div class="notis-content">
-                <span class="notis-type">{{ notification.type }}</span>
+              <div class="notis-content" :class="{ 'is-clickable': notification.meta?.url }" @click="openNotification(notification)">
+                <span class="notis-type">{{ notificationTypeLabel(notification.type) }}</span>
                 <span class="notis-message">{{ notification.message }}</span>
               </div>
               <div class="notis-actions">
@@ -556,6 +556,22 @@
           await fetchNotifications()
         } catch {
           toast.error('Kunde inte avsluta notisen.')
+        }
+      }
+
+      const notificationTypeLabels = {
+        inactivity_action: 'Inaktivitetsärende',
+        dropout: 'Avbrott',
+        studyplan_changed: 'Studieplan',
+        grades_pending: 'Betyg väntar',
+        action_plan_required: 'Åtgärdsplan krävs',
+      }
+
+      const notificationTypeLabel = (type) => notificationTypeLabels[type] || type
+
+      const openNotification = (notification) => {
+        if (notification.meta?.url) {
+          router.push(notification.meta.url)
         }
       }
 
@@ -1289,6 +1305,14 @@
 
   .notis-content {
     margin-bottom: 0.5rem;
+  }
+
+  .notis-content.is-clickable {
+    cursor: pointer;
+  }
+
+  .notis-content.is-clickable:hover .notis-message {
+    text-decoration: underline;
   }
 
   .notis-type {

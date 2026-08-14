@@ -190,13 +190,29 @@ export async function notifyInactivityAction({
             ? `Eleven ${studentName} har avslutats på grund av inaktivitet (avbrott).`
             : `Varningsmail om inaktivitet har skickats till ${studentName}.`;
 
+    const message = signalSummary ? `${actionText} ${signalSummary}` : actionText;
+
+    const existing = await Notification.findOne({
+        type: "inactivity_action",
+        teacher: teacherId,
+        "meta.studentId": studentId,
+    });
+    if (existing) {
+        // Re-sending the warning updates the notification instead of piling up
+        // duplicates, and re-surfaces it to users who had resolved it before.
+        existing.message = message;
+        existing.createdByAdmin = adminUserId;
+        existing.resolved = false;
+        existing.resolvedByUsers = [];
+        await existing.save();
+        return;
+    }
+
     await Notification.create({
         type: "inactivity_action",
         teacher: teacherId,
         createdByAdmin: adminUserId,
-        message: signalSummary
-            ? `${actionText} ${signalSummary}`
-            : actionText,
+        message,
         meta: {
             teacherId: teacherUserId,
             studentId,

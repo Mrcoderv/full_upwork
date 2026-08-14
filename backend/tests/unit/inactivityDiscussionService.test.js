@@ -181,6 +181,42 @@ describe("inactivityDiscussionService", () => {
             expect(notification.message).toContain(student.name);
         });
 
+        it("updates the existing notification instead of duplicating on re-send", async () => {
+            await notifyInactivityAction({
+                studentId: student._id.toString(),
+                studentName: student.name,
+                teacherId: teacher._id,
+                teacherUserId: teacherUser._id.toString(),
+                adminUserId: adminUser._id.toString(),
+                action: "warning_email",
+                signalSummary: "första",
+            });
+            const created = await Notification.findOne({
+                type: "inactivity_action",
+                teacher: teacher._id,
+            }).lean();
+            created.resolvedByUsers = [adminUser._id];
+            created.resolved = true;
+            await Notification.updateOne({ _id: created._id }, { $set: { resolvedByUsers: created.resolvedByUsers, resolved: true } });
+
+            await notifyInactivityAction({
+                studentId: student._id.toString(),
+                studentName: student.name,
+                teacherId: teacher._id,
+                teacherUserId: teacherUser._id.toString(),
+                adminUserId: adminUser._id.toString(),
+                action: "warning_email",
+                signalSummary: "andra",
+            });
+
+            expect(await Notification.countDocuments({ type: "inactivity_action" })).toBe(1);
+            const updated = await Notification.findById(created._id).lean();
+            expect(updated.message).toContain("andra");
+            expect(updated.message).not.toContain("första");
+            expect(updated.resolved).toBe(false);
+            expect(updated.resolvedByUsers).toEqual([]);
+        });
+
         it("is a no-op without a teacher", async () => {
             await notifyInactivityAction({
                 studentId: student._id.toString(),

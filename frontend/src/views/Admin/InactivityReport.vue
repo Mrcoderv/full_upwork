@@ -118,29 +118,38 @@
                 <span v-else class="badge bg-success">OK</span>
               </td>
               <td>
-                <div v-if="isAdmin" class="action-buttons">
+                <div class="action-buttons">
+                  <template v-if="isAdmin">
+                    <button
+                      class="btn btn-warning btn-sm"
+                      :disabled="sendingWarningFor === student.studentId"
+                      @click="sendWarningEmail(student)"
+                    >
+                      {{ sendingWarningFor === student.studentId ? 'Skickar...' : 'Varningsmail' }}
+                    </button>
+                    <button
+                      v-if="student.responsibleTeacherUserId"
+                      class="btn btn-success btn-sm"
+                      @click="discussStudent(student)"
+                    >
+                      Diskutera
+                    </button>
+                    <button
+                      class="btn btn-danger btn-sm"
+                      @click="openWithdrawDialog(student)"
+                    >
+                      Avsluta
+                    </button>
+                  </template>
                   <button
-                    class="btn btn-warning btn-sm"
-                    :disabled="sendingWarningFor === student.studentId"
-                    @click="sendWarningEmail(student)"
-                  >
-                    {{ sendingWarningFor === student.studentId ? 'Skickar...' : 'Varningsmail' }}
-                  </button>
-                  <button
-                    v-if="student.responsibleTeacherUserId"
+                    v-else-if="student.conversationId"
                     class="btn btn-success btn-sm"
                     @click="discussStudent(student)"
                   >
                     Diskutera
                   </button>
-                  <button
-                    class="btn btn-danger btn-sm"
-                    @click="openWithdrawDialog(student)"
-                  >
-                    Avsluta
-                  </button>
+                  <span v-if="!isAdmin && !student.conversationId" class="text-muted">-</span>
                 </div>
-                <span v-else class="text-muted">-</span>
               </td>
             </tr>
           </tbody>
