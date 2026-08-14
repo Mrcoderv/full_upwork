@@ -14,7 +14,7 @@ import { sendEmail, renderMessageCopyEmail } from "./emailService.js";
  * @param {{ senderName?: string }} [options]
  */
 export const sendEmailCopyOfMessage = async (message, recipient, options = {}) => {
-  if (recipient.roles.includes("student")) {
+  if (recipient.roles?.includes("student")) {
     if (!recipient.email) {
       logger.warn(
         { recipientId: recipient._id },
@@ -29,6 +29,58 @@ export const sendEmailCopyOfMessage = async (message, recipient, options = {}) =
     });
     await sendEmail({ to: recipient.email, subject, text });
   }
+};
+
+/**
+ * Send best-effort email copies of a message to every recipient in the
+ * conversation (excluding the sender). Only student recipients receive an
+ * email copy (see sendEmailCopyOfMessage); staff-to-staff stays in-app.
+ *
+ * Dispatch is deliberately non-fatal: an email failure must never block the
+ * in-platform message from being saved, mirroring the best-effort pattern used
+ * for lastLoginAt updates in authController.js. Failures are logged and the
+ * promise resolves normally.
+ *
+ * @param {{ message: Object, conversation: Object, senderName?: string }} args
+ * @returns {Promise<{ attempted: number, succeeded: number }>}
+ */
+export const dispatchMessageEmailCopies = async ({
+  message,
+  conversation,
+  senderName,
+}) => {
+  let recipients;
+  try {
+    recipients = await User.find({
+      _id: { $in: conversation.participants, $ne: message.senderId },
+    });
+  } catch (error) {
+    logger.error(
+      { err: error, conversationId: conversation?._id },
+      "Email copy dispatch aborted — could not load recipients (non-fatal)"
+    );
+    return { attempted: 0, succeeded: 0 };
+  }
+
+  // Propagate the conversation subject so the email copy carries the real
+  // subject (the Message schema has no subject column of its own).
+  if (conversation?.subject) {
+    message.conversationSubject = conversation.subject;
+  }
+
+  let succeeded = 0;
+  for (const recipient of recipients) {
+    try {
+      await sendEmailCopyOfMessage(message, recipient, { senderName });
+      succeeded += 1;
+    } catch (error) {
+      logger.error(
+        { err: error, recipientId: recipient._id },
+        "Email copy dispatch failed (non-fatal)"
+      );
+    }
+  }
+  return { attempted: recipients.length, succeeded };
 };
 
 /**

@@ -72,7 +72,7 @@ import {
   getUnreadCount,
   getRecipients,
 } from "../../src/controllers/messagingController.js";
-import { canMessage, sendEmailCopyOfMessage } from "../../src/services/messagingService.js";
+import { canMessage, dispatchMessageEmailCopies, sendEmailCopyOfMessage } from "../../src/services/messagingService.js";
 import { sendEmail, renderMessageCopyEmail } from "../../src/services/emailService.js";
 
 const createRes = () => {
@@ -196,6 +196,84 @@ describe("Messaging Service & Controller", () => {
     });
   });
 
+  describe("messagingService.dispatchMessageEmailCopies", () => {
+    const makeMessage = () => ({
+      _id: new mongoose.Types.ObjectId(),
+      senderId: staffUserId,
+      body: "Kom ihåg inlämningen!",
+    });
+    const makeConversation = () => ({
+      _id: new mongoose.Types.ObjectId(),
+      participants: [studentUserId, staffUserId],
+      subject: "Inlämning",
+    });
+
+    it("sends an email copy to every student participant except the sender", async () => {
+      User.find.mockResolvedValue([studentUser, otherStudent]);
+
+      const result = await dispatchMessageEmailCopies({
+        message: makeMessage(),
+        conversation: makeConversation(),
+        senderName: "Anna Lärare",
+      });
+
+      expect(User.find).toHaveBeenCalledWith({
+        _id: { $in: [studentUserId, staffUserId], $ne: staffUserId },
+      });
+      expect(sendEmail).toHaveBeenCalledTimes(2);
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "erik@elev.se" })
+      );
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "lisa@elev.se" })
+      );
+      expect(result).toEqual({ attempted: 2, succeeded: 2 });
+    });
+
+    it("propagates the conversation subject into the rendered email copy", async () => {
+      User.find.mockResolvedValue([studentUser]);
+
+      await dispatchMessageEmailCopies({
+        message: makeMessage(),
+        conversation: makeConversation(),
+        senderName: "Anna Lärare",
+      });
+
+      expect(renderMessageCopyEmail).toHaveBeenCalledWith({
+        senderName: "Anna Lärare",
+        messageBody: "Kom ihåg inlämningen!",
+        subject: "Inlämning",
+      });
+    });
+
+    it("resolves normally (best-effort) when a single recipient send fails", async () => {
+      User.find.mockResolvedValue([studentUser, otherStudent]);
+      sendEmail.mockRejectedValueOnce(new Error("SMTP down"));
+
+      const result = await dispatchMessageEmailCopies({
+        message: makeMessage(),
+        conversation: makeConversation(),
+        senderName: "Anna Lärare",
+      });
+
+      expect(result).toEqual({ attempted: 2, succeeded: 1 });
+      expect(sendEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it("resolves normally (best-effort) when the recipient lookup fails", async () => {
+      User.find.mockRejectedValue(new Error("db down"));
+
+      const result = await dispatchMessageEmailCopies({
+        message: makeMessage(),
+        conversation: makeConversation(),
+        senderName: "Anna Lärare",
+      });
+
+      expect(result).toEqual({ attempted: 0, succeeded: 0 });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+  });
+
   describe("getConversations", () => {
     it("returns user conversations with unread count", async () => {
       const convId = new mongoose.Types.ObjectId();
@@ -278,6 +356,78 @@ describe("Messaging Service & Controller", () => {
 
       await sendMessage(req, res);
 
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it("dispatches an email copy to student recipients with the conversation subject", async () => {
+      User.findById.mockResolvedValue(studentUser);
+      User.find.mockResolvedValue([studentUser]);
+
+      const req = {
+        user: staffUser,
+        body: {
+          body: "Välkommen till kursen",
+          participantIds: [studentUserId.toString()],
+          subject: "Kursstart",
+        },
+      };
+      const res = createRes();
+
+      await sendMessage(req, res);
+
+      expect(renderMessageCopyEmail).toHaveBeenCalledWith({
+        senderName: "Anna Lärare",
+        messageBody: "Välkommen till kursen",
+        subject: "Kursstart",
+      });
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: "erik@elev.se",
+          subject: "Kursstart",
+          text: "Anna Lärare: Välkommen till kursen",
+        })
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it("still saves the in-platform message and returns 201 when the email copy fails", async () => {
+      User.findById.mockResolvedValue(studentUser);
+      User.find.mockResolvedValue([studentUser]);
+      sendEmail.mockRejectedValue(new Error("SMTP down"));
+
+      const req = {
+        user: staffUser,
+        body: {
+          body: "Viktigt meddelande",
+          participantIds: [studentUserId.toString()],
+          subject: "Kursstart",
+        },
+      };
+      const res = createRes();
+
+      await sendMessage(req, res);
+
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it("still saves the in-platform message and returns 201 when the recipient lookup fails", async () => {
+      User.findById.mockResolvedValue(studentUser);
+      User.find.mockRejectedValue(new Error("db down"));
+
+      const req = {
+        user: staffUser,
+        body: {
+          body: "Viktigt meddelande",
+          participantIds: [studentUserId.toString()],
+          subject: "Kursstart",
+        },
+      };
+      const res = createRes();
+
+      await sendMessage(req, res);
+
+      expect(sendEmail).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
     });
   });

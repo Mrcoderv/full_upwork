@@ -1,7 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
-import { validateParticipants, sendEmailCopyOfMessage } from "../services/messagingService.js";
+import { validateParticipants, dispatchMessageEmailCopies } from "../services/messagingService.js";
 import logger from "../utils/logger.js";
 
 // Resolve the authenticated user's id across the shapes the app produces:
@@ -141,16 +141,13 @@ export const sendMessage = async (req, res) => {
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
-    // Trigger Part B stub for recipients
-    const recipients = await User.find({
-      _id: { $in: conversation.participants, $ne: senderId },
+    // Email copies to student recipients (best-effort; never blocks the
+    // in-platform message from being saved).
+    await dispatchMessageEmailCopies({
+      message: newMessage,
+      conversation,
+      senderName: req.user?.name,
     });
-
-    for (const recipient of recipients) {
-      await sendEmailCopyOfMessage(newMessage, recipient, {
-        senderName: req.user?.name,
-      });
-    }
 
     res.status(201).json(newMessage);
   } catch (error) {
