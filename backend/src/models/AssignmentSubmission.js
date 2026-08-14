@@ -46,6 +46,34 @@ const assignmentSubmissionSchema = new mongoose.Schema(
             by: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
             at: { type: Date, default: null },
         },
+
+        // Revision decision
+        // "godkänd" = accepted, no further action needed
+        // "komplettera" = needs revision, student must resubmit
+        // "returned" = sent back to student for revision (new status)
+        revisionDecision: {
+            type: String,
+            enum: ["", "godkänd", "komplettera", "returned"],
+            default: "",
+        },
+        revisionReason: String,
+        revisionBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        revisionAt: { type: Date, default: null },
+        revisionNotes: String,
+        // If "returned", which module(s) need revision
+        revisionModules: [{ type: Number }],
+        // Assignment-tied discussion threads (comments and replies)
+        // Each comment has a parentCommentId for threading (null = top-level comment)
+        // Replies are identified by parentCommentId pointing to the parent comment
+        comments: [
+            {
+                id: { type: mongoose.Schema.Types.ObjectId, required: true },
+                text: { type: String, required: true },
+                by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                at: { type: Date, default: Date.now },
+                parentCommentId: { type: mongoose.Schema.Types.ObjectId, ref: 'AssignmentSubmissionComment' }
+            }
+        ],
     },
     {
         timestamps: true,

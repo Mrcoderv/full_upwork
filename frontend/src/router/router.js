@@ -243,6 +243,12 @@ const routes = [
     meta: { title: 'Rapporter & Analys', role: ['admin', 'systemadmin'] },
   },
   {
+    path: '/admin/reports',
+    name: 'Reports',
+    component: () => import('@/views/Admin/Reports.vue'),
+    meta: { title: 'Kompletionsrapporter', role: ['admin', 'teacher', 'systemadmin'] },
+  },
+  {
     path: '/admin/betygsskala',
     name: 'GradingScaleAdmin',
     component: () => import('@/views/Admin/GradingScaleAdmin.vue'),

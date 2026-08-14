@@ -7,6 +7,10 @@ import {
     getInstanceSubmissions,
     setSubmissionFeedback,
     getPendingSubmissions,
+    getSubmissionComments,
+    addSubmissionComment,
+    getCourseInstanceReport,
+    getCourseInstanceReports,
 } from "../controllers/learningController.js";
 
 const router = express.Router();
@@ -44,6 +48,34 @@ router.put(
     "/learning/submissions/:submissionId/feedback",
     isAuthenticated,
     asyncHandler(setSubmissionFeedback)
+);
+
+// Assignment-tied comments / discussion thread per submission
+router.get(
+    "/learning/submissions/:submissionId/comments",
+    isAuthenticated,
+    asyncHandler(getSubmissionComments)
+);
+router.post(
+    "/learning/submissions/:submissionId/comments",
+    isAuthenticated,
+    asyncHandler(addSubmissionComment)
+);
+
+// Per-component completion report for a student
+// GET /learning/instances/:instanceId/report/:studentId
+router.get(
+    "/learning/instances/:instanceId/report/:studentId",
+    isAuthenticated,
+    asyncHandler(getCourseInstanceReport)
+);
+
+// Macro reports for a course instance (multiple students)
+// GET /learning/instances/:instanceId/reports
+router.get(
+    "/learning/instances/:instanceId/reports",
+    isAuthenticated,
+    asyncHandler(getCourseInstanceReports)
 );
 
 export default router;

@@ -331,3 +331,206 @@ export const getPendingSubmissions = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// Per-component completion report for a student
+// GET /learning/instances/:instanceId/report/:studentId
+export const getCourseInstanceReport = async (req, res) => {
+    try {
+        const { instanceId, studentId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId) || !mongoose.isValidObjectId(studentId)) {
+            return res.status(400).json({ error: "Invalid IDs" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        const student = await Student.findById(studentId);
+        if (!student) {
+            return res.status(404).json({ error: "Student not found" });
+        }
+
+        // Get the student's enrollment for this instance
+        const enrollment = student.enrollments.find(
+            e => String(e.courseInstanceId) === String(instanceId)
+        );
+
+        let completedComponents = {};
+        let totalModules = 0;
+        let completedModules = 0;
+
+        if (enrollment && enrollment.completedComponents) {
+            completedComponents = Object.fromEntries(enrollment.completedComponents);
+            totalModules = instance.modules ? instance.modules.length : 0;
+            completedModules = Object.values(completedComponents).filter(
+                c => c === "✓"
+            ).length;
+        }
+
+        res.json({
+            success: true,
+            instanceId,
+            studentId,
+            totalModules,
+            completedModules,
+            completionRate: totalModules > 0 ? (completedModules / totalModules * 100).toFixed(1) : 0,
+            completedComponents,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching course instance report");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// Macro reports for a course instance (multiple students)
+// GET /learning/instances/:instanceId/reports
+export const getCourseInstanceReports = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId)) {
+            return res.status(400).json({ error: "Invalid course instance ID" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        // Get all enrollments for this instance
+        const enrollments = await StudentEnrollment.find({ courseInstanceId: instanceId })
+            .select("completedAt completionCertificate studentId completedComponents");
+
+        const totalEnrollments = enrollments.length;
+        let totalCompletedStudents = 0;
+        let totalCompletedModules = 0;
+
+        enrollments.forEach(enrollment => {
+            if (enrollment.completedAt) totalCompletedStudents++;
+            if (enrollment.completedComponents) {
+                const completed = Object.values(enrollment.completedComponents || {}).filter(c => c === "✓").length;
+                totalCompletedModules += completed;
+            }
+        });
+
+        const overallCompletionRate = totalEnrollments > 0
+            ? (totalCompletedStudents / totalEnrollments * 100).toFixed(1)
+            : 0;
+
+        res.json({
+            success: true,
+            instanceId,
+            totalEnrollments,
+            totalCompletedStudents,
+            totalCompletedModules,
+            overallCompletionRate,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching course instance reports");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * GET /learning/submissions/:submissionId/comments
+ * Assignment-tied discussion thread for one submission. A student caller may
+ * only read comments on their own submission; teachers/staff may read any.
+ */
+export const getSubmissionComments = async (req, res) => {
+    try {
+        const { submissionId } = req.params;
+        if (!mongoose.isValidObjectId(submissionId)) {
+            return res.status(400).json({ error: "Invalid submission id" });
+        }
+
+        const user = req.user;
+        const submission = await AssignmentSubmission.findById(submissionId);
+        if (!submission) {
+            return res.status(404).json({ error: "Submission not found" });
+        }
+
+        if (!isTeacherUser(user) && !isStaffUser(user)) {
+            const student = await getStudentForUser(user);
+            if (!student || String(submission.studentId) !== String(student._id)) {
+                return res.status(403).json({ error: "Forbidden: Access denied." });
+            }
+        }
+
+        res.json({ success: true, comments: submission.comments || [] });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching submission comments");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * POST /learning/submissions/:submissionId/comments
+ * Add a comment/reply to a submission's discussion thread. Replies are
+ * identified by parentCommentId pointing to the parent comment (null = top-level).
+ */
+export const addSubmissionComment = async (req, res) => {
+    try {
+        const { submissionId } = req.params;
+        const { text, parentCommentId } = req.body || {};
+
+        if (!mongoose.isValidObjectId(submissionId)) {
+            return res.status(400).json({ error: "Invalid submission id" });
+        }
+        if (!text || !String(text).trim()) {
+            return res.status(400).json({ error: "Text krävs" });
+        }
+
+        const user = req.user;
+        const submission = await AssignmentSubmission.findById(submissionId);
+        if (!submission) {
+            return res.status(404).json({ error: "Submission not found" });
+        }
+
+        const isTeacher = isTeacherUser(user);
+        const isStaff = isStaffUser(user);
+        if (!isTeacher && !isStaff && !isStudentUser(user)) {
+            return res.status(403).json({ error: "Forbidden: Access denied." });
+        }
+
+        if (isTeacher && !isStaff) {
+            const teacher = await getTeacherForUser(user);
+            const instance = await CourseInstance.findById(submission.courseInstanceId);
+            if (!teacher || !instance || !teacherOwnsInstance(teacher, instance)) {
+                return res.status(403).json({ error: "Du ansvarar inte för den här kursen" });
+            }
+        }
+
+        if (isStudentUser(user)) {
+            const student = await getStudentForUser(user);
+            if (!student || String(submission.studentId) !== String(student._id)) {
+                return res.status(403).json({ error: "Forbidden: Access denied." });
+            }
+        }
+
+        if (parentCommentId && !mongoose.isValidObjectId(parentCommentId)) {
+            return res.status(400).json({ error: "Invalid parentCommentId" });
+        }
+
+        submission.comments = (submission.comments || []).concat({
+            id: new mongoose.Types.ObjectId(),
+            text: String(text).trim(),
+            by: user.userId || null,
+            at: new Date(),
+            parentCommentId: parentCommentId || null,
+        });
+        await submission.save();
+
+        logger.info(
+            { submissionId: submission._id, by: user.userId },
+            "Submission comment added"
+        );
+        res.json({ success: true, comments: submission.comments });
+    } catch (error) {
+        logger.error({ err: error }, "Error adding submission comment");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+

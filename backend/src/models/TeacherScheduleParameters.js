@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const TeacherScheduleParametersSchema = new mongoose.Schema({
     teacherId: {
@@ -52,4 +52,4 @@ TeacherScheduleParametersSchema.methods.getSectionOffsets = function () {
 // Index for fast lookup by teacher + course + length
 TeacherScheduleParametersSchema.index({ teacherId: 1, courseId: 1, lengthWeeks: 1 }, { unique: true });
 
-module.exports = mongoose.model("TeacherScheduleParameters", TeacherScheduleParametersSchema);
+export default mongoose.model("TeacherScheduleParameters", TeacherScheduleParametersSchema);

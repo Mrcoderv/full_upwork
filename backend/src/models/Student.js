@@ -141,6 +141,26 @@ const StudentSchema = new mongoose.Schema(
             },
         ],
 
+        // Logbook/kits for APL-only students
+        // Each kit is sent at internship start and contains placement information
+        logbook: [
+            {
+                id: { type: mongoose.Schema.Types.ObjectId, required: true },
+                title: { type: String, required: true }, // e.g. "Introduktionskit"
+                description: String, // Internship description
+                startDate: Date, // When the kit was sent
+                endDate: Date, // When the kit expires/placement ends
+                status: {
+                    type: String,
+                    enum: ["pending", "active", "completed", "archived"],
+                    default: "pending",
+                },
+                placementId: { type: mongoose.Schema.Types.ObjectId, ref: "Placement" },
+                // Optional: link to the student's APL CoursePackage enrollment
+                coursePackageId: { type: mongoose.Schema.Types.ObjectId, ref: "CoursePackage" },
+            }
+        ],
+
         changeHistory: [
             {
                 timestamp: { type: Date, default: Date.now },

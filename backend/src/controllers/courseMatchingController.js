@@ -2738,6 +2738,208 @@ export const updateCourseInstanceContent = async (req, res) => {
     }
 };
 
+
+
+/**
+ * GET /course-instances/:instanceId/activity-feed
+ * Get the activity feed / notice board for a course instance.
+ * Students can read all items; staff can also post.
+ * Only shows items for the current course instance.
+ */
+export const getCourseInstanceActivityFeed = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId)) {
+            return res.status(400).json({ error: "Ogiltigt kursinstans-id" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Kursinstans hittades inte" });
+        }
+
+        // Return the activity feed (students can read all, staff can post)
+        res.json({
+            success: true,
+            activityFeed: instance.activityFeed || [],
+            instanceId,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching activity feed");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
+/**
+ * PUT /course-instances/:instanceId/activity-feed
+ * Post a new item to the activity feed / notice board.
+ * Only staff (admin/systemadmin/responsible teacher) can post.
+ * Students receive 403 Forbidden.
+ * Item structure: { text: String, by: UserId }
+ */
+export const postCourseInstanceActivityFeed = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+        const { text } = req.body || {};
+
+        if (!text || text.trim().length === 0) {
+            return res.status(400).json({ error: "Aktivitetstext får inte vara tom." });
+        }
+
+        if (!mongoose.isValidObjectId(instanceId)) {
+            return res.status(400).json({ error: "Ogiltigt kursinstans-id" });
+        }
+
+        const user = req.user;
+
+        // Check that the user is connected to this course instance
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Kursinstans hittades inte" });
+        }
+
+        // Verify staff access: admin, systemadmin, or responsible teacher
+        const isAdmin = user.roles && user.roles.includes("systemadmin");
+        const isStaff = user.roles && user.roles.includes("admin");
+        const isTeacher = user.role === "teacher";
+
+        let isResponsibleTeacher = false;
+        if (isTeacher && instance.responsibleTeacher) {
+            isResponsibleTeacher = String(instance.responsibleTeacher) === String(user.userId);
+        } else if (isStaff || isAdmin) {
+            isResponsibleTeacher = true;
+        }
+
+        if (!isAdmin && !isStaff && !isResponsibleTeacher) {
+            return res.status(403).json({ error: "Endast ansvarig lärare, admin eller systemadmin kan posta meddelanden." });
+        }
+
+        // Create new activity feed item
+        const newItem = {
+            id: new mongoose.Types.ObjectId(),
+            text: String(text),
+            by: user.userId,
+            at: new Date(),
+            courseInstanceId: instance._id,
+        };
+
+        // Add to activity feed array
+        instance.activityFeed = (instance.activityFeed || []).concat(newItem);
+        await instance.save();
+
+        res.json({
+            success: true,
+            activityFeed: instance.activityFeed,
+            message: "Meddelande publicerat i aktivitetsbrädden",
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error posting to activity feed");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
+// Per-component completion report
+// GET /course-instances/:instanceId/report/:studentId - Get per-component completion report for a student
+// GET /course-instances/:instanceId/reports - Get macro reports for the course instance
+export const getCourseInstanceReport = async (req, res) => {
+    try {
+        const { instanceId, studentId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId) || !mongoose.isValidObjectId(studentId)) {
+            return res.status(400).json({ error: "Ogiltiga IDs-parametrar" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Kursinstans hittades inte" });
+        }
+
+        const student = await Student.findById(studentId);
+        if (!student) {
+            return res.status(404).json({ error: "Student hittades inte" });
+        }
+
+        // Get the student's enrollment for this instance
+        const enrollment = student.enrollments.find(
+            e => String(e.courseInstanceId) === String(instanceId)
+        );
+
+        let completedComponents = {};
+        let totalModules = 0;
+        let completedModules = 0;
+
+        if (enrollment && enrollment.completedComponents) {
+            completedComponents = Object.fromEntries(enrollment.completedComponents);
+            totalModules = instance.modules ? instance.modules.length : 0;
+            completedModules = Object.values(completedComponents).filter(
+                c => c === "✓"
+            ).length;
+        }
+
+        res.json({
+            success: true,
+            instanceId,
+            studentId,
+            totalModules,
+            completedModules,
+            completionRate: totalModules > 0 ? (completedModules / totalModules * 100).toFixed(1) : 0,
+            completedComponents,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching course instance report");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
+// GET /course-instances/:instanceId/reports - Get macro reports for the course instance
+export const getCourseInstanceReports = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId)) {
+            return res.status(400).json({ error: "Ogiltigt kursinstans-ID" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Kursinstans hittades inte" });
+        }
+
+        // Get all enrollments for this instance
+        const enrollments = await StudentEnrollment.find({ courseInstanceId: instanceId })
+            .select("completedAt completionCertificate studentId completedComponents");
+
+        const totalEnrollments = enrollments.length;
+        let totalCompletedStudents = 0;
+        let totalCompletedModules = 0;
+
+        enrollments.forEach(enrollment => {
+            if (enrollment.completedAt) totalCompletedStudents++;
+            if (enrollment.completedComponents) {
+                const completed = Object.values(enrollment.completedComponents || {}).filter(c => c === "✓").length;
+                totalCompletedModules += completed;
+            }
+        });
+
+        const overallCompletionRate = totalEnrollments > 0 
+            ? (totalCompletedStudents / totalEnrollments * 100).toFixed(1) 
+            : 0;
+
+        res.json({
+            success: true,
+            instanceId,
+            totalEnrollments,
+            totalCompletedStudents,
+            totalCompletedModules,
+            overallCompletionRate,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching course instance reports");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
 // Bulk delete all course instances and related enrollments
 export const deleteAllCourseInstances = async (req, res) => {
     try {

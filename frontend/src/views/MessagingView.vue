@@ -7,13 +7,18 @@
       </button>
     </div>
 
+    <div v-if="errorMessage" class="error-banner">
+      {{ errorMessage }}
+      <button class="error-dismiss" @click="errorMessage = ''">×</button>
+    </div>
+
     <div class="messaging-body">
       <!-- Conversation List Sidebar -->
       <div class="conversation-sidebar">
         <div class="search-box">
           <input
-            type="text"
             v-model="searchFilter"
+            type="text"
             placeholder="Sök konversation..."
             class="search-input"
           />
@@ -44,7 +49,7 @@
               </div>
               <div class="conv-subject">{{ conv.subject || 'Inget ämne' }}</div>
               <div class="conv-preview">
-                {{ conv.lastMessage ? conv.lastMessage.body : 'Inga meddelanden ännu' }}
+                {{ conv.lastMessage ? cutString(conv.lastMessage.body, 50) : 'Inga meddelanden ännu' }}
               </div>
             </div>
             <div v-if="conv.unreadCount > 0" class="unread-badge">
@@ -57,116 +62,106 @@
       <!-- Message View / Thread Area -->
       <div class="message-area">
         <div v-if="!selectedConversation" class="no-selection">
-          <div class="placeholder-icon">✉️</div>
+          <div class="placeholder-icon">💬</div>
           <h3>Välj en konversation</h3>
-          <p>Välj en konversation i listan till vänster eller starta en ny.</p>
+          <p>Välj en konversation från listan till vänster för att se meddelandena</p>
         </div>
 
-        <template v-else>
-          <!-- Thread Header -->
+        <!-- Message View -->
+        <div v-if="selectedConversation" class="conversation-view">
+          <div class="conversation-header">
+            <v-icon left mdi="account-circle"></v-icon>
+            <span class="conv-header-title">{{ getConversationTitle(selectedConversation) }}</span>
+
+            <v-chip
+              v-if="selectedConversation.studentId"
+              color="info"
+              small
+              class="student-badge"
+>
+              Elev: {{ selectedConversation.studentId.name }}
+            </v-chip>
+          </div>
+        </div>
+
+        <!-- Message Thread -->
+        <div v-if="selectedConversation" class="message-thread">
           <div class="thread-header">
-            <div class="thread-info">
-              <h3>{{ getConversationTitle(selectedConversation) }}</h3>
-              <span class="thread-subject">Ämne: {{ selectedConversation.subject || 'Inget ämne' }}</span>
-              <span v-if="selectedConversation.studentId" class="thread-student-badge">
-                Elev: {{ selectedConversation.studentId.name }}
-              </span>
-            </div>
+            <span class="thread-subject">{{ selectedConversation.subject || 'Inget ämne' }}</span>
+            <span v-if="selectedConversation.lastMessageAt" class="thread-time">
+              {{ formatDate(selectedConversation.lastMessageAt) }}
+            </span>
           </div>
 
-          <!-- Thread Message Feed -->
-          <div class="message-feed" ref="messageFeed">
-            <div v-if="loadingMessages" class="loading-state">
-              Laddar meddelanden...
-            </div>
-
-            <div v-else-if="messages.length === 0" class="empty-state">
-              Inga meddelanden i denna konversation än.
-            </div>
-
-            <div
-              v-else
-              v-for="msg in messages"
-              :key="msg._id"
-              :class="['message-bubble-wrapper', { 'mine': isMyMessage(msg) }]"
-            >
-              <div class="message-bubble">
-                <div class="message-meta">
-                  <span class="sender-name">{{ msg.senderId ? msg.senderId.name : 'Okänd' }}</span>
-                  <span class="message-time">{{ formatFullDate(msg.createdAt) }}</span>
-                </div>
-                <div class="message-text">{{ msg.body }}</div>
-              </div>
-            </div>
+          <div v-if="loadingMessages" class="loading-state">
+            Laddar meddelanden...
           </div>
 
-          <!-- Message Reply Box -->
-          <div class="reply-box">
-            <textarea
-              v-model="replyBody"
-              placeholder="Skriv ett meddelande..."
-              rows="3"
-              @keydown.enter.exact.prevent="sendReply"
-            ></textarea>
-            <div class="reply-actions">
-              <span class="hint">Tryck Enter för att skicka</span>
-              <button class="btn-send" :disabled="!replyBody.trim() || sending" @click="sendReply">
-                {{ sending ? 'Skickar...' : 'Skicka' }}
-              </button>
-            </div>
+          <div v-else ref="messageFeed" class="message-feed">
+            <MessageBubble
+              v-for="message in selectedConversation.messages"
+              :key="message._id"
+              :message="message"
+              :is-current="isCurrentMessage(message)"
+            />
           </div>
-        </template>
+
+          <div v-if="!loadingMessages && selectedConversation.messages.length === 0" class="empty-thread">
+            Inga meddelanden ännu
+          </div>
+        </div>
+
+        <!-- Message Input -->
+        <div v-if="selectedConversation" class="message-input-area">
+          <MessageInput
+            :conversation-id="selectedConversation._id"
+            :disabled="sendingMessage"
+            @send-message="onMessageSent"
+          />
+        </div>
       </div>
     </div>
 
     <!-- New Conversation Modal -->
-    <div v-if="showNewModal" class="modal-overlay" @click.self="closeNewConversationModal">
+    <div v-if="showNewConversationModal" class="modal-overlay" @click.self="showNewConversationModal = false">
       <div class="modal-card">
         <div class="modal-header">
           <h3>Ny konversation</h3>
-          <button class="close-btn" @click="closeNewConversationModal">✕</button>
+          <button class="modal-close" @click="showNewConversationModal = false">×</button>
         </div>
-
         <div class="modal-body">
-          <div class="form-group">
-            <label>Mottagare <span class="required">*</span></label>
-            <select v-model="selectedRecipientId" class="form-control">
-              <option value="" disabled>Välj mottagare...</option>
-              <option v-for="r in recipientOptions" :key="r._id" :value="r._id">
-                {{ r.name }} ({{ formatRole(r.roles) }}) - {{ r.email }}
-              </option>
-            </select>
+          <label class="field-label">Mottagare</label>
+          <div class="recipient-list">
+            <label v-for="r in recipients" :key="r._id" class="recipient-option">
+              <input
+                v-model="selectedRecipientIds"
+                type="checkbox"
+                :value="r._id"
+              />
+              <span>{{ r.name }} <em>{{ r.email }}</em></span>
+            </label>
+            <div v-if="recipients.length === 0" class="empty-state">
+              Inga mottagare tillgängliga
+            </div>
           </div>
-
-          <div class="form-group">
-            <label>Ämne</label>
-            <input
-              type="text"
-              v-model="newSubject"
-              placeholder="Ange ämne..."
-              class="form-control"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Meddelande <span class="required">*</span></label>
-            <textarea
-              v-model="newBody"
-              placeholder="Skriv ditt meddelande..."
-              rows="4"
-              class="form-control"
-            ></textarea>
-          </div>
+          <label class="field-label">Ämne</label>
+          <input v-model="newSubject" type="text" placeholder="Ämne (valfritt)" class="modal-input" />
+          <label class="field-label">Meddelande</label>
+          <textarea
+            v-model="newBody"
+            rows="3"
+            placeholder="Skriv ett meddelande..."
+            class="modal-input"
+          ></textarea>
         </div>
-
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeNewConversationModal">Avbryt</button>
+          <button class="btn-secondary" @click="showNewConversationModal = false">Avbryt</button>
           <button
             class="btn-primary"
-            :disabled="!selectedRecipientId || !newBody.trim() || starting"
-            @click="startNewConversation"
+            :disabled="selectedRecipientIds.length === 0 || !newBody.trim() || sendingMessage"
+            @click="sendNewConversation"
           >
-            {{ starting ? 'Startar...' : 'Starta konversation' }}
+            {{ sendingMessage ? 'Skickar...' : 'Skicka' }}
           </button>
         </div>
       </div>
@@ -175,535 +170,461 @@
 </template>
 
 <script>
+import { ref, computed, onMounted, nextTick } from 'vue'
+import store from '@/store/store.js'
 import { messagingApi } from '@/api/messaging'
-import store from '@/store/store'
+import MessageBubble from '@/components/MessageBubble.vue'
+import MessageInput from '@/components/MessageInput.vue'
 
 export default {
   name: 'MessagingView',
-  data() {
-    return {
-      conversations: [],
-      selectedConversation: null,
-      messages: [],
-      recipientOptions: [],
-      searchFilter: '',
-      loadingConversations: false,
-      loadingMessages: false,
-      sending: false,
-      starting: false,
-      replyBody: '',
-      showNewModal: false,
-      selectedRecipientId: '',
-      newSubject: '',
-      newBody: '',
-    }
+  components: {
+    MessageBubble,
+    MessageInput,
   },
-  computed: {
-    currentUserId() {
-      if (!store.state.user) return null
-      return store.state.user.userId || store.state.user._id || null
-    },
-    filteredConversations() {
-      if (!this.searchFilter.trim()) return this.conversations
-      const query = this.searchFilter.toLowerCase()
-      return this.conversations.filter(c => {
-        const title = this.getConversationTitle(c).toLowerCase()
-        const subject = (c.subject || '').toLowerCase()
-        return title.includes(query) || subject.includes(query)
-      })
-    }
-  },
-  mounted() {
-    this.fetchConversations()
-    this.fetchRecipients()
-  },
-  methods: {
-    async fetchConversations() {
-      this.loadingConversations = true
+  setup() {
+    const conversations = ref([])
+    const selectedConversation = ref(null)
+    const searchFilter = ref('')
+    const loadingConversations = ref(false)
+    const loadingMessages = ref(false)
+    const sendingMessage = ref(false)
+    const errorMessage = ref('')
+
+    // New conversation modal state
+    const showNewConversationModal = ref(false)
+    const recipients = ref([])
+    const selectedRecipientIds = ref([])
+    const newSubject = ref('')
+    const newBody = ref('')
+
+    const messageFeed = ref(null)
+    const currentUserId = computed(
+      () => store.state.user?.userId || store.state.user?._id
+    )
+
+    onMounted(async () => {
+      await loadConversations()
+    })
+
+    const loadConversations = async () => {
+      loadingConversations.value = true
+      errorMessage.value = ''
       try {
-        const res = await messagingApi.getConversations()
-        this.conversations = res.data || []
-      } catch (err) {
-        console.error('Kunde inte hämta konversationer:', err)
+        const { data } = await messagingApi.getConversations()
+        conversations.value = data
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte hämta konversationer'
       } finally {
-        this.loadingConversations = false
+        loadingConversations.value = false
       }
-    },
+    }
 
-    async fetchRecipients() {
-      try {
-        const res = await messagingApi.getRecipients()
-        this.recipientOptions = res.data || []
-      } catch (err) {
-        console.error('Kunde inte hämta mottagare:', err)
-      }
-    },
+    const filteredConversations = computed(() => {
+      const q = searchFilter.value.toLowerCase()
+      if (!q) return conversations.value
+      return conversations.value.filter((conv) => {
+        const title = getConversationTitle(conv).toLowerCase()
+        const subject = (conv.subject || '').toLowerCase()
+        return title.includes(q) || subject.includes(q)
+      })
+    })
 
-    async selectConversation(conv) {
-      this.selectedConversation = conv
-      this.loadingMessages = true
+    const selectConversation = async (conv) => {
+      selectedConversation.value = { ...conv, messages: [] }
+      loadingMessages.value = true
+      errorMessage.value = ''
       try {
-        const res = await messagingApi.getMessages(conv._id)
-        this.messages = res.data || []
-        
-        // Mark as read if unread
+        const { data } = await messagingApi.getMessages(conv._id)
+        selectedConversation.value.messages = data
         if (conv.unreadCount > 0) {
           await messagingApi.markAsRead(conv._id)
           conv.unreadCount = 0
         }
-        
-        this.$nextTick(() => {
-          this.scrollToBottom()
-        })
-      } catch (err) {
-        console.error('Kunde inte hämta meddelanden:', err)
+        scrollToBottom()
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte hämta meddelanden'
       } finally {
-        this.loadingMessages = false
+        loadingMessages.value = false
       }
-    },
+    }
 
-    async sendReply() {
-      if (!this.replyBody.trim() || !this.selectedConversation || this.sending) return
-      this.sending = true
+    const onMessageSent = async (message) => {
+      if (!selectedConversation.value || !message || !message.body) return
+      sendingMessage.value = true
+      errorMessage.value = ''
       try {
-        const payload = {
-          conversationId: this.selectedConversation._id,
-          body: this.replyBody.trim(),
-        }
-        const res = await messagingApi.sendMessage(payload)
-        this.messages.push(res.data)
-        this.selectedConversation.lastMessage = res.data
-        this.selectedConversation.lastMessageAt = new Date().toISOString()
-        this.replyBody = ''
-        this.$nextTick(() => {
-          this.scrollToBottom()
+        const { data } = await messagingApi.sendMessage({
+          conversationId: selectedConversation.value._id,
+          body: message.body,
         })
-      } catch (err) {
-        console.error('Kunde inte skicka meddelande:', err)
+        selectedConversation.value.messages.push(data)
+        selectedConversation.value.lastMessageAt = new Date()
+        selectedConversation.value.lastMessage = data
+        scrollToBottom()
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte skicka meddelandet'
       } finally {
-        this.sending = false
+        sendingMessage.value = false
       }
-    },
+    }
 
-    openNewConversationModal() {
-      this.selectedRecipientId = ''
-      this.newSubject = ''
-      this.newBody = ''
-      this.showNewModal = true
-    },
-
-    closeNewConversationModal() {
-      this.showNewModal = false
-    },
-
-    async startNewConversation() {
-      if (!this.selectedRecipientId || !this.newBody.trim() || this.starting) return
-      this.starting = true
+    const openNewConversationModal = async () => {
+      showNewConversationModal.value = true
+      errorMessage.value = ''
       try {
-        const payload = {
-          participantIds: [this.selectedRecipientId],
-          subject: this.newSubject.trim() || 'Inget ämne',
-          body: this.newBody.trim(),
+        const { data } = await messagingApi.getRecipients()
+        recipients.value = data
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte hämta mottagare'
+      }
+    }
+
+    const sendNewConversation = async () => {
+      if (selectedRecipientIds.value.length === 0 || !newBody.value.trim()) return
+      sendingMessage.value = true
+      errorMessage.value = ''
+      try {
+        const { data } = await messagingApi.sendMessage({
+          participantIds: selectedRecipientIds.value,
+          subject: newSubject.value || 'Inget ämne',
+          body: newBody.value,
+        })
+        showNewConversationModal.value = false
+        newSubject.value = ''
+        newBody.value = ''
+        selectedRecipientIds.value = []
+        await loadConversations()
+        const created = conversations.value.find(
+          (c) => String(c._id) === String(data.conversationId)
+        )
+        if (created) {
+          await selectConversation(created)
         }
-        await messagingApi.sendMessage(payload)
-        this.closeNewConversationModal()
-        await this.fetchConversations()
-        if (this.conversations.length > 0) {
-          this.selectConversation(this.conversations[0])
-        }
-      } catch (err) {
-        console.error('Kunde inte starta konversation:', err)
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte skicka meddelandet'
       } finally {
-        this.starting = false
+        sendingMessage.value = false
       }
-    },
+    }
 
-    isMyMessage(msg) {
-      if (!msg.senderId) return false
-      const senderId = typeof msg.senderId === 'object' ? msg.senderId._id : msg.senderId
-      return senderId === this.currentUserId
-    },
-
-    getConversationTitle(conv) {
-      if (!conv || !conv.participants) return 'Konversation'
-      const others = conv.participants.filter(p => p._id !== this.currentUserId)
-      if (others.length === 0) return 'Mig själv'
-      return others.map(p => p.name || p.email).join(', ')
-    },
-
-    getAvatarInitials(conv) {
-      const title = this.getConversationTitle(conv)
-      return title.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
-    },
-
-    formatRole(roles) {
-      if (!roles || roles.length === 0) return 'Användare'
-      const roleMap = {
-        admin: 'Admin',
-        systemadmin: 'Systemadmin',
-        teacher: 'Lärare',
-        student: 'Elev',
-        syv: 'SYV',
-        specped: 'Specialpedagog',
-        coordinator: 'Praktiksamordnare',
+    const scrollToBottom = async () => {
+      await nextTick()
+      if (messageFeed.value) {
+        messageFeed.value.scrollTop = messageFeed.value.scrollHeight
       }
-      return roleMap[roles[0]] || roles[0]
-    },
+    }
 
-    formatDate(dateStr) {
-      if (!dateStr) return ''
-      const d = new Date(dateStr)
-      const now = new Date()
-      if (d.toDateString() === now.toDateString()) {
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-    },
+    const getOtherParticipant = (conv) => {
+      const participants = conv.participants || []
+      return participants.find(
+        (p) => String(p._id) !== String(currentUserId.value)
+      ) || null
+    }
 
-    formatFullDate(dateStr) {
-      if (!dateStr) return ''
-      const d = new Date(dateStr)
-      return d.toLocaleString([], {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    },
+    const getConversationTitle = (conv) => {
+      if (conv.studentId?.name) return conv.studentId.name
+      const other = getOtherParticipant(conv)
+      if (other?.name) return other.name
+      return conv.subject || 'Okänt ämne'
+    }
 
-    scrollToBottom() {
-      const feed = this.$refs.messageFeed
-      if (feed) {
-        feed.scrollTop = feed.scrollHeight
-      }
-    },
+    const getAvatarInitials = (conv) => {
+      const name = getConversationTitle(conv) || ''
+      const parts = name.split(' ').filter(Boolean)
+      return parts.slice(0, 2).map((p) => p.charAt(0)).join('')
+    }
+
+    const formatDate = (date) => {
+      if (!date) return ''
+      const d = new Date(date)
+      const day = d.getDate()
+      const month = d.getMonth() + 1
+      const year = d.getFullYear()
+      return `${day}.${month}.${year}`
+    }
+
+    const cutString = (str, maxLength) => {
+      if (!str) return ''
+      if (str.length <= maxLength) return str
+      return str.substring(0, maxLength - 3) + '...'
+    }
+
+    const isCurrentMessage = (message) => {
+      if (!message || !message.senderId) return false
+      const senderId =
+        typeof message.senderId === 'object' && message.senderId !== null
+          ? message.senderId._id
+          : message.senderId
+      return String(senderId) === String(currentUserId.value)
+    }
+
+    return {
+      conversations,
+      selectedConversation,
+      searchFilter,
+      loadingConversations,
+      loadingMessages,
+      sendingMessage,
+      errorMessage,
+      showNewConversationModal,
+      recipients,
+      selectedRecipientIds,
+      newSubject,
+      newBody,
+      messageFeed,
+      filteredConversations,
+      loadConversations,
+      selectConversation,
+      onMessageSent,
+      openNewConversationModal,
+      sendNewConversation,
+      getAvatarInitials,
+      getConversationTitle,
+      formatDate,
+      cutString,
+      isCurrentMessage,
+    }
   },
 }
 </script>
 
 <style scoped>
 .messaging-container {
-  max-width: 1200px;
-  margin: 1.5rem auto;
-  padding: 0 1rem;
-  font-family: inherit;
+  max-width: 100%;
+  height: 100vh;
+  background: #f7f9fc;
+  display: flex;
+  flex-direction: column;
 }
 
 .messaging-header {
+  background: white;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  justify-content: space-between;
 }
 
 .messaging-header h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #111827;
+  margin: 0;
+  font-size: 18px;
+}
+
+.error-banner {
+  background: #fdecea;
+  color: #c62828;
+  padding: 10px 24px;
+  border-bottom: 1px solid #f5c6cb;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0;
+  justify-content: space-between;
+  font-size: 14px;
 }
 
-.btn-primary {
-  background-color: #2563eb;
-  color: white;
+.error-dismiss {
+  background: none;
   border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 0.375rem;
-  font-weight: 600;
+  font-size: 18px;
+  color: #c62828;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  transition: background-color 0.2s;
-}
-
-.btn-primary:hover {
-  background-color: #1d4ed8;
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .messaging-body {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  min-height: 580px;
+  display: flex;
+  flex: 1;
   overflow: hidden;
 }
 
-/* Sidebar */
 .conversation-sidebar {
-  border-right: 1px solid #e5e7eb;
-  display: flex;
-  flex-direction: column;
-  background: #f9fafb;
+  width: 300px;
+  background: #fff;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  padding: 16px;
+  flex-shrink: 0;
 }
 
 .search-box {
-  padding: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 20px;
 }
 
 .search-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.loading-state,
+.empty-state {
+  padding: 20px;
+  text-align: center;
+  color: #666;
 }
 
 .conversation-list {
   list-style: none;
-  margin: 0;
   padding: 0;
-  overflow-y: auto;
-  flex: 1;
+  margin: 0;
 }
 
 .conversation-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
   cursor: pointer;
-  transition: background 0.15s;
-  position: relative;
+  transition: background 0.2s;
 }
 
-.conversation-item:hover {
-  background: #f3f4f6;
-}
-
+.conversation-item:hover,
 .conversation-item.active {
-  background: #eff6ff;
-  border-left: 4px solid #2563eb;
+  background: #f0f7ff;
 }
 
 .conv-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #3b82f6;
-  color: white;
+  background: #e0e0e0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: bold;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
 .conv-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.conv-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  margin-left: 56px;
 }
 
 .conv-title {
   font-weight: 600;
-  font-size: 0.9rem;
-  color: #1f2937;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .conv-time {
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
 }
 
 .conv-subject {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #4b5563;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #333;
+  margin-top: 4px;
 }
 
 .conv-preview {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: 12px;
+  color: #555;
+  margin-top: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .unread-badge {
-  background-color: #ef4444;
+  background: #e53935;
   color: white;
-  border-radius: 9999px;
-  padding: 0.15rem 0.45rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  margin-left: 4px;
 }
 
-/* Message Area */
 .message-area {
+  flex: 1;
+  background: #f7f9fc;
+  padding: 24px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
 }
 
 .no-selection {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #6b7280;
-  padding: 2rem;
   text-align: center;
+  padding: 40px;
+  color: #666;
 }
 
 .placeholder-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: 48px;
+  color: #d0d0d0;
+  margin-bottom: 16px;
+}
+
+.conversation-view {
+  margin-bottom: 24px;
+}
+
+.conversation-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.conv-header-title {
+  font-size: 18px;
+  margin-left: 8px;
+}
+
+.student-badge {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+.message-thread {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .thread-header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
-}
-
-.thread-info h3 {
-  margin: 0 0 0.25rem 0;
-  font-size: 1.1rem;
-  color: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .thread-subject {
-  font-size: 0.85rem;
-  color: #4b5563;
-  display: block;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.thread-student-badge {
-  display: inline-block;
-  margin-top: 0.25rem;
-  background: #f3f4f6;
-  color: #374151;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.25rem;
-  font-weight: 500;
+.thread-time {
+  font-size: 12px;
+  color: #666;
 }
 
 .message-feed {
   flex: 1;
-  padding: 1.25rem;
   overflow-y: auto;
+}
+
+.empty-thread {
+  padding: 20px;
+  color: #666;
+  text-align: center;
+}
+
+.message-input-area {
+  padding: 16px 0 0;
+  border-top: 1px solid #e0e0e0;
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  max-height: 400px;
 }
 
-.message-bubble-wrapper {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.message-bubble-wrapper.mine {
-  justify-content: flex-end;
-}
-
-.message-bubble {
-  max-width: 70%;
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
-  background: #f3f4f6;
-  color: #1f2937;
-}
-
-.message-bubble-wrapper.mine .message-bubble {
-  background: #2563eb;
-  color: white;
-}
-
-.message-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.75rem;
-  margin-bottom: 0.25rem;
-  opacity: 0.85;
-}
-
-.message-text {
-  font-size: 0.925rem;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-/* Reply box */
-.reply-box {
-  padding: 1rem;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
-}
-
-.reply-box textarea {
-  width: 100%;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  padding: 0.75rem;
-  font-size: 0.9rem;
-  resize: vertical;
-}
-
-.reply-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 0.5rem;
-}
-
-.hint {
-  font-size: 0.75rem;
-  color: #9ca3af;
-}
-
-.btn-send {
-  background: #2563eb;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Modal */
+/* New conversation modal */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
@@ -713,86 +634,114 @@ export default {
 
 .modal-card {
   background: white;
-  width: 100%;
-  max-width: 500px;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
 }
 
 .modal-header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 16px;
 }
 
-.close-btn {
+.modal-close {
   background: none;
   border: none;
-  font-size: 1.2rem;
+  font-size: 22px;
   cursor: pointer;
-  color: #6b7280;
+  color: #666;
 }
 
 .modal-body {
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  padding: 16px 20px;
+  overflow-y: auto;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.form-group label {
-  font-size: 0.85rem;
+.field-label {
+  display: block;
+  font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  margin: 12px 0 6px;
 }
 
-.required {
-  color: #ef4444;
+.recipient-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px;
 }
 
-.form-control {
+.recipient-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.recipient-option em {
+  color: #888;
+  font-size: 12px;
+}
+
+.modal-input {
   width: 100%;
-  padding: 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.9rem;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
 }
 
 .modal-footer {
-  padding: 1rem 1.25rem;
-  border-top: 1px solid #e5e7eb;
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  background: #f9fafb;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
 }
 
-.btn-secondary {
-  background: white;
-  border: 1px solid #d1d5db;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
+.btn-primary {
+  padding: 8px 16px;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
   cursor: pointer;
 }
 
-.loading-state, .empty-state {
-  padding: 1.5rem;
-  text-align: center;
-  color: #6b7280;
-  font-size: 0.9rem;
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background: #fff;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.plus-icon {
+  font-weight: bold;
+  margin-right: 4px;
 }
 </style>

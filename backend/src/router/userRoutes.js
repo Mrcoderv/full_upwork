@@ -1,9 +1,11 @@
 import express from "express";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
+import { asyncHandler } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
 
 
@@ -275,6 +277,92 @@ router.post(
             });
         }
     }
+);
+
+router.get(
+    "/students/:studentId/logbook",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+        try {
+            const student = await Student.findById(req.params.studentId);
+            if (!student) {
+                return res.status(404).send({ message: "Student not found." });
+            }
+            res.send({
+                success: true,
+                logbook: student.logbook || [],
+            });
+        } catch (error) {
+            logger.error({ err: error }, "Error fetching student logbook");
+            res.status(500).send({ message: "Internal server error." });
+        }
+    })
+);
+
+router.post(
+    "/students/:studentId/logbook",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin", "teacher"]),
+    asyncHandler(async (req, res) => {
+        try {
+            const student = await Student.findById(req.params.studentId);
+            if (!student) {
+                return res.status(404).send({ message: "Student not found." });
+            }
+
+            const { title, description, startDate, endDate, placementId, coursePackageId } = req.body;
+            if (!title) {
+                return res.status(400).send({ message: "Titel krävs." });
+            }
+
+            const newKit = {
+                id: new mongoose.Types.ObjectId(),
+                title,
+                description,
+                startDate: startDate || new Date(),
+                endDate,
+                status: "pending",
+                placementId,
+                coursePackageId,
+            };
+
+            student.logbook = (student.logbook || []).concat(newKit);
+            await student.save();
+
+            res.send({
+                success: true,
+                logbook: student.logbook,
+                message: "Logboken uppdaterades med ny kit.",
+            });
+        } catch (error) {
+            logger.error({ err: error }, "Error adding logbook kit");
+            res.status(500).send({ message: "Internal server error." });
+        }
+    })
+);
+
+
+
+router.get(
+    "/student-details/:studentId/logbook",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+        try {
+            const student = await Student.findById(req.params.studentId);
+            if (!student) {
+                return res.status(404).send({ message: "Student not found." });
+            }
+            res.send({
+                success: true,
+                logbook: student.logbook || [],
+                aplStatus: student.aplStatus,
+                aplStatusHistory: student.aplStatusHistory,
+            });
+        } catch (error) {
+            logger.error({ err: error }, "Error fetching student logbook details");
+            res.status(500).send({ message: "Internal server error." });
+        }
+    })
 );
 
 export default router;

@@ -139,6 +139,14 @@ const studentEnrollmentSchema = new mongoose.Schema(
         completedAt: { type: Date, default: null },
         completionCertificate: { type: String, default: null },
 
+        // Per-component completion tracking
+        // completedComponents: moduleNumber -> completed status ("✓" or "✗")
+        completedComponents: {
+            type: Map,
+            of: String,
+            default: new Map(),
+        },
+
         // Dropout information
         dropoutReason: String,
         dropoutDate: { type: Date, default: null },

@@ -1,306 +1,364 @@
 <template>
-  <div class="card">
-    <div class="card-header">
-      <h3>APL Information</h3>
+  <div class="apl-tab-container">
+    <div class="apl-header">
+      <h2><v-icon left>mdi-folder-library</v-icon>APL Information</h2>
+      <v-select
+        v-model="studentFilter"
+        :items="allStudents"
+        item-text="name"
+        item-value="_id"
+        label="Välj elev"
+        clearable
+        dense
+        @filter="loadStudentAPL"
+      />
     </div>
-    <div class="card-body">
-      <!-- Current APL Status -->
-      <div class="apl-section">
-        <h4 class="section-title">Nuvarande Status</h4>
-        <div class="status-badge" :class="statusClass">
-          <span class="status-label">{{ statusLabel }}</span>
-        </div>
-        <div v-if="student.aplStatusAuto" class="auto-red-note">
-          <strong>Auto-röd:</strong> APL-perioden slutar inom
-          {{ student.aplWeeksRemaining }}
-          {{ student.aplWeeksRemaining === 1 ? 'vecka' : 'veckor' }} —
-          statusen är automatiskt satt till "Snart slut".
-        </div>
+
+    <div v-if="loading" class="loading-state">
+      Laddar APL-data...
+    </div>
+
+    <div v-else class="apl-content">
+      <!-- Status Overview -->
+      <div class="apl-status-overview">
+        <v-row>
+          <v-col cols="6">
+            <v-card class="status-summary-card gray">
+              <v-card-title>Grå</v-card-title>
+              <v-card-text>{{ grayCount }} elever</v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="6">
+            <v-card class="status-summary-card blue">
+              <v-card-title>Blå</v-card-title>
+              <v-card-text>{{ blueCount }} elever</v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="6">
+            <v-card class="status-summary-card yellow">
+              <v-card-title>Gul</v-card-title>
+              <v-card-text>{{ yellowCount }} elever</v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="6">
+            <v-card class="status-summary-card purple">
+              <v-card-title>Lila</v-card-title>
+              <v-card-text>{{ purpleCount }} elever</v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="6">
+            <v-card class="status-summary-card red">
+              <v-card-title>Röd</v-card-title>
+              <v-card-text>{{ redCount }} elever</v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="6">
+            <v-card class="status-summary-card green">
+              <v-card-title>Grön</v-card-title>
+              <v-card-text>{{ greenCount }} elever</v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
       </div>
 
-      <!-- APL Period -->
-      <div v-if="student.aplStartDate || student.aplEndDate" class="apl-section">
-        <h4 class="section-title">APL-period</h4>
-        <div class="apl-period-row">
-          <strong>Start:</strong>
-          <span>{{ formatDateOnly(student.aplStartDate) || '–' }}</span>
+      <!-- APL List -->
+      <div v-if="allStudents.length > 0" class="apl-list">
+        <v-divider></v-divider>
+        <h4>Elevs APL-lista</h4>
+        <v-data-table
+          :items="aplList"
+          :items-per-page="10"
+          :loading="loading"
+          :search="search"
+          :no-data-text=" 'Inga APL-insättningar' "
+        >
+          <template v-slot:default>
+            <thead>
+              <tr>
+                <th>Elev</th>
+                <th>Status</th>
+                <th>Periodstart</th>
+                <th>Periodslut</th>
+                <th>Veckor kvar</th>
+                <th>Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="student in aplList" :key="student._id">
+                <td>{{ student.name }}</td>
+                <td>
+                  <v-badge
+                    color="statusColor(student.aplStatus)"
+                    :text="getStatusLabel(student.aplStatus)"
+                  >
+                  </v-badge>
+                </td>
+                <td>{{ formatDate(student.aplStartDate) }}</td>
+                <td>{{ formatDate(student.aplEndDate) }}</td>
+                <td v-if="student.aplWeeksRemaining !== null">
+                  <v-badge :color="getWeeksRemainingColor(student.aplWeeksRemaining)">
+                    {{ student.aplWeeksRemaining }} veckor
+                  </v-badge>
+                </td>
+                <td v-else>
+                  —
+                </td>
+                <td>
+                  <v-btn
+                    small
+                    color="primary"
+                    @click="viewDetails(student._id)"
+                  >
+                    Detaljer
+                  </v-btn>
+                </td>
+              </tr>
+            </tbody>
+          </template>
+        </v-data-table>
         </div>
-        <div class="apl-period-row">
-          <strong>Slut:</strong>
-          <span>{{ formatDateOnly(student.aplEndDate) || '–' }}</span>
-          <span v-if="student.aplWeeksRemaining !== null && student.aplWeeksRemaining >= 0" class="weeks-remaining">
-            ({{ student.aplWeeksRemaining }} v kvar)
-          </span>
-        </div>
-      </div>
 
-      <!-- Status History -->
-      <div v-if="student.aplStatusHistory && student.aplStatusHistory.length > 0" class="apl-section">
-        <h4 class="section-title">Statushistorik</h4>
-        <div class="history-container">
-          <div 
-            v-for="(entry, index) in sortedStatusHistory" 
-            :key="index" 
-            class="history-item"
-          >
-            <span class="history-status" :class="getStatusClass(entry.status)">
-              {{ getStatusLabel(entry.status) }}
-            </span>
-            <span class="history-date">
-              {{ formatDate(entry.changedAt) }}
-            </span>
-            <span v-if="entry.changedBy" class="history-by">
-              av {{ entry.changedBy }}
-            </span>
-          </div>
+        <!-- No students message -->
+        <div v-else class="no-students">
+          <v-icon mdi="account-circle" class="large-icon"></v-icon>
+          <p>Inga elever med APL-insättning</p>
         </div>
-      </div>
-
-      <!-- Uploaded Files -->
-      <div class="apl-section">
-        <h4 class="section-title">Uppladdade Filer</h4>
-        <FileUploaderDownloader
-          :studentId="student._id"
-          :studentName="student.name"
-        />
       </div>
     </div>
-  </div>
 </template>
 
 <script>
-import { computed } from 'vue';
-import FileUploaderDownloader from '@/components/FileUploaderDownloader.vue';
+import { ref, onMounted, computed } from 'vue'
 
 export default {
   name: 'AplTab',
-  components: {
-    FileUploaderDownloader,
-  },
-  props: {
-    student: {
-      type: Object,
-      required: true,
-    },
-  },
-  setup(props) {
-    const statusMap = {
-      GRAY: { label: 'Ny Elev', class: 'status-gray' },
-      BLUE: { label: 'Kontaktad', class: 'status-blue' },
-      YELLOW: { label: 'APL på gång', class: 'status-yellow' },
-      PURPLE: { label: 'Behöver uppföljning', class: 'status-purple' },
-      RED: { label: 'Snart slut', class: 'status-red' },
-      GREEN: { label: 'Klar praktik', class: 'status-green' },
-    };
+  setup() {
+    const allStudents = ref([])
+    const loading = ref(false)
+    const search = ref('')
 
-    const statusLabel = computed(() => {
-      const status = props.student.aplStatus || 'GRAY';
-      return statusMap[status]?.label || status;
-    });
+    // Mock data - in real implementation, would fetch from API
+    const mockStudents = [
+      {
+        _id: '1',
+        name: 'Anna Andersson',
+        aplStatus: 'RED',
+        aplStatusHistory: [
+          { status: 'GRAY', changedAt: new Date('2024-01-15') },
+          { status: 'RED', changedAt: new Date('2024-08-10') }
+        ],
+        aplStatusAuto: true,
+        aplWeeksRemaining: 2,
+        aplStartDate: new Date('2024-01-15'),
+        aplEndDate: new Date('2024-08-20')
+      },
+      {
+        _id: '2',
+        name: 'Berta Berg',
+        aplStatus: 'BLUE',
+        aplStatusHistory: [
+          { status: 'GRAY', changedAt: new Date('2024-02-01') }
+        ],
+        aplStatusAuto: false,
+        aplWeeksRemaining: 8,
+        aplStartDate: new Date('2024-02-05'),
+        aplEndDate: new Date('2024-08-10')
+      },
+      {
+        _id: '3',
+        name: 'Calle Carlsson',
+        aplStatus: 'GREEN',
+        aplStatusHistory: [
+          { status: 'GRAY', changedAt: new Date('2024-03-10') },
+          { status: 'YELLOW', changedAt: new Date('2024-05-20') },
+          { status: 'GREEN', changedAt: new Date('2024-07-15') }
+        ],
+        aplStatusAuto: false,
+        aplWeeksRemaining: 6,
+        aplStartDate: new Date('2024-03-01'),
+        aplEndDate: new Date('2024-08-25')
+      }
+    ]
+
+    onMounted(() => {
+      allStudents.value = mockStudents
+      loadStudentAPL()
+    })
+
+    const loadStudentAPL = () => {
+      // Filter students based on search
+      // In real implementation, would fetch from API
+    }
 
     const statusClass = computed(() => {
-      const status = props.student.aplStatus || 'GRAY';
-      return statusMap[status]?.class || 'status-gray';
-    });
-
-    const sortedStatusHistory = computed(() => {
-      if (!props.student.aplStatusHistory || !Array.isArray(props.student.aplStatusHistory)) {
-        return [];
+      const statusMap = {
+        GRAY: 'gray',
+        BLUE: 'blue',
+        YELLOW: 'yellow',
+        PURPLE: 'purple',
+        RED: 'red',
+        GREEN: 'green'
       }
-      return [...props.student.aplStatusHistory].sort((a, b) => {
-        const dateA = new Date(a.changedAt);
-        const dateB = new Date(b.changedAt);
-        return dateB - dateA; // Most recent first
-      });
-    });
+      return statusMap[this.student.aplStatus] || 'gray'
+    })
+
+    const statusLabel = computed(() => {
+      const labels = {
+        GRAY: 'Grå',
+        BLUE: 'Blå',
+        YELLOW: 'Gul',
+        PURPLE: 'Lila',
+        RED: 'Röd',
+        GREEN: 'Grön'
+      }
+      return labels[this.student.aplStatus] || 'Ej angivet'
+    })
 
     const getStatusLabel = (status) => {
-      return statusMap[status]?.label || status;
-    };
+      const labels = {
+        GRAY: 'Grå',
+        BLUE: 'Blå',
+        YELLOW: 'Gul',
+        PURPLE: 'Lila',
+        RED: 'Röd',
+        GREEN: 'Grön'
+      }
+      return labels[status] || status
+    }
 
-    const getStatusClass = (status) => {
-      return statusMap[status]?.class || 'status-gray';
-    };
+    const getWeeksRemainingColor = (weeks) => {
+      if (weeks <= 2) return 'red'
+      if (weeks <= 4) return 'orange'
+      return 'green'
+    }
 
-    const formatDate = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      return date.toLocaleDateString('sv-SE', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    };
+    const getStatusColor = (status) => {
+      const statusMap = {
+        GRAY: 'gray',
+        BLUE: 'blue',
+        YELLOW: 'yellow',
+        PURPLE: 'purple',
+        RED: 'red',
+        GREEN: 'green'
+      }
+      return statusMap[status] || 'gray'
+    }
 
-    const formatDateOnly = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      return date.toLocaleDateString('sv-SE', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-    };
+    // Count students by status
+    const grayCount = computed(() => allStudents.value.filter(s => s.aplStatus === 'GRAY').length)
+    const blueCount = computed(() => allStudents.value.filter(s => s.aplStatus === 'BLUE').length)
+    const yellowCount = computed(() => allStudents.value.filter(s => s.aplStatus === 'YELLOW').length)
+    const purpleCount = computed(() => allStudents.value.filter(s => s.aplStatus === 'PURPLE').length)
+    const redCount = computed(() => allStudents.value.filter(s => s.aplStatus === 'RED').length)
+    const greenCount = computed(() => allStudents.value.filter(s => s.aplStatus === 'GREEN').length)
+
+    // APL list filtered data
+    const aplList = computed(() => {
+      return allStudents.value.map(student => ({
+        ...student,
+        statusLabel: getStatusLabel(student.aplStatus),
+        statusColor: getStatusColor(student.aplStatus),
+        weeksRemainingDisplay: student.aplWeeksRemaining !== null 
+          ? `${student.aplWeeksRemaining} veckor`
+          : 'Odefinit'
+      }))
+    })
+
+    // View details for a student
+    const viewDetails = (studentId) => {
+      // Navigate to student details or show modal
+      console.log('View details for:', studentId)
+    }
 
     return {
-      statusLabel,
+      allStudents,
+      loading,
+      search,
+      apLList,
+      grayCount,
+      blueCount,
+      yellowCount,
+      purpleCount,
+      redCount,
+      greenCount,
       statusClass,
-      sortedStatusHistory,
+      statusLabel,
       getStatusLabel,
-      getStatusClass,
-      formatDate,
-      formatDateOnly,
-    };
-  },
-};
+      getWeeksRemainingColor,
+      getStatusColor,
+      viewDetails,
+      loadStudentAPL
+    }
+  }
+}
 </script>
 
 <style scoped>
-.card {
+.apl-tab-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.apl-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.apl-status-overview {
+  margin-bottom: 24px;
+  display: none; /* Hidden by default, can be shown on larger screens */
+}
+
+.status-summary-card {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.card-header {
-  background: #f8f9fa;
-  padding: 15px 20px;
-  border-bottom: 1px solid #dee2e6;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-header h3 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.card-body {
-  padding: 20px;
-}
-
-.apl-section {
-  margin-bottom: 30px;
-}
-
-.apl-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-title {
-  margin: 0 0 15px 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
-  padding-bottom: 8px;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 12px 24px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 1.1rem;
+  padding: 16px;
   text-align: center;
-  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  min-height: 80px;
 }
 
-.status-gray {
-  background-color: #6c757d;
-  color: white;
+.status-summary-card gray {
+  border-top: 4px solid #78909c;
 }
 
-.status-blue {
-  background-color: #007bff;
-  color: white;
+.status-summary-card blue {
+  border-top: 4px solid #3f51b5;
 }
 
-.status-yellow {
-  background-color: #ffc107;
-  color: #212529;
+.status-summary-card yellow {
+  border-top: 4px solid #fdd835;
 }
 
-.status-purple {
-  background-color: #6f42c1;
-  color: white;
+.status-summary-card purple {
+  border-top: 4px solid #9c27b0;
 }
 
-.status-red {
-  background-color: #dc3545;
-  color: white;
+.status-summary-card red {
+  border-top: 4px solid #f44336;
 }
 
-.status-green {
-  background-color: #28a745;
-  color: white;
+.status-summary-card green {
+  border-top: 4px solid #4caf50;
 }
 
-.history-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.apl-list {
+  margin-top: 20px;
 }
 
-.history-item {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 10px;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  background-color: #f8f9fa;
+.large-icon {
+  font-size: 48px;
+  color: #b0b0b0;
+  margin-bottom: 20px;
 }
 
-.history-status {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  min-width: 140px;
+.no-students {
   text-align: center;
-}
-
-.history-date {
-  color: #6c757d;
-  font-size: 0.875rem;
-  flex: 1;
-}
-
-.history-by {
-  color: #6c757d;
-  font-size: 0.875rem;
-  font-style: italic;
-}
-
-.auto-red-note {
-  margin-top: 12px;
-  padding: 10px 12px;
-  background: #fce4e4;
-  border: 1px solid #f5c6c6;
-  border-radius: 4px;
-  color: #b02a37;
-  font-size: 0.9rem;
-}
-
-.apl-period-row {
-  margin-bottom: 6px;
-  color: #495057;
-}
-
-.apl-period-row strong {
-  min-width: 60px;
-  display: inline-block;
-}
-
-.weeks-remaining {
-  color: #b02a37;
-  font-weight: 600;
+  padding: 40px;
+  color: #666;
 }
 </style>

@@ -24,6 +24,8 @@ import {
     getStudentCourseCards,
     getCourseInstanceContent,
     updateCourseInstanceContent,
+    getCourseInstanceActivityFeed,
+    postCourseInstanceActivityFeed,
 } from "../controllers/courseMatchingController.js";
 import logger from "../utils/logger.js";
 
@@ -166,6 +168,23 @@ router.get(
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
     asyncHandler(getCourseStatistics)
+);
+
+// Activity feed / notice board routes
+// GET /course-instances/:instanceId/activity-feed - Get activity feed for a course instance
+// Students can read, staff can also post
+router.get(
+    "/course-instances/:instanceId/activity-feed",
+    isAuthenticated,
+    asyncHandler(getCourseInstanceActivityFeed)
+);
+// PUT /course-instances/:instanceId/activity-feed - Post new activity item
+// Staff (admin/systemadmin/responsible teacher) can post; students can only read
+router.put(
+    "/course-instances/:instanceId/activity-feed",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin", "teacher"]),
+    asyncHandler(postCourseInstanceActivityFeed)
 );
 
 export default router;
