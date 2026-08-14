@@ -152,15 +152,31 @@
                 {{ formatDateISO(course.startDate) }} - {{ formatDateISO(course.endDate) }}
               </span>
               <span v-if="course.grade" class="completed-course-grade">Betyg: {{ course.grade }}</span>
+              <span v-if="course.completionCertificate" class="completed-course-certificate">
+                Intyg: {{ course.completionCertificate }}
+              </span>
             </div>
-            <button
-              v-if="canEditStatus"
-              class="reenroll-button"
-              :disabled="reEnrolling[course.enrollmentId || course._id]"
-              @click="handleReEnroll(course)"
-            >
-              {{ reEnrolling[course.enrollmentId || course._id] ? 'ANMÄLER...' : 'Ny antagning' }}
-            </button>
+            <div class="completed-course-actions">
+              <button
+                class="certificate-button"
+                :disabled="downloadingCertificate[course.enrollmentId || course._id]"
+                @click="handleDownloadCertificate(course)"
+              >
+                {{
+                  downloadingCertificate[course.enrollmentId || course._id]
+                    ? 'LADDAR NER...'
+                    : 'Ladda ner studieintyg'
+                }}
+              </button>
+              <button
+                v-if="canEditStatus"
+                class="reenroll-button"
+                :disabled="reEnrolling[course.enrollmentId || course._id]"
+                @click="handleReEnroll(course)"
+              >
+                {{ reEnrolling[course.enrollmentId || course._id] ? 'ANMÄLER...' : 'Ny antagning' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -533,6 +549,35 @@ export default {
 
     const reEnrolling = ref({});
 
+    const downloadingCertificate = ref({});
+
+    const handleDownloadCertificate = async (course) => {
+      if (!course?.enrollmentId || !props.student?._id) return;
+      const key = course.enrollmentId;
+      downloadingCertificate.value[key] = true;
+      try {
+        const response = await client.get(`/study-certificate/${key}/pdf`, {
+          responseType: 'blob',
+        });
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `studieintyg-${getEducationName(course).replace(/\s+/g, '-')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('Error downloading certificate:', err);
+        const errorMessage =
+          err.message || err.response?.data?.message || 'Något gick fel';
+        toast.error(`Kunde inte ladda ner studieintyg: ${errorMessage}`);
+      } finally {
+        downloadingCertificate.value[key] = false;
+      }
+    };
+
     const handleReEnroll = async (course) => {
       if (!course || !props.student?._id) return;
 
@@ -610,6 +655,8 @@ export default {
       completedCourses,
       reEnrolling,
       handleReEnroll,
+      downloadingCertificate,
+      handleDownloadCertificate,
     };
   },
 };
@@ -973,5 +1020,34 @@ export default {
 }
 .reenroll-button:hover:not(:disabled) {
   background: #218838;
+}
+.certificate-button {
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.certificate-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.certificate-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+.completed-course-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.completed-course-certificate {
+  color: #6c757d;
+  font-size: 13px;
 }
 </style>

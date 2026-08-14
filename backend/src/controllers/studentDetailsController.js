@@ -107,6 +107,8 @@ export const getStudentDetails = async (req, res) => {
             teacherId: enrollment.teacherId, // Include teacherId for display
             addedAt: enrollment.createdAt,
             addedBy: enrollment.teacherId?.name || "System",
+            completedAt: enrollment.completedAt,
+            completionCertificate: enrollment.completionCertificate,
             isEnrollment: true, // Flag to identify this came from enrollment system
         }));
 

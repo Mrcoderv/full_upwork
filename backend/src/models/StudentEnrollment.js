@@ -273,6 +273,11 @@ studentEnrollmentSchema.methods.changeStatus = function (
     // Set specific dates based on status
     if (newStatus === "completed") {
         this.completedAt = new Date();
+        if (!this.completionCertificate) {
+            const year = this.completedAt.getFullYear();
+            const suffix = String(this._id || "").slice(-8).toUpperCase() || "NEW";
+            this.completionCertificate = `CERT-${year}-${suffix}`;
+        }
     } else if (newStatus === "dropped") {
         this.dropoutDate = new Date();
         this.dropoutBy = changedBy;

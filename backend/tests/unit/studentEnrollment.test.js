@@ -83,6 +83,36 @@ describe("StudentEnrollment model", () => {
         expect(enrollment.statusHistory[0].notes).toBe("All requirements met");
     });
 
+    it("auto-issues a stable certificate number on completion", async () => {
+        const enrollment = buildEnrollment();
+
+        await enrollment.changeStatus("completed");
+
+        expect(enrollment.completionCertificate).toMatch(
+            new RegExp(`^CERT-\\d{4}-${String(enrollment._id).slice(-8).toUpperCase()}$`)
+        );
+    });
+
+    it("keeps the existing certificate number on re-completion", async () => {
+        const enrollment = buildEnrollment();
+
+        await enrollment.changeStatus("completed");
+        const firstNumber = enrollment.completionCertificate;
+
+        await enrollment.changeStatus("active");
+        await enrollment.changeStatus("completed");
+
+        expect(enrollment.completionCertificate).toBe(firstNumber);
+    });
+
+    it("does not issue a certificate number for non-completed statuses", async () => {
+        const enrollment = buildEnrollment();
+
+        await enrollment.changeStatus("active");
+
+        expect(enrollment.completionCertificate).toBeNull();
+    });
+
     it("sets dropout metadata when status changes to dropped", async () => {
         const updaterId = new mongoose.Types.ObjectId();
         const enrollment = buildEnrollment();

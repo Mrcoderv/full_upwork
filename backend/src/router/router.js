@@ -27,6 +27,7 @@ import analyticsRoutes from "./analyticsRoutes.js";
 import inactivityRoutes from "./inactivityRoutes.js";
 import messagingRoutes from "./messagingRoutes.js";
 import learningRoutes from "./learningRoutes.js";
+import studyCertificateRoutes from "./studyCertificateRoutes.js";
 
 const router = Router();
 
@@ -60,5 +61,6 @@ router.use("/api/analytics", analyticsRoutes);
 router.use("/api/inactivity", inactivityRoutes);
 router.use("/api", messagingRoutes);
 router.use("/api", learningRoutes);
+router.use("/api", studyCertificateRoutes);
 
 export default router;
