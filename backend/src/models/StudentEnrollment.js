@@ -167,6 +167,7 @@ const studentEnrollmentSchema = new mongoose.Schema(
             { courseInstanceId: 1, status: 1 },
             { startDate: 1, endDate: 1 },
             { status: 1, startDate: 1 },
+            { status: 1, endDate: 1 },
         ],
     }
 );
@@ -305,6 +306,7 @@ studentEnrollmentSchema.index({ teacherId: 1 });
 studentEnrollmentSchema.index({ status: 1 });
 studentEnrollmentSchema.index({ gradeDate: 1 });
 studentEnrollmentSchema.index({ endDate: 1 });
+studentEnrollmentSchema.index({ startDate: 1, endDate: 1 });
 
 export default mongoose.model(
     "StudentEnrollment",

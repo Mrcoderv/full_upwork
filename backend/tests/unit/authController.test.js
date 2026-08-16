@@ -92,6 +92,7 @@ describe("authController", () => {
             roles: ["teacher"],
             password: "hashed",
             mustChangePassword: false,
+            permissions: {},
         };
         vi.spyOn(User, "findOne").mockResolvedValueOnce(user);
         vi.spyOn(bcrypt, "compare").mockResolvedValueOnce(true);
@@ -109,6 +110,12 @@ describe("authController", () => {
             expect.objectContaining({ $set: expect.objectContaining({ lastLoginAt: expect.any(Date) }) })
         );
 
+        expect(jwt.sign).toHaveBeenCalledWith(
+            expect.objectContaining({ permissions: {} }),
+            expect.any(String),
+            expect.objectContaining({ expiresIn: "7d" })
+        );
+
         expect(res.cookies[AUTH_COOKIE_NAME].value).toBe(token);
         expect(res.body).toEqual({
             message: "Login successful",
@@ -119,8 +126,38 @@ describe("authController", () => {
                 email: user.email,
                 role: user.role,
                 roles: user.roles,
+                permissions: {},
             },
         });
+    });
+
+    it("carries per-user permissions into the JWT payload", async () => {
+        const user = {
+            _id: "u2",
+            name: "Coordinator",
+            email: "c@example.com",
+            role: "coordinator",
+            roles: ["coordinator"],
+            password: "hashed",
+            mustChangePassword: false,
+            permissions: { statistics: true, search_users: false },
+        };
+        vi.spyOn(User, "findOne").mockResolvedValueOnce(user);
+        vi.spyOn(bcrypt, "compare").mockResolvedValueOnce(true);
+        vi.spyOn(User, "updateOne").mockResolvedValueOnce({ modifiedCount: 1 });
+        vi.spyOn(jwt, "sign").mockReturnValueOnce("jwt-token");
+
+        const req = { body: { email: "c@example.com", password: "secret" } };
+        const res = buildRes();
+
+        await authController.login(req, res);
+
+        expect(jwt.sign).toHaveBeenCalledWith(
+            expect.objectContaining({ permissions: { statistics: true, search_users: false } }),
+            expect.any(String),
+            expect.any(Object)
+        );
+        expect(res.body.user.permissions).toEqual({ statistics: true, search_users: false });
     });
 
     it("logs in with requiresPasswordChange true when mustChangePassword is set", async () => {

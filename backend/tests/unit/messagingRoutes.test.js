@@ -29,7 +29,9 @@ vi.mock("../../src/models/Message.js", () => {
   Object.assign(MessageMock, {
     find: vi.fn(),
     findOne: vi.fn(),
+    findById: vi.fn(),
     countDocuments: vi.fn(),
+    aggregate: vi.fn(),
     updateMany: vi.fn(),
   });
 
@@ -288,13 +290,9 @@ describe("Messaging Service & Controller", () => {
         sort: vi.fn().mockResolvedValue([mockConv]),
       };
       Conversation.find.mockReturnValue(findQuery);
-      Message.countDocuments.mockResolvedValue(2);
-
-      const msgQuery = {
-        sort: vi.fn().mockReturnThis(),
-        select: vi.fn().mockResolvedValue({ body: "Hej", createdAt: new Date() }),
-      };
-      Message.findOne.mockReturnValue(msgQuery);
+      Message.aggregate
+        .mockResolvedValueOnce([{ _id: convId, count: 2 }])
+        .mockResolvedValueOnce([{ _id: convId, body: "Hej", createdAt: new Date() }]);
 
       const req = { user: staffUser };
       const res = createRes();
@@ -306,9 +304,150 @@ describe("Messaging Service & Controller", () => {
           expect.objectContaining({
             _id: convId,
             unreadCount: 2,
+            lastMessage: expect.objectContaining({ body: "Hej" }),
           }),
         ])
       );
+    });
+
+    it("returns an empty list when the user has no conversations", async () => {
+      const findQuery = {
+        populate: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockResolvedValue([]),
+      };
+      Conversation.find.mockReturnValue(findQuery);
+
+      const req = { user: staffUser };
+      const res = createRes();
+
+      await getConversations(req, res);
+
+      expect(res.json).toHaveBeenCalledWith([]);
+      expect(Message.aggregate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getMessages", () => {
+    const convId = new mongoose.Types.ObjectId();
+
+    const messageDoc = (id, body) => ({
+      _id: id,
+      body,
+      senderId: staffUserId,
+      createdAt: new Date(),
+    });
+
+    it("returns the first page of messages ascending with pagination metadata", async () => {
+      Conversation.findOne.mockResolvedValue({ _id: convId, participants: [staffUserId] });
+      const newestId = new mongoose.Types.ObjectId();
+      const pageQuery = {
+        populate: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([messageDoc(newestId, "Nyare"), messageDoc(convId, "Äldre")]),
+      };
+      Message.find.mockReturnValue(pageQuery);
+
+      const req = { user: staffUser, params: { conversationId: convId.toString() }, query: {} };
+      const res = createRes();
+
+      await getMessages(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        messages: [
+          expect.objectContaining({ body: "Äldre" }),
+          expect.objectContaining({ body: "Nyare" }),
+        ],
+        hasMore: false,
+        nextBefore: null,
+      });
+    });
+
+    it("supports keyset pagination via ?before", async () => {
+      Conversation.findOne.mockResolvedValue({ _id: convId, participants: [staffUserId] });
+      Message.findById.mockReturnValue({
+        select: vi.fn().mockResolvedValue({ _id: convId }),
+      });
+      const oldestId = new mongoose.Types.ObjectId();
+      const pageQuery = {
+        populate: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([messageDoc(oldestId, "Äldst")]),
+      };
+      Message.find.mockReturnValue(pageQuery);
+
+      const req = {
+        user: staffUser,
+        params: { conversationId: convId.toString() },
+        query: { before: convId.toString(), limit: "50" },
+      };
+      const res = createRes();
+
+      await getMessages(req, res);
+
+      expect(Message.findById).toHaveBeenCalledWith(convId.toString());
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hasMore: false,
+          nextBefore: null,
+        })
+      );
+    });
+
+    it("returns 400 when the cursor message does not exist", async () => {
+      Conversation.findOne.mockResolvedValue({ _id: convId, participants: [staffUserId] });
+      Message.findById.mockReturnValue({
+        select: vi.fn().mockResolvedValue(null),
+      });
+
+      const req = {
+        user: staffUser,
+        params: { conversationId: convId.toString() },
+        query: { before: convId.toString() },
+      };
+      const res = createRes();
+
+      await getMessages(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("reports hasMore and nextBefore when more older messages exist", async () => {
+      Conversation.findOne.mockResolvedValue({ _id: convId, participants: [staffUserId] });
+      const oldestId = new mongoose.Types.ObjectId();
+      // limit+1 rows means there is an older page.
+      const pageQuery = {
+        populate: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([messageDoc(oldestId, "A"), messageDoc(convId, "B")]),
+      };
+      Message.find.mockReturnValue(pageQuery);
+
+      const req = {
+        user: staffUser,
+        params: { conversationId: convId.toString() },
+        query: { limit: "1" },
+      };
+      const res = createRes();
+
+      await getMessages(req, res);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hasMore: true,
+          nextBefore: expect.any(String),
+        })
+      );
+    });
+
+    it("returns 404 when the user is not a participant", async () => {
+      Conversation.findOne.mockResolvedValue(null);
+
+      const req = { user: staffUser, params: { conversationId: convId.toString() }, query: {} };
+      const res = createRes();
+
+      await getMessages(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
     });
   });
 
@@ -479,6 +618,30 @@ describe("Messaging Service & Controller", () => {
 
       await getRecipients(req, res);
 
+      expect(res.json).toHaveBeenCalledWith(mockRecipients);
+    });
+
+    it("filters recipients server-side when a search term is provided", async () => {
+      const mockRecipients = [{ name: "Erik Elev", email: "erik@elev.se", roles: ["student"] }];
+      const selectQuery = {
+        select: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockResolvedValue(mockRecipients),
+      };
+      User.find.mockReturnValue(selectQuery);
+
+      const req = { user: staffUser, query: { search: "erik" } };
+      const res = createRes();
+
+      await getRecipients(req, res);
+
+      expect(User.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          $or: [
+            { name: { $regex: "erik", $options: "i" } },
+            { email: { $regex: "erik", $options: "i" } },
+          ],
+        })
+      );
       expect(res.json).toHaveBeenCalledWith(mockRecipients);
     });
   });

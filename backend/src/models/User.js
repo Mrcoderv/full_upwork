@@ -56,4 +56,8 @@ UserSchema.virtual("role")
         }
     });
 
+UserSchema.index({ lastLoginAt: 1 });
+UserSchema.index({ name: 1 });
+UserSchema.index({ username: "text", name: "text", email: "text" });
+
 export default mongoose.model("User", UserSchema);

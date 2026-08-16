@@ -29,5 +29,7 @@ const conversationSchema = new mongoose.Schema(
 conversationSchema.index({ participants: 1 });
 conversationSchema.index({ studentId: 1 });
 conversationSchema.index({ lastMessageAt: -1 });
+// Main inbox query: a user's conversations, newest first.
+conversationSchema.index({ participants: 1, lastMessageAt: -1 });
 
 export default mongoose.model("Conversation", conversationSchema, "conversations");

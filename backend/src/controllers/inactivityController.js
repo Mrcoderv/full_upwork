@@ -5,6 +5,8 @@ import StudentEnrollment from "../models/StudentEnrollment.js";
 import CourseInstance from "../models/CourseInstance.js";
 import AssignmentSubmission from "../models/AssignmentSubmission.js";
 import Conversation from "../models/Conversation.js";
+import Notification from "../models/Notification.js";
+import NOTIFICATION_TYPES from "./notificationTypes.js";
 import {
     ACTIVE_ENROLLMENT_STATUSES,
     INACTIVITY_WITHDRAW_DAYS,
@@ -26,6 +28,7 @@ import {
     getLastScanSummary,
     runInactivityScan,
 } from "../services/inactivityScanner.js";
+import { performStudentDropout } from "../services/dropoutService.js";
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 
@@ -305,21 +308,16 @@ export const getInactivityScanStatus = async (_req, res) => {
 };
 
 /**
- * POST /api/inactivity/:studentId/warning-email
- * Admin action (Phase 4B): send the inactivity warning email to a flagged
- * student, stating the withdrawal date (today + INACTIVITY_WITHDRAW_DAYS).
- * Records the send in the student's change history; the report then surfaces
- * warningSentAt/warnedWithdrawalDate.
+ * Send the inactivity warning email for a student and open the teacher
+ * discussion loop. Shared by the report action and the notification action so
+ * both paths behave identically.
+ * @param {{ studentId: string, actor: { userId: string, role: string } }} args
+ * @returns {Promise<{sent: boolean, reason?: string, emailResult?: Object, warningSentAt?: Date, withdrawalDate?: Date, conversationId?: string|null}>}
  */
-export const sendInactivityWarning = async (req, res) => {
-    const { studentId } = req.params;
+export const performInactivityWarning = async ({ studentId, actor }) => {
     const student = await Student.findById(studentId).select("name email changeHistory");
-    if (!student) {
-        return res.status(404).json({ error: "Student not found" });
-    }
-    if (!student.email) {
-        return res.status(400).json({ error: "Student has no email address" });
-    }
+    if (!student) return { sent: false, reason: "student_not_found" };
+    if (!student.email) return { sent: false, reason: "no_email" };
 
     const withdrawalDate = new Date();
     withdrawalDate.setDate(withdrawalDate.getDate() + INACTIVITY_WITHDRAW_DAYS);
@@ -330,56 +328,159 @@ export const sendInactivityWarning = async (req, res) => {
         withdrawalDate,
     });
 
-    let warningSentAt = null;
-    let conversationId = null;
-    if (result.sent) {
-        warningSentAt = new Date();
-        if (!student.changeHistory) student.changeHistory = [];
-        student.changeHistory.push({
-            timestamp: warningSentAt,
-            changedBy: req.user.userId,
-            changedByRole: req.user.role,
-            changes: ["inactivity_warning_email"],
-            newValues: { withdrawalDate },
-        });
-        await student.save();
-
-        const thread = await safeInactivitySideEffect(async () => {
-            const responsible = await resolveResponsibleTeacher(studentId);
-            if (!responsible) return null;
-            const signal = await computeLiveInactivitySignal({
-                studentId,
-                email: student.email,
-            });
-            const signalSummary = signal
-                ? summarizeInactivitySignal(signal, student.name)
-                : "";
-            await notifyInactivityAction({
-                studentId,
-                studentName: student.name,
-                teacherId: responsible.teacherId,
-                teacherUserId: responsible.userId,
-                adminUserId: req.user.userId,
-                action: "warning_email",
-                signalSummary,
-            });
-            return ensureInactivityDiscussionThread({
-                studentId,
-                adminUserId: req.user.userId,
-                teacherUserId: responsible.userId,
-                studentName: student.name,
-                actionLabel: "Varningsmail om inaktivitet har skickats",
-                signalSummary,
-            });
-        }, "notify_teacher_of_warning");
-        conversationId = thread?._id?.toString() || null;
+    if (!result.sent) {
+        return { sent: false, reason: result.reason || "send_failed", emailResult: result.result };
     }
 
-    res.status(result.sent ? 200 : 502).json({
-        success: result.sent,
+    const warningSentAt = new Date();
+    if (!student.changeHistory) student.changeHistory = [];
+    student.changeHistory.push({
+        timestamp: warningSentAt,
+        changedBy: actor.userId,
+        changedByRole: actor.role,
+        changes: ["inactivity_warning_email"],
+        newValues: { withdrawalDate },
+    });
+    await student.save();
+
+    let conversationId = null;
+    await safeInactivitySideEffect(async () => {
+        const responsible = await resolveResponsibleTeacher(studentId);
+        if (!responsible) return null;
+        const signal = await computeLiveInactivitySignal({
+            studentId,
+            email: student.email,
+        });
+        const signalSummary = signal
+            ? summarizeInactivitySignal(signal, student.name)
+            : "";
+        await notifyInactivityAction({
+            studentId,
+            studentName: student.name,
+            teacherId: responsible.teacherId,
+            teacherUserId: responsible.userId,
+            adminUserId: actor.userId,
+            action: "warning_email",
+            signalSummary,
+        });
+        const thread = await ensureInactivityDiscussionThread({
+            studentId,
+            adminUserId: actor.userId,
+            teacherUserId: responsible.userId,
+            studentName: student.name,
+            actionLabel: "Varningsmail om inaktivitet har skickats",
+            signalSummary,
+        });
+        conversationId = thread?._id?.toString() || null;
+        return null;
+    }, "notify_teacher_of_warning");
+
+    return {
+        sent: true,
         emailResult: result.result,
         warningSentAt,
         withdrawalDate,
         conversationId,
+    };
+};
+
+/**
+ * POST /api/inactivity/:studentId/warning-email
+ * Admin action (Phase 4B): send the inactivity warning email to a flagged
+ * student, stating the withdrawal date (today + INACTIVITY_WITHDRAW_DAYS).
+ * Records the send in the student's change history; the report then surfaces
+ * warningSentAt/warnedWithdrawalDate.
+ */
+export const sendInactivityWarning = async (req, res) => {
+    const { studentId } = req.params;
+    const result = await performInactivityWarning({
+        studentId,
+        actor: { userId: req.user.userId, role: req.user.role },
+    });
+
+    if (result.reason === "student_not_found") {
+        return res.status(404).json({ error: "Student not found" });
+    }
+    if (result.reason === "no_email") {
+        return res.status(400).json({ error: "Student has no email address" });
+    }
+
+    res.status(result.sent ? 200 : 502).json({
+        success: result.sent,
+        emailResult: result.emailResult,
+        warningSentAt: result.warningSentAt,
+        withdrawalDate: result.withdrawalDate,
+        conversationId: result.conversationId || null,
+    });
+};
+
+/**
+ * POST /api/inactivity/notifications/:notificationId/action
+ * Admin action straight from the notification (P0): the admin can send the
+ * warning email ("warning") or trigger the avbrott cascade ("withdraw") for the
+ * student a notification refers to, then the notification is resolved for that
+ * admin.
+ */
+export const performInactivityNotificationAction = async (req, res) => {
+    const { notificationId } = req.params;
+    const { action } = req.body || {};
+
+    if (!["warning", "withdraw"].includes(action)) {
+        return res.status(400).json({ error: "action must be 'warning' or 'withdraw'" });
+    }
+
+    const notification = await Notification.findById(notificationId);
+    if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+    }
+    if (notification.type !== NOTIFICATION_TYPES.INACTIVITY_ACTION) {
+        return res.status(400).json({ error: "Not an inactivity notification" });
+    }
+    const studentId = notification.meta?.studentId;
+    if (!studentId) {
+        return res.status(400).json({ error: "Notification has no linked student" });
+    }
+
+    let result;
+    if (action === "warning") {
+        result = await performInactivityWarning({
+            studentId: studentId.toString(),
+            actor: { userId: req.user.userId, role: req.user.role },
+        });
+        if (result.reason === "student_not_found") {
+            return res.status(404).json({ error: "Student not found" });
+        }
+        if (result.reason === "no_email") {
+            return res.status(400).json({ error: "Student has no email address" });
+        }
+    } else {
+        const dropout = await performStudentDropout({
+            studentId: studentId.toString(),
+            userId: req.user.userId,
+            role: req.user.role,
+            reason: "Avbrott från inaktivitetsnotis (admin-åtgärd)",
+        });
+        result = { sent: true, dropout };
+    }
+
+    if (result.sent) {
+        if (!notification.resolvedByUsers) notification.resolvedByUsers = [];
+        const userIdStr = req.user.userId.toString();
+        if (!notification.resolvedByUsers.some((u) => u.toString() === userIdStr)) {
+            notification.resolvedByUsers.push(req.user.userId);
+            await notification.save();
+        }
+    }
+
+    res.status(200).json({
+        success: result.sent,
+        action,
+        warning: result.sent && action === "warning" ? {
+            emailResult: result.emailResult,
+            warningSentAt: result.warningSentAt,
+            withdrawalDate: result.withdrawalDate,
+            conversationId: result.conversationId || null,
+        } : undefined,
+        dropout: result.sent && action === "withdraw" ? result.dropout : undefined,
     });
 };

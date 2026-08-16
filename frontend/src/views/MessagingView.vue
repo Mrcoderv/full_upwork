@@ -98,6 +98,11 @@
           </div>
 
           <div v-else ref="messageFeed" class="message-feed">
+            <div v-if="hasMoreMessages" class="load-older">
+              <button class="btn-secondary btn-sm" :disabled="loadingOlderMessages" @click="loadOlderMessages">
+                {{ loadingOlderMessages ? 'Laddar...' : 'Ladda äldre meddelanden' }}
+              </button>
+            </div>
             <MessageBubble
               v-for="message in selectedConversation.messages"
               :key="message._id"
@@ -131,6 +136,13 @@
         </div>
         <div class="modal-body">
           <label class="field-label">Mottagare</label>
+          <input
+            v-model="recipientSearch"
+            type="text"
+            placeholder="Sök på namn eller e-post..."
+            class="modal-input recipient-search"
+            @input="searchRecipients"
+          />
           <div class="recipient-list">
             <label v-for="r in recipients" :key="r._id" class="recipient-option">
               <input
@@ -141,7 +153,7 @@
               <span>{{ r.name }} <em>{{ r.email }}</em></span>
             </label>
             <div v-if="recipients.length === 0" class="empty-state">
-              Inga mottagare tillgängliga
+              Inga mottagare hittades
             </div>
           </div>
           <label class="field-label">Ämne</label>
@@ -195,9 +207,15 @@ export default {
     // New conversation modal state
     const showNewConversationModal = ref(false)
     const recipients = ref([])
+    const recipientSearch = ref('')
     const selectedRecipientIds = ref([])
     const newSubject = ref('')
     const newBody = ref('')
+
+    // Message thread pagination state
+    const hasMoreMessages = ref(false)
+    const nextBefore = ref(null)
+    const loadingOlderMessages = ref(false)
 
     const messageFeed = ref(null)
     const currentUserId = computed(
@@ -243,9 +261,13 @@ export default {
       selectedConversation.value = { ...conv, messages: [] }
       loadingMessages.value = true
       errorMessage.value = ''
+      hasMoreMessages.value = false
+      nextBefore.value = null
       try {
-        const { data } = await messagingApi.getMessages(conv._id)
-        selectedConversation.value.messages = data
+        const { data } = await messagingApi.getMessages(conv._id, { limit: 50 })
+        selectedConversation.value.messages = data.messages || []
+        hasMoreMessages.value = !!data.hasMore
+        nextBefore.value = data.nextBefore || null
         if (conv.unreadCount > 0) {
           await messagingApi.markAsRead(conv._id)
           conv.unreadCount = 0
@@ -255,6 +277,26 @@ export default {
         errorMessage.value = error.message || 'Kunde inte hämta meddelanden'
       } finally {
         loadingMessages.value = false
+      }
+    }
+
+    const loadOlderMessages = async () => {
+      if (!selectedConversation.value || !nextBefore.value || loadingOlderMessages.value) return
+      loadingOlderMessages.value = true
+      errorMessage.value = ''
+      try {
+        const { data } = await messagingApi.getMessages(selectedConversation.value._id, {
+          before: nextBefore.value,
+          limit: 50,
+        })
+        const older = data.messages || []
+        selectedConversation.value.messages = [...older, ...selectedConversation.value.messages]
+        hasMoreMessages.value = !!data.hasMore
+        nextBefore.value = data.nextBefore || null
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte hämta äldre meddelanden'
+      } finally {
+        loadingOlderMessages.value = false
       }
     }
 
@@ -281,11 +323,23 @@ export default {
     const openNewConversationModal = async () => {
       showNewConversationModal.value = true
       errorMessage.value = ''
+      recipientSearch.value = ''
       try {
         const { data } = await messagingApi.getRecipients()
         recipients.value = data
       } catch (error) {
         errorMessage.value = error.message || 'Kunde inte hämta mottagare'
+      }
+    }
+
+    const searchRecipients = async () => {
+      try {
+        const { data } = await messagingApi.getRecipients({
+          search: recipientSearch.value.trim(),
+        })
+        recipients.value = data
+      } catch (error) {
+        errorMessage.value = error.message || 'Kunde inte söka mottagare'
       }
     }
 
@@ -624,6 +678,16 @@ export default {
   text-align: center;
 }
 
+.load-older {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+
 .message-input-area {
   padding: 16px 0 0;
   border-top: 1px solid #e0e0e0;
@@ -714,6 +778,10 @@ export default {
   border-radius: 4px;
   font-size: 14px;
   font-family: inherit;
+}
+
+.recipient-search {
+  margin-bottom: 8px;
 }
 
 .modal-footer {

@@ -88,12 +88,16 @@ export const login = async (req, res) => {
             logger.error({ err: loginError }, "Failed to record last login time");
         }
 
+        const userPermissions =
+            user.permissions && typeof user.permissions === "object" ? user.permissions : {};
+
         const tokenPayload = {
             userId: user._id,
             roles: user.roles,
             role: user.role,
             name: user.name,
             email: user.email,
+            permissions: userPermissions,
         };
 
         const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
@@ -114,6 +118,7 @@ export const login = async (req, res) => {
                 email: user.email,
                 role: primaryRole,
                 roles: user.roles || [],
+                permissions: userPermissions,
             },
         });
     } catch (error) {

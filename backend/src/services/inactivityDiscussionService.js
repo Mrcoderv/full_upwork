@@ -16,6 +16,7 @@ import Teacher from "../models/Teacher.js";
 import User from "../models/User.js";
 import AssignmentSubmission from "../models/AssignmentSubmission.js";
 import logger from "../utils/logger.js";
+import NOTIFICATION_TYPES from "../controllers/notificationTypes.js";
 import {
     ACTIVE_ENROLLMENT_STATUSES,
     INACTIVITY_WARNING_DAYS,
@@ -193,7 +194,7 @@ export async function notifyInactivityAction({
     const message = signalSummary ? `${actionText} ${signalSummary}` : actionText;
 
     const existing = await Notification.findOne({
-        type: "inactivity_action",
+        type: NOTIFICATION_TYPES.INACTIVITY_ACTION,
         teacher: teacherId,
         "meta.studentId": studentId,
     });
@@ -209,14 +210,17 @@ export async function notifyInactivityAction({
     }
 
     await Notification.create({
-        type: "inactivity_action",
+        type: NOTIFICATION_TYPES.INACTIVITY_ACTION,
         teacher: teacherId,
         createdByAdmin: adminUserId,
         message,
         meta: {
             teacherId: teacherUserId,
             studentId,
-            url: `/student/${studentId}`,
+            studentName,
+            // The inactivity report is where the admin can act on this
+            // notification (warning email / avbrott buttons).
+            url: "/admin/inactivity",
         },
         resolved: false,
         resolvedByUsers: [],

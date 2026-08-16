@@ -19,6 +19,10 @@ import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import Course from "../../src/models/Course.js";
 import CourseInstance from "../../src/models/CourseInstance.js";
 import Notification from "../../src/models/Notification.js";
+import ExamAttendance from "../../src/models/ExamAttendance.js";
+import Provning from "../../src/models/Provning.js";
+import Conversation from "../../src/models/Conversation.js";
+import Message from "../../src/models/Message.js";
 
 describe("inactivityScanner", () => {
     beforeAll(async () => {
@@ -53,6 +57,10 @@ describe("inactivityScanner", () => {
             Course.deleteMany({}),
             CourseInstance.deleteMany({}),
             Notification.deleteMany({}),
+            ExamAttendance.deleteMany({}),
+            Provning.deleteMany({}),
+            Conversation.deleteMany({}),
+            Message.deleteMany({}),
         ]);
 
         teacherUser = await User.create({
@@ -192,5 +200,97 @@ describe("inactivityScanner", () => {
             warned: 1,
         });
         expect(getLastScanSummary().lastScanAt).toBeInstanceOf(Date);
+    });
+
+    it("auto-withdraws once the warned withdrawal date has passed without activity", async () => {
+        const { student } = await enrollStudent({ lastLoginDaysAgo: 20 });
+
+        // Simulate a warning sent 10 days ago (deadline already past).
+        await Student.updateOne(
+            { _id: student._id },
+            {
+                $push: {
+                    changeHistory: {
+                        timestamp: daysAgo(10),
+                        changedBy: null,
+                        changedByRole: "system",
+                        changes: ["inactivity_warning_email", "auto"],
+                        newValues: { withdrawalDate: daysAgo(5) },
+                    },
+                },
+            }
+        );
+
+        const summary = await runInactivityScan({ today });
+
+        expect(summary.autoWithdrawn).toBe(1);
+        expect(summary.withdrawPending).toBe(0);
+
+        const reloaded = await Student.findById(student._id).lean();
+        expect(reloaded.dropout).toBe(true);
+        const markers = reloaded.changeHistory
+            .filter((e) => e.changes?.includes("inactivity_auto_withdraw"))
+            .map((e) => e.changedByRole);
+        expect(markers).toContain("system");
+
+        const enrollments = await StudentEnrollment.find({ studentId: student._id }).lean();
+        expect(enrollments.length).toBeGreaterThan(0);
+        expect(enrollments.every((e) => e.status === "dropped")).toBe(true);
+    });
+
+    it("does not auto-withdraw before the warned withdrawal date", async () => {
+        const { student } = await enrollStudent({ lastLoginDaysAgo: 20 });
+
+        await Student.updateOne(
+            { _id: student._id },
+            {
+                $push: {
+                    changeHistory: {
+                        timestamp: today,
+                        changedBy: null,
+                        changedByRole: "system",
+                        changes: ["inactivity_warning_email", "auto"],
+                        newValues: { withdrawalDate: new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000) },
+                    },
+                },
+            }
+        );
+
+        const summary = await runInactivityScan({ today });
+
+        expect(summary.autoWithdrawn).toBe(0);
+        expect(summary.withdrawPending).toBe(1);
+        expect((await Student.findById(student._id).lean()).dropout).toBeFalsy();
+    });
+
+    it("does not auto-withdraw students who resumed activity", async () => {
+        const { student } = await enrollStudent({ lastLoginDaysAgo: 20 });
+
+        await Student.updateOne(
+            { _id: student._id },
+            {
+                $push: {
+                    changeHistory: {
+                        timestamp: daysAgo(10),
+                        changedBy: null,
+                        changedByRole: "system",
+                        changes: ["inactivity_warning_email", "auto"],
+                        newValues: { withdrawalDate: daysAgo(5) },
+                    },
+                },
+            }
+        );
+
+        // Student logged in again 2 days ago — mustWithdraw flips off.
+        await User.updateOne(
+            { email: "auto@elev.se" },
+            { lastLoginAt: daysAgo(2) }
+        );
+
+        const summary = await runInactivityScan({ today });
+
+        expect(summary.autoWithdrawn).toBe(0);
+        expect(summary.withdrawPending).toBe(0);
+        expect((await Student.findById(student._id).lean()).dropout).toBeFalsy();
     });
 });

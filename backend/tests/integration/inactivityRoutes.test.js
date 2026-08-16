@@ -494,4 +494,145 @@ describe("Inactivity Report Routes Integration Tests", () => {
             expect(dropoutNotification).toBeTruthy();
         });
     });
+
+    describe("Notification action (P0)", () => {
+        let teacherUser;
+        let teacher;
+        let adminUser;
+
+        const createInactivityNotification = async () => {
+            const notification = await Notification.create({
+                type: "inactivity_action",
+                teacher: teacher._id,
+                message: "Varningsmail om inaktivitet har skickats",
+                meta: { studentId: studentA._id },
+                createdByAdmin: adminUser._id,
+            });
+            return notification;
+        };
+
+        beforeEach(async () => {
+            teacherUser = await User.create({
+                email: "action-larare@mindful.se",
+                password: "hashed-placeholder",
+                roles: ["teacher"],
+            });
+            teacher = await Teacher.create({
+                userId: teacherUser._id,
+                subject: "Matematik",
+            });
+            adminUser = await User.create({
+                email: "action-admin@mindful.se",
+                password: "hashed-placeholder",
+                roles: ["admin"],
+            });
+            await StudentEnrollment.updateOne(
+                { studentId: studentA._id, status: "active" },
+                { $set: { teacherId: teacher._id } }
+            );
+        });
+
+        it("requires authentication", async () => {
+            const notification = await createInactivityNotification();
+            await request(app)
+                .post(`/api/inactivity/notifications/${notification._id}/action`)
+                .send({ action: "warning" })
+                .expect(401);
+        });
+
+        it("rejects student tokens", async () => {
+            const notification = await createInactivityNotification();
+            await request(app)
+                .post(`/api/inactivity/notifications/${notification._id}/action`)
+                .set(buildAuthHeader("student"))
+                .send({ action: "warning" })
+                .expect(403);
+        });
+
+        it("rejects an invalid action", async () => {
+            const notification = await createInactivityNotification();
+            const res = await request(app)
+                .post(`/api/inactivity/notifications/${notification._id}/action`)
+                .set(buildAuthHeader("admin"))
+                .send({ action: "spam" })
+                .expect(400);
+            expect(res.body.error).toContain("action");
+        });
+
+        it("returns 404 for an unknown notification", async () => {
+            await request(app)
+                .post(`/api/inactivity/notifications/${new mongoose.Types.ObjectId()}/action`)
+                .set(buildAuthHeader("admin"))
+                .send({ action: "warning" })
+                .expect(404);
+        });
+
+        it("rejects notifications that are not inactivity notifications", async () => {
+            const other = await Notification.create({
+                type: "dropout",
+                teacher: teacher._id,
+                message: "hej",
+                meta: { studentId: studentA._id },
+                createdByAdmin: adminUser._id,
+            });
+            const res = await request(app)
+                .post(`/api/inactivity/notifications/${other._id}/action`)
+                .set(buildAuthHeader("admin"))
+                .send({ action: "warning" })
+                .expect(400);
+            expect(res.body.error).toContain("inactivity");
+        });
+
+        it("sends a warning email and resolves the notification for the admin", async () => {
+            const notification = await createInactivityNotification();
+
+            const res = await request(app)
+                .post(`/api/inactivity/notifications/${notification._id}/action`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .send({ action: "warning" })
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            expect(res.body.action).toBe("warning");
+            expect(res.body.warning.warningSentAt).toBeTruthy();
+            expect(res.body.warning.withdrawalDate).toBeTruthy();
+
+            const reloaded = await Notification.findById(notification._id).lean();
+            expect(reloaded.resolvedByUsers.map((u) => u.toString())).toContain(
+                adminUser._id.toString()
+            );
+
+            const student = await Student.findById(studentA._id).lean();
+            const warningEntry = student.changeHistory.find((e) =>
+                e.changes.includes("inactivity_warning_email")
+            );
+            expect(warningEntry).toBeTruthy();
+            expect(warningEntry.changedByRole).toBe("admin");
+            expect(warningEntry.changedBy.toString()).toBe(adminUser._id.toString());
+        });
+
+        it("withdraws the student through the cascade and resolves the notification", async () => {
+            const notification = await createInactivityNotification();
+
+            const res = await request(app)
+                .post(`/api/inactivity/notifications/${notification._id}/action`)
+                .set(buildAuthHeader("admin", adminUser._id.toString()))
+                .send({ action: "withdraw" })
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            expect(res.body.action).toBe("withdraw");
+
+            const student = await Student.findById(studentA._id).lean();
+            expect(student.dropout).toBe(true);
+
+            const enrollments = await StudentEnrollment.find({ studentId: studentA._id }).lean();
+            expect(enrollments.every((e) => e.status === "dropped")).toBe(true);
+
+            const reloaded = await Notification.findById(notification._id).lean();
+            expect(reloaded.resolvedByUsers.map((u) => u.toString())).toContain(
+                adminUser._id.toString()
+            );
+        });
+    });
 });

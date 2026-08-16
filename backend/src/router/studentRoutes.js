@@ -23,6 +23,10 @@ import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
 import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
 import { maybeSendLarteametEmail, getStudentMunicipality, SOLLENTUNA_MUNICIPALITY } from "../services/emailService.js";
+import {
+    performStudentDropout,
+    removeStudentDropoutRecord,
+} from "../services/dropoutService.js";
 
 const router = Router();
 
@@ -1021,7 +1025,6 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
         "exam",
         "teacher",
         "teacherId",
-        "dropout",
         "attendedExam",
         "paidExamFee",
         "startDate",
@@ -1042,6 +1045,11 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
             updates[field] = req.body[field];
         }
     }
+
+    // dropout is handled explicitly below through the avbrott cascade so the
+    // flag is never written in isolation (bypassing enrollment/calendar/APL
+    // side effects). Removing it from `updates` keeps findByIdAndUpdate clean.
+    const dropoutRequested = req.body.dropout !== undefined ? !!req.body.dropout : null;
 
     if (
         req.body.municipality &&
@@ -1165,6 +1173,29 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
             }
         }
 
+        // Handle dropout toggle through the shared avbrott cascade so that
+        // enrollments, slutprovslista, APL visibility, notifications and the
+        // discussion thread stay consistent (see dropoutService.js).
+        let dropoutActionResult = null;
+        if (dropoutRequested !== null) {
+            if (dropoutRequested && !student.dropout) {
+                dropoutActionResult = await performStudentDropout({
+                    studentId: student._id,
+                    userId: req.user?.userId || null,
+                    role: req.user?.role || "system",
+                    reason: "Avbrott via elevkort (redigering)",
+                });
+                student.dropout = true;
+            } else if (!dropoutRequested && student.dropout) {
+                dropoutActionResult = await removeStudentDropoutRecord({
+                    studentId: student._id,
+                    userId: req.user?.userId || null,
+                    role: req.user?.role || "system",
+                });
+                student.dropout = false;
+            }
+        }
+
         const updatedStudent = await Student.findByIdAndUpdate(
             req.params.id,
             { $set: updates },
@@ -1220,6 +1251,12 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
         const responseData = {
             ...updatedStudent.toObject(),
             education: enrollmentEducation,
+            ...(dropoutActionResult ? { dropoutAction: {
+                performed: true,
+                droppedEnrollments: dropoutActionResult.droppedEnrollments ?? 0,
+                conversationId: dropoutActionResult.conversationId ?? null,
+                wasDropout: dropoutActionResult.wasDropout,
+            } } : {}),
         };
 
         res.status(200).json(responseData);

@@ -5,8 +5,8 @@ export const messagingApi = {
     return client.get('/conversations')
   },
 
-  getMessages(conversationId) {
-    return client.get(`/conversations/${conversationId}/messages`)
+  getMessages(conversationId, params = {}) {
+    return client.get(`/conversations/${conversationId}/messages`, { params })
   },
 
   sendMessage(data) {
@@ -21,8 +21,8 @@ export const messagingApi = {
     return client.get('/unread-count')
   },
 
-  getRecipients() {
-    return client.get('/recipients')
+  getRecipients(params = {}) {
+    return client.get('/recipients', { params })
   },
 }
 

@@ -178,6 +178,10 @@ const StudentSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+StudentSchema.index({ dropout: 1 });
+StudentSchema.index({ name: 1, personalNumber: 1 });
+StudentSchema.index({ name: "text", email: "text" });
+
 const municipalityPath = StudentSchema.path("municipality");
 if (municipalityPath?.set) {
     municipalityPath.set((value) => {

@@ -1,6 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import mongoose from "mongoose";
 import { validateParticipants, dispatchMessageEmailCopies } from "../services/messagingService.js";
 import logger from "../utils/logger.js";
 
@@ -9,8 +10,19 @@ import logger from "../utils/logger.js";
 // (plain-object mocks and legacy flows).
 const getCurrentUserId = (req) => req.userId || req.user?.userId || req.user?._id || req.user?.id;
 
+// Aggregation pipelines do NOT schema-cast query values, so a string userId
+// must be converted to an ObjectId before matching against _id/readBy.userId.
+const toObjectId = (value) =>
+  typeof value === "string" && mongoose.Types.ObjectId.isValid(value)
+    ? new mongoose.Types.ObjectId(value)
+    : value;
+
 /**
  * Get all conversations for the authenticated user.
+ *
+ * Unread counts and newest-message previews are loaded with two batched
+ * aggregations instead of a per-conversation query pair, so the endpoint stays
+ * O(1) in the number of conversations (important at ~1000+ users).
  */
 export const getConversations = async (req, res) => {
   try {
@@ -23,26 +35,47 @@ export const getConversations = async (req, res) => {
       .populate("studentId", "name personalNumber")
       .sort({ lastMessageAt: -1 });
 
-    // For each conversation, find if there are unread messages for this user
-    const conversationsWithUnread = await Promise.all(
-      conversations.map(async (conv) => {
-        const unreadCount = await Message.countDocuments({
-          conversationId: conv._id,
-          senderId: { $ne: userId },
-          "readBy.userId": { $ne: userId },
-        });
-        
-        const lastMessage = await Message.findOne({ conversationId: conv._id })
-          .sort({ createdAt: -1 })
-          .select("body createdAt senderId");
+    if (conversations.length === 0) {
+      return res.json([]);
+    }
 
-        return {
-          ...conv.toObject(),
-          unreadCount,
-          lastMessage,
-        };
-      })
-    );
+    const conversationIds = conversations.map((c) => c._id);
+    const userIdObjectId = toObjectId(userId);
+
+    // One batched query: unread count per conversation.
+    const unreadRows = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: conversationIds },
+          senderId: { $ne: userIdObjectId },
+          "readBy.userId": { $ne: userIdObjectId },
+        },
+      },
+      { $group: { _id: "$conversationId", count: { $sum: 1 } } },
+    ]);
+
+    // One batched query: the newest message per conversation.
+    const lastRows = await Message.aggregate([
+      { $match: { conversationId: { $in: conversationIds } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$conversationId",
+          body: { $first: "$body" },
+          createdAt: { $first: "$createdAt" },
+          senderId: { $first: "$senderId" },
+        },
+      },
+    ]);
+
+    const unreadByConv = new Map(unreadRows.map((r) => [String(r._id), r.count]));
+    const lastByConv = new Map(lastRows.map((r) => [String(r._id), r]));
+
+    const conversationsWithUnread = conversations.map((conv) => ({
+      ...conv.toObject(),
+      unreadCount: unreadByConv.get(String(conv._id)) || 0,
+      lastMessage: lastByConv.get(String(conv._id)) || null,
+    }));
 
     res.json(conversationsWithUnread);
   } catch (error) {
@@ -53,7 +86,15 @@ export const getConversations = async (req, res) => {
 
 /**
  * Get messages for a specific conversation.
+ *
+ * Keyset-paginated: pass ?before=<oldest loaded message _id> and ?limit=N to
+ * page backwards through long threads. Without any params the newest
+ * DEFAULT_MESSAGE_PAGE_SIZE messages are returned (the full-thread behavior is
+ * removed so a huge thread can never be loaded into memory unboundedly).
  */
+const DEFAULT_MESSAGE_PAGE_SIZE = 50;
+const MAX_MESSAGE_PAGE_SIZE = 200;
+
 export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -68,11 +109,35 @@ export const getMessages = async (req, res) => {
       return res.status(404).json({ message: "Konversationen hittades inte eller så har du inte tillgång till den" });
     }
 
-    const messages = await Message.find({ conversationId })
-      .populate("senderId", "name email roles")
-      .sort({ createdAt: 1 });
+    const limit = Math.min(
+      parseInt(req.query.limit, 10) || DEFAULT_MESSAGE_PAGE_SIZE,
+      MAX_MESSAGE_PAGE_SIZE
+    );
+    const before = req.query.before || null;
 
-    res.json(messages);
+    const query = { conversationId };
+    if (before) {
+      const cursorMessage = await Message.findById(before).select("_id");
+      if (!cursorMessage) {
+        return res.status(400).json({ message: "Ogiltig markör för meddelandehämtning" });
+      }
+      query._id = { $lt: cursorMessage._id };
+    }
+
+    // Fetch limit+1 so we can report whether older messages exist.
+    const page = await Message.find(query)
+      .populate("senderId", "name email roles")
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+
+    const hasMore = page.length > limit;
+    const slice = page.slice(0, limit).reverse();
+
+    res.json({
+      messages: slice,
+      hasMore,
+      nextBefore: hasMore && slice.length > 0 ? String(slice[0]._id) : null,
+    });
   } catch (error) {
     logger.error({ err: error, conversationId: req.params.conversationId }, "Error fetching messages");
     res.status(500).json({ message: "Internt serverfel vid hämtning av meddelanden" });
@@ -218,6 +283,8 @@ export const getUnreadCount = async (req, res) => {
 
 /**
  * Get available recipients for the authenticated user based on RBAC rules.
+ * Accepts an optional ?search= term that filters server-side by name/email so
+ * the dropdown stays responsive at ~1000+ users.
  */
 export const getRecipients = async (req, res) => {
   try {
@@ -235,6 +302,14 @@ export const getRecipients = async (req, res) => {
       query.roles = { $in: staffRoles };
     } else {
       query.roles = { $in: staffRoles };
+    }
+
+    const search = (req.query?.search || "").trim();
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
     }
 
     const recipients = await User.find(query).select("name email roles").sort({ name: 1 });

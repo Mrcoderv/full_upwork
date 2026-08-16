@@ -17,6 +17,17 @@
         varningsmail.
       </div>
 
+      <!-- Scan controls (admin) -->
+      <div v-if="isAdmin" class="scan-section">
+        <button class="btn btn-primary btn-sm" :disabled="scanning" @click="runScan">
+          {{ scanning ? 'Kör skanning...' : 'Kör inaktivitets-skanning' }}
+        </button>
+        <span v-if="scanStatus" class="scan-status">
+          Senaste skanning: {{ formatDate(scanStatus.lastScanAt) }} — varnade: {{ scanStatus.warned }},
+          auto-avbrott: {{ scanStatus.autoWithdrawn }}
+        </span>
+      </div>
+
       <!-- Error message -->
       <div v-if="errorMessage" class="alert alert-danger">
         {{ errorMessage }}
@@ -200,6 +211,8 @@ const thresholds = ref({ withdrawDays: 5, warningDays: 14 })
 const sendingWarningFor = ref(null)
 const withdrawStudent = ref(null)
 const withdrawing = ref(false)
+const scanning = ref(false)
+const scanStatus = ref(null)
 
 const isAdmin = computed(() => store.getters.isAdmin)
 
@@ -233,6 +246,30 @@ async function loadReport() {
     errorMessage.value = error.response?.data?.error || 'Kunde inte hämta inaktivitetsrapporten'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadScanStatus() {
+  try {
+    const response = await axios.get('/api/inactivity/scan-status')
+    scanStatus.value = response.data?.lastScan || null
+  } catch {
+    scanStatus.value = null
+  }
+}
+
+async function runScan() {
+  scanning.value = true
+  errorMessage.value = ''
+  try {
+    await axios.post('/api/inactivity/scan')
+    toast.success('Skanning klar')
+    await loadReport()
+    await loadScanStatus()
+  } catch (error) {
+    toast.error(error.response?.data?.error || 'Kunde inte köra skanningen')
+  } finally {
+    scanning.value = false
   }
 }
 
@@ -302,7 +339,10 @@ async function confirmWithdraw() {
   }
 }
 
-onMounted(loadReport)
+onMounted(() => {
+  loadReport()
+  if (isAdmin.value) loadScanStatus()
+})
 </script>
 
 <style scoped>
@@ -318,6 +358,19 @@ onMounted(loadReport)
   font-size: 0.9rem;
   color: #6b5b1e;
   margin-bottom: 16px;
+}
+
+.scan-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.scan-status {
+  font-size: 0.85rem;
+  color: #555;
 }
 
 .summary-cards {

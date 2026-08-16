@@ -305,6 +305,30 @@ class CourseMatchingService {
             errors: [],
         };
 
+        // Re-registration revival (Etapp 1): a dropout student who is given new
+        // education entries is active again. Clear the dropout flag and reset
+        // the inactivity warning markers so the new period starts fresh and the
+        // student reappears on active lists. See dropoutService.reactivateStudent.
+        try {
+            const { default: Student } = await import("../models/Student.js");
+            const { reactivateStudent } = await import(
+                "../services/dropoutService.js"
+            );
+            const studentDoc = await Student.findById(studentId);
+            if (studentDoc) {
+                await reactivateStudent({
+                    studentDoc,
+                    userId,
+                    role: userId ? "system" : "system",
+                });
+            }
+        } catch (reactivateError) {
+            logger.error(
+                { err: reactivateError, studentId },
+                "Failed to reactivate student during education processing"
+            );
+        }
+
         logger.debug({ educationCount: educationEntries.length, studentId }, "Processing education entries for student");
 
         // Deduplicate missing package errors

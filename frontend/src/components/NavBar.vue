@@ -390,6 +390,22 @@
                 <span class="notis-message">{{ notification.message }}</span>
               </div>
               <div class="notis-actions">
+                <template v-if="isAdmin && notification.type === 'inactivity_action'">
+                  <button
+                    class="action-btn action-warn"
+                    :disabled="busyNotificationId === notification._id"
+                    @click.stop="performInactivityAction(notification, 'warning')"
+                  >
+                    {{ busyNotificationId === notification._id ? 'Skickar...' : 'Varningsmail' }}
+                  </button>
+                  <button
+                    class="action-btn action-withdraw"
+                    :disabled="busyNotificationId === notification._id"
+                    @click.stop="performInactivityAction(notification, 'withdraw')"
+                  >
+                    Avsluta
+                  </button>
+                </template>
                 <button @click="resolveNote(notification._id)" class="resolve-btn">
                   Markera som löst
                 </button>
@@ -556,6 +572,29 @@
           await fetchNotifications()
         } catch {
           toast.error('Kunde inte avsluta notisen.')
+        }
+      }
+
+      const busyNotificationId = ref(null)
+
+      const performInactivityAction = async (notification, action) => {
+        busyNotificationId.value = notification._id
+        try {
+          await client.post(`/inactivity/notifications/${notification._id}/action`, {
+            action,
+          })
+          const label = action === 'warning' ? 'Varningsmail skickat' : 'Eleven avslutades'
+          toast.success(label)
+          await fetchNotifications()
+        } catch (error) {
+          toast.error(
+            error.response?.data?.error ||
+              (action === 'warning'
+                ? 'Kunde inte skicka varningsmail'
+                : 'Kunde inte avsluta eleven')
+          )
+        } finally {
+          busyNotificationId.value = null
         }
       }
 
@@ -1334,6 +1373,38 @@
   .notis-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    color: white;
+  }
+
+  .action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .action-warn {
+    background: #f59e0b;
+  }
+
+  .action-warn:hover {
+    background: #d97706;
+  }
+
+  .action-withdraw {
+    background: #dc2626;
+  }
+
+  .action-withdraw:hover {
+    background: #b91c1c;
   }
 
   .resolve-btn,

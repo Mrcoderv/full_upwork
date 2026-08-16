@@ -7,6 +7,7 @@ import {
     sendInactivityWarning,
     runInactivityScanHandler,
     getInactivityScanStatus,
+    performInactivityNotificationAction,
 } from "../controllers/inactivityController.js";
 
 const router = Router();
@@ -37,6 +38,14 @@ router.post(
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
     asyncHandler(sendInactivityWarning)
+);
+
+// Admin acts on an inactivity notification directly: warning email or avbrott.
+router.post(
+    "/notifications/:notificationId/action",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(performInactivityNotificationAction)
 );
 
 export default router;

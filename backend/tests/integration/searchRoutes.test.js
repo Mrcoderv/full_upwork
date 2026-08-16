@@ -28,13 +28,23 @@ import {
 const mockAuthenticateUser = vi.hoisted(() => (req, _res, next) => {
     const roleHeader = req.headers["x-test-role"];
     const userHeader = req.headers["x-test-userid"];
+    const permissionsHeader = req.headers["x-test-permissions"];
     const role = Array.isArray(roleHeader) ? roleHeader[0] : roleHeader;
     const userId = Array.isArray(userHeader) ? userHeader[0] : userHeader;
+    let permissions = {};
+    if (permissionsHeader) {
+        try {
+            permissions = JSON.parse(permissionsHeader);
+        } catch (_err) {
+            permissions = {};
+        }
+    }
 
     req.user = {
         role: role || "admin",
         roles: role ? [role] : ["admin"],
         userId: userId || "test-user",
+        permissions,
     };
     req.userId = req.user.userId;
     next();
@@ -234,6 +244,30 @@ describe("Search Routes", () => {
             expect(response.body).toEqual({
                 error: "Teacher profile not found",
             });
+        });
+
+        it("returns 403 when a per-user override revokes search access", async () => {
+            const response = await request(searchApp)
+                .get("/api/search")
+                .query({ type: "Användare", q: "ann" })
+                .set("x-test-role", "teacher")
+                .set("x-test-permissions", JSON.stringify({ search_users: false }))
+                .expect(403);
+
+            expect(response.body).toEqual({
+                message: "Forbidden: You do not have the required permission.",
+            });
+        });
+
+        it("allows search when a per-user override explicitly grants access", async () => {
+            const response = await request(searchApp)
+                .get("/api/search")
+                .query({ type: "Användare", q: "ann" })
+                .set("x-test-role", "student")
+                .set("x-test-permissions", JSON.stringify({ search_users: true }))
+                .expect(200);
+
+            expect(Array.isArray(response.body)).toBe(true);
         });
 
         it("rejects invalid date search", async () => {

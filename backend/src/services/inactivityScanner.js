@@ -39,11 +39,15 @@ import {
     safeInactivitySideEffect,
     summarizeInactivitySignal,
 } from "./inactivityDiscussionService.js";
+import { performStudentDropout } from "./dropoutService.js";
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 
 /** Auto-send is on unless explicitly disabled. */
 export const AUTO_WARNING_ENABLED = process.env.INACTIVITY_AUTO_WARNING_ENABLED !== "false";
+
+/** Auto-withdraw is on unless explicitly disabled (default on). */
+export const AUTO_WITHDRAW_ENABLED = process.env.INACTIVITY_AUTO_WITHDRAW_ENABLED !== "false";
 
 const SYSTEM_ROLE = "system";
 
@@ -57,6 +61,23 @@ const hasSentWarning = (student) =>
     (student.changeHistory || []).some(
         (entry) => entry.changes && entry.changes.includes("inactivity_warning_email")
     );
+
+/**
+ * The withdrawal date stated in the student's latest inactivity warning email
+ * (when one has been sent), from the audited change history.
+ * @param {Object} student
+ * @returns {{ warningSentAt: Date|null, warnedWithdrawalDate: Date|null }}
+ */
+export const latestInactivityWarning = (student) => {
+    const entry = (student.changeHistory || [])
+        .filter((item) => item.changes && item.changes.includes("inactivity_warning_email"))
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+    if (!entry) return { warningSentAt: null, warnedWithdrawalDate: null };
+    return {
+        warningSentAt: entry.timestamp,
+        warnedWithdrawalDate: entry.newValues?.withdrawalDate || null,
+    };
+};
 
 /**
  * Load every student currently expected to study, batched, and compute their
@@ -266,15 +287,71 @@ async function warnStudent({ studentId, student, signal, teacherId, teacherUserI
 }
 
 /**
+ * Auto-withdraw a single student whose warning deadline has passed without any
+ * resumed activity. Runs the full avbrott cascade so the student is removed
+ * from slutprovslista/APL/exams and their courses are dropped consistently.
+ * @param {Object} row - an evaluateActiveStudents row.
+ * @returns {Promise<{withdrawn: boolean, reason?: string}>}
+ */
+async function withdrawStudent(row) {
+    const { studentId, student, signal, today } = row;
+    if (!signal.mustWithdraw) {
+        return { withdrawn: false, reason: "activity_resumed" };
+    }
+
+    const { warnedWithdrawalDate } = latestInactivityWarning(student);
+    const due = warnedWithdrawalDate
+        ? warnedWithdrawalDate.getTime() <= today.getTime()
+        : false;
+    if (!due) {
+        return { withdrawn: false, reason: "deadline_not_reached" };
+    }
+
+    const result = await performStudentDropout({
+        studentId,
+        userId: null,
+        role: SYSTEM_ROLE,
+        reason: "Auto-avbrott efter varning utan återupptagen aktivitet (inaktivitet)",
+    });
+    if (!result.success) {
+        return { withdrawn: false, reason: "cascade_failed" };
+    }
+
+    // Audit marker making the automation explicit in the student's history
+    // (the cascade already records a "dropout" entry with changedByRole system).
+    await Student.updateOne(
+        { _id: studentId, "changeHistory.changes": { $nin: ["inactivity_auto_withdraw"] } },
+        {
+            $push: {
+                changeHistory: {
+                    timestamp: new Date(),
+                    changedBy: null,
+                    changedByRole: SYSTEM_ROLE,
+                    changes: ["inactivity_auto_withdraw", "auto"],
+                    newValues: { withdrawalDate: warnedWithdrawalDate, triggeredAt: new Date() },
+                },
+            },
+        }
+    ).catch((error) => logger.warn({ err: error, studentId }, "Failed to record auto-withdraw audit marker"));
+
+    logger.info(
+        { studentId, studentName: student.name, warnedWithdrawalDate },
+        "Auto-withdrew inactive student after warning deadline"
+    );
+    return { withdrawn: true };
+}
+
+/**
  * Run the inactivity automation scan.
  *
  * Batched evaluation over all currently-expected students; sends the warning
  * email to every student past the warning threshold that has not been warned
- * yet. Never throws — failures are collected and reported so a scheduled run
- * cannot crash the process.
+ * yet, and auto-withdraws students whose warned withdrawal date has passed
+ * without resumed activity. Never throws — failures are collected and reported
+ * so a scheduled run cannot crash the process.
  *
  * @param {{ today?: Date, autoSend?: boolean }} [options]
- * @returns {Promise<{ evaluated: number, inactiveForWarning: number, warned: number, alreadyWarned: number, noEmail: number, failed: number, autoSend: boolean, failures: Array<{studentId: string, reason: string}> }>}
+ * @returns {Promise<{ evaluated: number, inactiveForWarning: number, warned: number, alreadyWarned: number, noEmail: number, autoWithdrawn: number, withdrawPending: number, failed: number, autoSend: boolean, autoWithdraw: boolean, failures: Array<{studentId: string, reason: string}> }>}
  */
 export async function runInactivityScan({ today = new Date(), autoSend = AUTO_WARNING_ENABLED } = {}) {
     const summary = {
@@ -283,8 +360,11 @@ export async function runInactivityScan({ today = new Date(), autoSend = AUTO_WA
         warned: 0,
         alreadyWarned: 0,
         noEmail: 0,
+        autoWithdrawn: 0,
+        withdrawPending: 0,
         failed: 0,
         autoSend,
+        autoWithdraw: AUTO_WITHDRAW_ENABLED,
         failures: [],
     };
 
@@ -332,6 +412,29 @@ export async function runInactivityScan({ today = new Date(), autoSend = AUTO_WA
                 summary.failed += 1;
                 summary.failures.push({ studentId, reason: error.message });
                 logger.error({ err: error, studentId }, "Auto inactivity warning failed (non-fatal)");
+            }
+        }
+
+        // Auto-withdraw pass: students whose warning email's stated withdrawal
+        // date has passed without resumed activity. Runs after the warning pass
+        // so a warning sent today schedules the next scan's withdrawal.
+        if (AUTO_WITHDRAW_ENABLED) {
+            for (const row of rows) {
+                const { studentId } = row;
+                try {
+                    if (row.signal.mustWithdraw && hasSentWarning(row.student)) {
+                        const result = await withdrawStudent({ ...row, today });
+                        if (result.withdrawn) {
+                            summary.autoWithdrawn += 1;
+                        } else {
+                            summary.withdrawPending += 1;
+                        }
+                    }
+                } catch (error) {
+                    summary.failed += 1;
+                    summary.failures.push({ studentId, reason: error.message });
+                    logger.error({ err: error, studentId }, "Auto-withdraw failed (non-fatal)");
+                }
             }
         }
     } catch (error) {

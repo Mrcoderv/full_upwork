@@ -17,6 +17,9 @@ const NOTIFICATION_TYPES = {
   
     // 🛑 Avbrott
     DROPOUT: "dropout", // Elev har avbrutit kurs eller paket
+
+    // 📵 Inaktivitet
+    INACTIVITY_ACTION: "inactivity_action", // Lärare/admin hanterar en inaktiv elev
   
     // 📆 Slutprov
     FINAL_EXAM_SOON: "final_exam_soon", // Elev har slutprov inom 14 dagar

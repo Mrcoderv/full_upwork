@@ -4,21 +4,13 @@ import CoursePackage from "../models/CoursePackage.js";
 import Program from "../models/Program.js";
 import User from "../models/User.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
-import CourseInstance from "../models/CourseInstance.js";
-import ExamAttendance from "../models/ExamAttendance.js";
-import Provning from "../models/Provning.js";
-import Teacher from "../models/Teacher.js";
-import Notification from "../models/Notification.js";
-import CalendarEvent from "../models/Event.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
 import {
-    computeLiveInactivitySignal,
-    ensureInactivityDiscussionThread,
-    safeInactivitySideEffect,
-    summarizeInactivitySignal,
-} from "../services/inactivityDiscussionService.js";
+    performStudentDropout,
+    removeStudentDropoutRecord,
+} from "../services/dropoutService.js";
 
 /**
  * Student Details Controller
@@ -509,7 +501,7 @@ export const getChangeHistory = async (req, res) => {
 export const setStudentDropout = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role, userId, name } = req.user;
+        const { role, userId } = req.user;
 
         // Check permissions - admin+ only
         if (!["admin", "systemadmin"].includes(role)) {
@@ -518,399 +510,30 @@ export const setStudentDropout = async (req, res) => {
             });
         }
 
-        const student = await Student.findById(id).populate({
-            path: "teacherId",
-            populate: { path: "userId", select: "_id username email" }
+        const result = await performStudentDropout({
+            studentId: id,
+            userId,
+            role,
+            reason: "Student marked as dropout (Avbrott)",
         });
-        if (!student) {
-            return res.status(404).json({ error: "Student not found" });
-        }
-        
-        logger.debug({ name: student.name, id }, "Student fetched");
-        logger.debug({ teacherId: student.teacherId }, "Student teacherId");
-        logger.debug({ teacher: student.teacher }, "Student teacher string");
-
-        // If already dropout, we still need to ensure notification exists
-        // (in case it was deleted or teacher changed)
-        const wasAlreadyDropout = student.dropout;
-        if (wasAlreadyDropout) {
-            logger.info({ name: student.name }, "Student already marked as dropout, checking notification");
-        }
-
-        // Set dropout flag (only if not already set)
-        if (!student.dropout) {
-            student.dropout = true;
-        }
-
-        // Log the change (only if dropout was actually changed)
-        if (!wasAlreadyDropout) {
-            const changeLog = {
-                timestamp: new Date(),
-                changedBy: userId,
-                changedByRole: role,
-                changes: ["dropout"],
-                previousValues: { dropout: false },
-                newValues: { dropout: true },
-            };
-
-            if (!student.changeHistory) {
-                student.changeHistory = [];
-            }
-            student.changeHistory.push(changeLog);
-        }
-
-        // Save student (even if already dropout, to ensure data is fresh)
-        await student.save();
-
-        // Snapshot the live inactivity signal before the cascade drops the
-        // enrollments, so the teacher discussion thread can show the status
-        // that triggered the withdrawal.
-        let dropoutSignalSummary = "";
-        await safeInactivitySideEffect(async () => {
-            const signal = await computeLiveInactivitySignal({
-                studentId: student._id.toString(),
-                email: student.email,
-            });
-            if (signal) {
-                dropoutSignalSummary = summarizeInactivitySignal(signal, student.name);
-            }
-            return null;
-        }, "inactivity_signal_snapshot_for_dropout");
-
-        // Cascade dropout to enrollments: flip every non-terminal enrollment to "dropped"
-        // so the course-instance participant list automatically reflects the withdrawal.
-        // "completed" and "dropped" enrollments are left untouched.
-        let droppedEnrollments = 0;
-        try {
-            const enrollmentsToDrop = await StudentEnrollment.find({
-                studentId: student._id,
-                status: {
-                    $in: ["enrolled", "active", "inactive", "suspended", "reviderad"],
-                },
-            });
-            for (const enrollment of enrollmentsToDrop) {
-                await enrollment.changeStatus(
-                    "dropped",
-                    "Student marked as dropout (Avbrott)",
-                    null,
-                    userId
-                );
-                droppedEnrollments++;
-            }
-            if (droppedEnrollments > 0) {
-                logger.info(
-                    { count: droppedEnrollments, name: student.name },
-                    "Cascaded dropout to enrollments"
-                );
-            }
-        } catch (cascadeError) {
-            logger.error(
-                { err: cascadeError, name: student.name },
-                "Error cascading dropout to enrollments"
-            );
-        }
-
-        // Remove from APL lists (by excluding from APL queries - handled automatically)
-        // The APL board already filters by excluding dropout students
-
-        // Find all ExamAttendance records for this student (all dates, not just future)
-        // Convert id to ObjectId to ensure proper matching
-        const studentObjectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
-        const allExamAttendance = await ExamAttendance.find({ studentId: studentObjectId });
-        logger.debug({ count: allExamAttendance.length, name: student.name, id }, "Found exam attendance records");
-        if (allExamAttendance.length > 0) {
-            logger.debug({ records: allExamAttendance.map(a => ({
-                _id: a._id,
-                examDate: a.examDate,
-                teacherId: a.teacherId,
-                courseId: a.courseId,
-                studentId: a.studentId
-            })) }, "Exam attendance records details");
-        }
-
-        // Group exams by examDate (normalized to start of day) + teacherId + courseId to identify which exams they belong to
-        const examGroups = new Map();
-        for (const attendance of allExamAttendance) {
-            // Normalize examDate to start of day for proper grouping
-            const examDateStart = new Date(attendance.examDate);
-            examDateStart.setHours(0, 0, 0, 0);
-            const examDateEnd = new Date(examDateStart);
-            examDateEnd.setHours(23, 59, 59, 999);
-            
-            const examKey = `${examDateStart.toISOString()}_${attendance.teacherId}_${attendance.courseId || 'null'}`;
-            if (!examGroups.has(examKey)) {
-                examGroups.set(examKey, {
-                    examDateStart,
-                    examDateEnd,
-                    teacherId: attendance.teacherId,
-                    courseId: attendance.courseId,
-                    attendanceRecords: []
-                });
-            }
-            examGroups.get(examKey).attendanceRecords.push(attendance._id);
-        }
-
-        // Delete all ExamAttendance records for this student
-        const deletedExamAttendance = await ExamAttendance.deleteMany({
-            studentId: studentObjectId,
-        });
-        logger.info({ count: deletedExamAttendance.deletedCount, name: student.name, id }, "Deleted exam attendance records");
-        // Verify deletion by checking if any records remain
-        const remainingRecords = await ExamAttendance.countDocuments({ studentId: studentObjectId });
-        if (remainingRecords > 0) {
-            logger.warn({ remainingRecords, name: student.name }, "Exam attendance records still exist after deletion");
-        } else {
-            logger.info({ name: student.name }, "Verified: No exam attendance records remain");
-        }
-
-        // Check each exam group - if no students remain, delete the entire exam
-        let deletedEmptyExams = 0;
-        for (const [examKey, examGroup] of examGroups.entries()) {
-            // Build query for this exam group (using date range to match all records on the same day)
-            const examQuery = {
-                $and: [
-                    {
-                        examDate: {
-                            $gte: examGroup.examDateStart,
-                            $lte: examGroup.examDateEnd
-                        }
-                    },
-                    { teacherId: examGroup.teacherId }
-                ]
-            };
-            
-            // Handle courseId - if it's null/undefined, match records where courseId is null or doesn't exist
-            if (examGroup.courseId) {
-                examQuery.$and.push({ courseId: examGroup.courseId });
-            } else {
-                examQuery.$and.push({
-                    $or: [
-                        { courseId: null },
-                        { courseId: { $exists: false } }
-                    ]
-                });
-            }
-
-            // Check if there are any remaining students in this exam
-            const remainingStudents = await ExamAttendance.countDocuments(examQuery);
-
-            if (remainingStudents === 0) {
-                // No students left in this exam, delete all records (should already be deleted, but double-check)
-                const deleted = await ExamAttendance.deleteMany(examQuery);
-                deletedEmptyExams++;
-                logger.info({ examKey, count: deleted.deletedCount }, "Deleted empty exam group");
-            }
-        }
-
-        // Remove from Provning (exam registrations) - delete ALL records regardless of status
-        const deletedProvning = await Provning.deleteMany({
-            studentId: studentObjectId,
-        });
-        logger.info({ count: deletedProvning.deletedCount, name: student.name }, "Deleted exam registrations (Provning)");
-
-        // Remove the student from persisted calendar slutprov events and delete now-empty events.
-        // This makes the removal durable so the student no longer appears on the slutprov list
-        // even in stored calendar events (the read endpoints also filter by dropout as a safety net).
-        let removedFromEvents = 0;
-        let deletedEmptyEvents = 0;
-        try {
-            const pullResult = await CalendarEvent.updateMany(
-                {
-                    "extendedProps.type": "slutprov",
-                    "extendedProps.students._id": studentObjectId,
-                },
-                { $pull: { "extendedProps.students": { _id: studentObjectId } } }
-            );
-            removedFromEvents = pullResult.modifiedCount || 0;
-            logger.info({ count: removedFromEvents, name: student.name }, "Removed dropout student from persisted calendar events");
-
-            const emptyEvents = await CalendarEvent.find({
-                "extendedProps.type": "slutprov",
-                $or: [
-                    { "extendedProps.students": { $size: 0 } },
-                    { "extendedProps.students": { $exists: false } },
-                    { "extendedProps.students": null },
-                ],
-            }).select("_id");
-
-            if (emptyEvents.length > 0) {
-                const deleteResult = await CalendarEvent.deleteMany({
-                    _id: { $in: emptyEvents.map((e) => e._id) },
-                });
-                deletedEmptyEvents = deleteResult.deletedCount || 0;
-                logger.info({ count: deletedEmptyEvents, name: student.name }, "Deleted empty calendar events after dropout");
-            }
-        } catch (eventError) {
-            logger.error({ err: eventError, name: student.name }, "Error cleaning up calendar events for dropout student");
-        }
-
-        // Send notification to responsible teacher
-        let teacherRecord = null;
-        let teacherUserId = null;
-        
-        logger.debug({ name: student.name, id }, "Looking for teacher for student");
-        logger.debug({ teacherId: student.teacherId }, "Student teacherId");
-        logger.debug({ teacher: student.teacher }, "Student teacher string");
-        
-        if (student.teacherId) {
-            // If teacherId is populated (as object), use it directly
-            if (student.teacherId._id) {
-                teacherRecord = student.teacherId;
-                logger.debug({ teacherRecordId: teacherRecord._id }, "Found populated teacherId");
-            } else {
-                // If teacherId is just an ObjectId, fetch the teacher
-                teacherRecord = await Teacher.findById(student.teacherId);
-                logger.debug({ teacherRecordId: teacherRecord ? teacherRecord._id : 'NOT FOUND' }, "Fetched teacher by ID");
-            }
-            
-            if (teacherRecord) {
-                // Get the userId from the teacher record
-                if (teacherRecord.userId) {
-                    // userId might be ObjectId or populated object
-                    teacherUserId = teacherRecord.userId._id || teacherRecord.userId;
-                    logger.debug({ teacherUserId }, "Found userId from teacher record");
-                } else {
-                    // If userId is not populated, fetch it
-                    const populatedTeacher = await Teacher.findById(teacherRecord._id).populate("userId");
-                    if (populatedTeacher && populatedTeacher.userId) {
-                        teacherUserId = populatedTeacher.userId._id || populatedTeacher.userId;
-                        logger.debug({ teacherUserId }, "Found userId after populate");
-                    } else {
-                        logger.warn({ teacherRecordId: teacherRecord._id }, "Could not find userId for teacher");
-                    }
-                }
-            }
-        } else if (student.teacher && typeof student.teacher === "string") {
-            // Try to find teacher by name string
-            logger.debug({ name: student.teacher }, "Looking for teacher by name");
-            const teacherUser = await User.findOne({ name: student.teacher });
-            if (teacherUser) {
-                logger.debug({ userId: teacherUser._id }, "Found user by name");
-                // Find the Teacher record for this user
-                teacherRecord = await Teacher.findOne({ userId: teacherUser._id });
-                if (teacherRecord) {
-                    teacherUserId = teacherUser._id;
-                    logger.debug({ teacherRecordId: teacherRecord._id }, "Found Teacher record for user");
-                } else {
-                    logger.warn({ userId: teacherUser._id }, "No Teacher record found for user");
-                }
-            } else {
-                logger.warn({ name: student.teacher }, "No user found with name");
-            }
-        } else {
-            logger.warn({ name: student.name }, "No teacherId or teacher name found for student");
-        }
-
-        if (teacherRecord && teacherRecord._id) {
-            logger.debug({ teacherRecordId: teacherRecord._id, teacherUserId }, "Creating notification for teacher");
-            logger.debug({
-                teacherRecordId: teacherRecord._id.toString(),
-                teacherUserId: teacherUserId ? teacherUserId.toString() : 'MISSING',
-                studentId: id,
-            }, "Notification details");
-            
-            // Check if notification already exists (regardless of resolution status)
-            // We want to prevent duplicates, not check if it's resolved
-            const existingNotification = await Notification.findOne({
-                type: "dropout",
-                teacher: teacherRecord._id,
-                "meta.studentId": id,
-            });
-
-            logger.debug("Checking for existing notification");
-            logger.debug({
-                teacher: teacherRecord._id.toString(),
-                studentId: id,
-                existingNotificationId: existingNotification ? existingNotification._id : 'NONE',
-            }, "Notification query details");
-
-            if (!existingNotification) {
-                // Ensure teacher._id is properly converted to ObjectId
-                const teacherObjectId = mongoose.Types.ObjectId.isValid(teacherRecord._id)
-                    ? new mongoose.Types.ObjectId(teacherRecord._id)
-                    : teacherRecord._id;
-                
-                const notification = new Notification({
-                    type: "dropout",
-                    teacher: teacherObjectId, // Store Teacher._id for query matching
-                    createdByAdmin: userId, // Store the admin who created this notification
-                    message: `Eleven ${student.name} har markerats som avbrott (inaktiv).`,
-                    meta: {
-                        teacherId: teacherUserId, // Store User._id for reference
-                        studentId: id,
-                        url: `/student/${id}`,
-                    },
-                    resolved: false,
-                    resolvedByUsers: [], // Initialize empty array for per-user resolution
-                });
-                await notification.save();
-                logger.info({ notificationId: notification._id }, "Created dropout notification");
-                logger.debug({
-                    notificationTeacher: notification.teacher ? notification.teacher.toString() : 'MISSING',
-                    notificationMetaTeacherId: notification.meta.teacherId ? notification.meta.teacherId.toString() : 'MISSING',
-                    notificationMetaStudentId: notification.meta.studentId ? notification.meta.studentId.toString() : 'MISSING',
-                    notificationType: notification.type,
-                    notificationResolved: notification.resolved,
-                }, "Notification details");
-                
-                // Verify the notification was saved correctly
-                const verifyNotification = await Notification.findById(notification._id);
-                logger.debug({
-                    _id: verifyNotification._id.toString(),
-                    type: verifyNotification.type,
-                    teacher: verifyNotification.teacher ? verifyNotification.teacher.toString() : 'MISSING',
-                    metaTeacherId: verifyNotification.meta?.teacherId ? verifyNotification.meta.teacherId.toString() : 'MISSING',
-                    metaStudentId: verifyNotification.meta?.studentId ? verifyNotification.meta.studentId.toString() : 'MISSING',
-                    resolved: verifyNotification.resolved,
-                }, "Verification - Saved notification");
-            } else {
-                // Notification already exists - reset resolvedByUsers so all users see it again
-                logger.info({ notificationId: existingNotification._id }, "Dropout notification already exists");
-                logger.debug({
-                    existingTeacher: existingNotification.teacher ? existingNotification.teacher.toString() : 'MISSING',
-                    existingMetaTeacherId: existingNotification.meta?.teacherId ? existingNotification.meta.teacherId.toString() : 'MISSING',
-                    resolvedByUsers: existingNotification.resolvedByUsers ? existingNotification.resolvedByUsers.map(id => id.toString()) : 'MISSING',
-                }, "Existing notification details");
-                
-                // Reset resolvedByUsers so all users see the notification again
-                // Also update createdByAdmin to the current admin
-                existingNotification.resolvedByUsers = [];
-                existingNotification.resolved = false; // Also reset legacy field
-                existingNotification.createdByAdmin = userId; // Update to current admin
-                await existingNotification.save();
-                logger.info({ notificationId: existingNotification._id, userId }, "Reset notification - cleared resolvedByUsers and updated createdByAdmin");
-            }
-        } else {
-            logger.warn({ name: student.name }, "No teacher found for student, skipping notification");
-            logger.debug({ teacherRecord, teacherUserId }, "Teacher lookup details");
-        }
-
-        const thread = await safeInactivitySideEffect(async () => {
-            if (!teacherUserId) return null;
-            return ensureInactivityDiscussionThread({
-                studentId: id,
-                adminUserId: userId,
-                teacherUserId,
-                studentName: student.name,
-                actionLabel: "Eleven har avslutats (avbrott) på grund av inaktivitet",
-                signalSummary: dropoutSignalSummary,
-            });
-        }, "inactivity_discussion_thread_for_dropout");
 
         res.json({
-            success: true,
+            success: result.success,
             message: "Student marked as dropout successfully",
-            student,
-            conversationId: thread?._id?.toString() || null,
-            deletedExamAttendance: deletedExamAttendance.deletedCount,
-            deletedProvning: deletedProvning.deletedCount,
-            deletedEmptyExams: deletedEmptyExams,
-            removedFromEvents,
-            deletedEmptyEvents,
-            droppedEnrollments,
+            student: result.student,
+            conversationId: result.conversationId,
+            deletedExamAttendance: result.deletedExamAttendance,
+            deletedProvning: result.deletedProvning,
+            deletedEmptyExams: result.deletedEmptyExams,
+            removedFromEvents: result.removedFromEvents,
+            deletedEmptyEvents: result.deletedEmptyEvents,
+            droppedEnrollments: result.droppedEnrollments,
         });
     } catch (error) {
         logger.error({ err: error }, "Error setting student as dropout");
+        if (error.statusCode === 404) {
+            return res.status(404).json({ error: "Student not found" });
+        }
         res.status(500).json({ error: "Failed to set student as dropout" });
     }
 };
@@ -921,7 +544,7 @@ export const setStudentDropout = async (req, res) => {
 export const removeStudentDropout = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role, userId, name } = req.user;
+        const { role, userId } = req.user;
 
         // Check permissions - admin+ only
         if (!["admin", "systemadmin"].includes(role)) {
@@ -930,95 +553,23 @@ export const removeStudentDropout = async (req, res) => {
             });
         }
 
-        const student = await Student.findById(id);
-        if (!student) {
-            return res.status(404).json({ error: "Student not found" });
-        }
-
-        const wasDropout = student.dropout;
-        if (!wasDropout) {
-            return res.json({
-                success: true,
-                message: "Student is not marked as dropout",
-                student,
-            });
-        }
-
-        // Remove dropout flag
-        student.dropout = false;
-
-        // Log the change
-        const changeLog = {
-            timestamp: new Date(),
-            changedBy: userId,
-            changedByRole: role,
-            changes: ["dropout"],
-            previousValues: { dropout: true },
-            newValues: { dropout: false },
-        };
-
-        if (!student.changeHistory) {
-            student.changeHistory = [];
-        }
-        student.changeHistory.push(changeLog);
-
-        await student.save();
-
-        // Resolve any existing dropout notifications for this student
-        const resolvedNotifications = await Notification.updateMany(
-            {
-                type: "dropout",
-                "meta.studentId": id,
-                resolved: false,
-            },
-            {
-                $set: {
-                    resolved: true,
-                    resolvedBy: userId,
-                    resolvedAt: new Date(),
-                },
-            }
-        );
-
-        logger.info({ name: student.name }, "Removed dropout status for student");
-        logger.debug({ count: resolvedNotifications.modifiedCount }, "Resolved dropout notifications");
-
-        // Re-add the student to calendar slutprov events (enrollment-based and manual finalExamDate).
-        // The sync functions skip dropout students, so this must run after dropout has been cleared.
-        let reSyncedEnrollments = 0;
-        try {
-            const { syncCalendarEventFromEnrollment, syncCalendarEventsForStudent } = await import(
-                "../utils/calendarEventSync.js"
-            );
-
-            const enrollments = await StudentEnrollment.find({
-                studentId: student._id,
-                slutprovDate: { $ne: null },
-            }).select("_id");
-
-            for (const enrollment of enrollments) {
-                await syncCalendarEventFromEnrollment(enrollment._id);
-                reSyncedEnrollments++;
-            }
-
-            if (student.finalExamDate) {
-                await syncCalendarEventsForStudent(student._id);
-            }
-
-            logger.info({ name: student.name, reSyncedEnrollments }, "Re-synced calendar events after dropout removal");
-        } catch (syncError) {
-            logger.error({ err: syncError, name: student.name }, "Error re-syncing calendar events after dropout removal");
-        }
+        const result = await removeStudentDropoutRecord({ studentId: id, userId, role });
 
         res.json({
-            success: true,
-            message: "Dropout status removed successfully",
-            student,
-            resolvedNotifications: resolvedNotifications.modifiedCount,
-            reSyncedEnrollments,
+            success: result.success,
+            message: result.wasDropout
+                ? "Dropout status removed successfully"
+                : "Student is not marked as dropout",
+            student: result.student,
+            resolvedNotifications: result.resolvedNotifications,
+            reSyncedEnrollments: result.reSyncedEnrollments,
         });
     } catch (error) {
         logger.error({ err: error }, "Error removing dropout status");
+        if (error.statusCode === 404) {
+            return res.status(404).json({ error: "Student not found" });
+        }
         res.status(500).json({ error: "Failed to remove dropout status" });
     }
 };
+

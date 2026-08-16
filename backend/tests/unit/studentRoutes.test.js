@@ -102,9 +102,11 @@ vi.mock("../../src/utils/logger.js", () => ({
     default: loggerMock,
 }));
 
-const TeacherMock = {
-    findOne: vi.fn(),
-};
+const { TeacherMock } = vi.hoisted(() => ({
+    TeacherMock: {
+        findOne: vi.fn(),
+    },
+}));
 
 let StudentEnrollmentQuery;
 var StudentEnrollmentMock;
