@@ -1,26 +1,13 @@
 import logger from "../utils/logger.js";
 import TeacherScheduleParameters from "../models/TeacherScheduleParameters.js";
+import { recordAudit } from "../utils/auditLog.js";
 
-// List a teacher's saved schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any teacher's
+// List a teacher's saved schedule parameters (admin only)
 export const listTeacherScheduleParameters = async (req, res) => {
     try {
-        const { teacherId: callerId, roles } = req.user;
-        const targetTeacherId = req.params.targetTeacherId || null;
+        const { teacherId } = req.query;
 
-        // If caller is admin/systemadmin, they can see any teacher's parameters
-        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
-
-        let query = {};
-        if (!isAdmin && callerId) {
-            query.teacherId = callerId;
-        } else if (targetTeacherId) {
-            query.teacherId = targetTeacherId;
-        } else {
-            // Admin with no targetTeacherId: return all (might be many; keep it simple)
-            query = {};
-        }
+        const query = teacherId ? { teacherId } : {};
 
         const parameters = await TeacherScheduleParameters.find(query)
             .sort({ courseId: 1, lengthWeeks: 1 })
@@ -33,32 +20,19 @@ export const listTeacherScheduleParameters = async (req, res) => {
     }
 };
 
-// Get a single teacher's schedule parameters
+// Get a single teacher's schedule parameters (admin only)
 export const getTeacherScheduleParameter = async (req, res) => {
     try {
-        const { teacherId: callerId, roles } = req.user;
-        const targetTeacherId = req.params.targetTeacherId || null;
-        const { courseId, lengthWeeks } = req.query;
+        const { teacherId, courseId, lengthWeeks } = req.params;
 
-        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
-
-        let query = { teacherId: targetTeacherId || callerId };
-        if (courseId) query.courseId = courseId;
-        if (lengthWeeks) query.lengthWeeks = Number(lengthWeeks);
-
-        if (!isAdmin && callerId) {
-            query.teacherId = callerId;
-        }
-
-        const parameter = await TeacherScheduleParameters.findOne(query).lean();
+        const parameter = await TeacherScheduleParameters.findOne({
+            teacherId,
+            courseId,
+            lengthWeeks: Number(lengthWeeks),
+        }).lean();
 
         if (!parameter) {
             return res.status(404).json({ message: "Schedule parameters not found for this teacher/course/length" });
-        }
-
-        // Non-admin callers can only access their own
-        if (!isAdmin && parameter.teacherId.toString() !== callerId) {
-            return res.status(403).json({ message: "Forbidden: You can only access your own schedule parameters" });
         }
 
         res.json(parameter);
@@ -68,28 +42,15 @@ export const getTeacherScheduleParameter = async (req, res) => {
     }
 };
 
-// Create new schedule parameters
-// - Teacher: only for their own courses (courseId from body must match or be own course)
-// - Admin/systemadmin: any teacher/course/length
+// Create new schedule parameters (admin only)
 export const createTeacherScheduleParameter = async (req, res) => {
     try {
-        const { teacherId: callerId, roles } = req.user;
-        const { courseId, lengthWeeks, sectionOffsets } = req.body;
-
-        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
-
-        // If not admin, teacher can only create for themselves, and courseId should match or be sensible
-        let effectiveTeacherId = isAdmin ? (req.body.teacherId || callerId) : callerId;
-
-        if (!isAdmin) {
-            // Teacher creating their own: courseId from body is optional/suggested, but we trust it
-            // We'll just use the caller's ID as the teacher
-        }
+        const { teacherId, courseId, lengthWeeks, sectionOffsets } = req.body;
 
         const existing = await TeacherScheduleParameters.findOne({
-            teacherId: effectiveTeacherId,
-            courseId: courseId,
-            lengthWeeks: lengthWeeks,
+            teacherId,
+            courseId,
+            lengthWeeks,
         }).lean();
 
         if (existing) {
@@ -97,13 +58,21 @@ export const createTeacherScheduleParameter = async (req, res) => {
         }
 
         const parameter = new TeacherScheduleParameters({
-            teacherId: effectiveTeacherId,
-            courseId: courseId,
-            lengthWeeks: lengthWeeks,
+            teacherId,
+            courseId,
+            lengthWeeks,
             sectionOffsets: sectionOffsets || [],
         });
 
         await parameter.save();
+
+        await recordAudit(req, {
+            entityType: "TeacherScheduleParameters",
+            entityId: parameter._id,
+            action: "create",
+            description: `Skapade schemaparametrar för lärare ${teacherId}, kurs ${courseId}, ${lengthWeeks} veckor (offsets: ${JSON.stringify(sectionOffsets || [])})`,
+        });
+
         res.status(201).json(parameter);
     } catch (error) {
         logger.error("Error creating teacher schedule parameter:", error);
@@ -111,33 +80,25 @@ export const createTeacherScheduleParameter = async (req, res) => {
     }
 };
 
-// Update schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any
+// Update schedule parameters (admin only)
 export const updateTeacherScheduleParameter = async (req, res) => {
     try {
-        const { teacherId: callerId, roles } = req.user;
-        const { courseId, lengthWeeks } = req.query;
+        const { teacherId, courseId, lengthWeeks } = req.params;
         const { sectionOffsets } = req.body;
 
-        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
+        const previous = await TeacherScheduleParameters.findOne({
+            teacherId,
+            courseId,
+            lengthWeeks: Number(lengthWeeks),
+        }).lean();
 
-        let query = {};
-        if (courseId) query.courseId = courseId;
-        if (lengthWeeks) query.lengthWeeks = Number(lengthWeeks);
-
-        if (!isAdmin && callerId) {
-            query.teacherId = callerId;
-        } else if (!callerId) {
-            return res.status(401).json({ message: "Authentication required" });
-        }
-
-        const updateData = {};
-        if (sectionOffsets !== undefined) updateData.sectionOffsets = sectionOffsets;
-        updateData.updatedAt = Date.now();
+        const updateData = {
+            sectionOffsets,
+            updatedAt: Date.now(),
+        };
 
         const parameter = await TeacherScheduleParameters.findOneAndUpdate(
-            { ...query, teacherId: isAdmin ? (req.body.teacherId || callerId) : callerId },
+            { teacherId, courseId, lengthWeeks: Number(lengthWeeks) },
             updateData,
             { new: true, runValidators: true }
         ).lean();
@@ -146,6 +107,13 @@ export const updateTeacherScheduleParameter = async (req, res) => {
             return res.status(404).json({ message: "Schedule parameters not found" });
         }
 
+        await recordAudit(req, {
+            entityType: "TeacherScheduleParameters",
+            entityId: parameter._id,
+            action: "update",
+            description: `Uppdaterade schemaparametrar för lärare ${teacherId}, kurs ${courseId}, ${lengthWeeks} veckor (offsets: ${JSON.stringify(previous?.sectionOffsets || [])} -> ${JSON.stringify(sectionOffsets)})`,
+        });
+
         res.json(parameter);
     } catch (error) {
         logger.error("Error updating teacher schedule parameter:", error);
@@ -153,31 +121,27 @@ export const updateTeacherScheduleParameter = async (req, res) => {
     }
 };
 
-// Delete schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any
+// Delete schedule parameters (admin only)
 export const deleteTeacherScheduleParameter = async (req, res) => {
     try {
-        const { teacherId: callerId, roles } = req.user;
-        const { courseId, lengthWeeks } = req.query;
+        const { teacherId, courseId, lengthWeeks } = req.params;
 
-        const isAdmin = roles.includes("systemadmin") || roles.includes("admin");
+        const deleted = await TeacherScheduleParameters.findOneAndDelete({
+            teacherId,
+            courseId,
+            lengthWeeks: Number(lengthWeeks),
+        }).lean();
 
-        let query = {};
-        if (courseId) query.courseId = courseId;
-        if (lengthWeeks) query.lengthWeeks = Number(lengthWeeks);
-
-        if (!isAdmin && callerId) {
-            query.teacherId = callerId;
-        } else if (!callerId) {
-            return res.status(401).json({ message: "Authentication required" });
-        }
-
-        const result = await TeacherScheduleParameters.deleteOne(query);
-
-        if (result.deletedCount === 0) {
+        if (!deleted) {
             return res.status(404).json({ message: "Schedule parameters not found" });
         }
+
+        await recordAudit(req, {
+            entityType: "TeacherScheduleParameters",
+            entityId: deleted._id,
+            action: "delete",
+            description: `Tog bort schemaparametrar för lärare ${teacherId}, kurs ${courseId}, ${lengthWeeks} veckor`,
+        });
 
         res.json({ message: "Schedule parameters deleted successfully" });
     } catch (error) {

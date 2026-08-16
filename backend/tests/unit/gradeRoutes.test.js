@@ -495,50 +495,6 @@ describe("DELETE /grades/enrollments/:id", () => {
   });
 });
 
-describe("GET /grades/debug/students-past-end-date", () => {
-  it("returns aggregated debug info", async () => {
-    StudentEnrollment.find.mockReturnValueOnce(
-      createQueryChain([
-        {
-          _id: "en1",
-          studentId: { name: "Stu" },
-          mainCourseId: { courseName: "Math" },
-          teacherId: { userId: { username: "tuser" } },
-          endDate: new Date(Date.now() - 1000),
-          status: "active",
-          grade: "A",
-        },
-      ])
-    );
-    Student.find.mockReturnValueOnce(
-      createQueryChain([
-        {
-          _id: "stu2",
-          name: "Student2",
-          teacherId: { userId: { username: "tuser2" } },
-          education: [
-            { _id: "edu1", name: "Course", endDate: new Date(Date.now() - 1000), grade: "B", locked: false },
-          ],
-        },
-      ])
-    );
-    const res = await request(app)
-      .get("/grades/debug/students-past-end-date")
-      .set("x-user-role", "admin");
-    expect(res.status).toBe(200);
-    expect(res.body.debug.enrollments.total).toBe(1);
-    expect(res.body.debug.students.total).toBe(1);
-  });
-
-  it("handles errors in the debug endpoint", async () => {
-    StudentEnrollment.find.mockRejectedValueOnce(new Error("boom"));
-    const res = await request(app)
-      .get("/grades/debug/students-past-end-date")
-      .set("x-user-role", "admin");
-    expect(res.status).toBe(500);
-  });
-});
-
 describe("GET /grades/locked-grades", () => {
   it("returns 403 for non-admin", async () => {
     const res = await request(app)

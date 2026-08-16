@@ -1,12 +1,16 @@
 import express from "express";
 import mongoose from "mongoose";
 import User from "../models/User.js";
+import Student from "../models/Student.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
-import { validate } from "../middleware/validation.js";
+import { validate, validateId } from "../middleware/validation.js";
 import { asyncHandler } from "../utils/errorHandler.js";
+import { recordAudit } from "../utils/auditLog.js";
 import logger from "../utils/logger.js";
+
+const LOGBOOK_ROLES = ["admin", "systemadmin", "teacher"];
 
 
 const router = express.Router();
@@ -282,6 +286,8 @@ router.post(
 router.get(
     "/students/:studentId/logbook",
     isAuthenticated,
+    hasRole(LOGBOOK_ROLES),
+    validateId("studentId"),
     asyncHandler(async (req, res) => {
         try {
             const student = await Student.findById(req.params.studentId);
@@ -302,7 +308,8 @@ router.get(
 router.post(
     "/students/:studentId/logbook",
     isAuthenticated,
-    hasRole(["admin", "systemadmin", "teacher"]),
+    hasRole(LOGBOOK_ROLES),
+    validateId("studentId"),
     asyncHandler(async (req, res) => {
         try {
             const student = await Student.findById(req.params.studentId);
@@ -329,6 +336,13 @@ router.post(
             student.logbook = (student.logbook || []).concat(newKit);
             await student.save();
 
+            await recordAudit(req, {
+                entityType: "Student",
+                entityId: student._id,
+                action: "logbook:create",
+                description: `Lade till loggboks-kit "${title}" för elev ${student.name || req.params.studentId}`,
+            });
+
             res.send({
                 success: true,
                 logbook: student.logbook,
@@ -346,6 +360,8 @@ router.post(
 router.get(
     "/student-details/:studentId/logbook",
     isAuthenticated,
+    hasRole(LOGBOOK_ROLES),
+    validateId("studentId"),
     asyncHandler(async (req, res) => {
         try {
             const student = await Student.findById(req.params.studentId);

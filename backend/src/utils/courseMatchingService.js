@@ -227,7 +227,7 @@ class CourseMatchingService {
         if (responsibleTeacherId) {
             const params = await TeacherScheduleParameters.findOne({
                 teacherId: responsibleTeacherId,
-                courseId: mainCourse.courseId || "",
+                courseId: String(mainCourse._id),
                 lengthWeeks,
             }).lean();
 

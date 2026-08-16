@@ -604,7 +604,7 @@ export default {
         end.setDate(end.getDate() + tempoWeeks * 7);
         const endDate = end.toISOString().slice(0, 10);
 
-        await client.post('/course-matching/process-education', {
+        await client.post('/process-education', {
           studentId: props.student._id,
           educationEntries: [
             {

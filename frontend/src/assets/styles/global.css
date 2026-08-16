@@ -31,10 +31,10 @@ input[type='password'],
 input[type='search'],
 select,
 textarea {
-  border: 2px solid #999 !important;
-  background-color: #fff !important;
-  color: #000 !important;
-  border-radius: 4px;
+  border: 2px solid var(--color-border) !important;
+  background-color: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-radius: var(--radius-control);
   padding: 0.5rem 0.75rem;
   appearance: none;
   box-shadow: none;
@@ -42,9 +42,9 @@ textarea {
 
 /* 4. Vuetify fix: remove cascading inner borders */
 .v-input__control {
-  border: 2px solid #999 !important;
-  border-radius: 4px !important;
-  background-color: white !important;
+  border: 2px solid var(--color-border) !important;
+  border-radius: var(--radius-control) !important;
+  background-color: var(--color-surface) !important;
 }
 
 /* Don't duplicate border on Vuetify's inner input */
@@ -57,7 +57,7 @@ textarea {
 
 /* 5. Placeholder color */
 ::placeholder {
-  color: #888;
+  color: var(--color-ink-muted);
   opacity: 1;
 }
 
@@ -66,13 +66,13 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: #007dc3 !important;
+  border-color: var(--color-primary) !important;
 }
 
 /* 7. Radio button fix (for KDE / Chromium) */
 input[type='radio'] {
   appearance: auto !important; /* Undo 'none' */
-  accent-color: #007dc3; /* Blue highlight for checked state */
+  accent-color: var(--color-primary); /* Blue highlight for checked state */
   width: 1rem;
   height: 1rem;
   vertical-align: middle;
@@ -80,24 +80,24 @@ input[type='radio'] {
 }
 
 input[type='checkbox'] {
-  accent-color: #007dc3;
+  accent-color: var(--color-primary);
   margin-right: 0.5em;
 }
 
 /* 8. Button style */
 button {
   padding: 0.375rem 0.75rem;
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   line-height: 1.5;
-  border-radius: 0.25rem;
-  border: 1px solid #ccc;
-  background-color: #007bff;
-  color: white;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-primary);
+  color: var(--color-surface);
   cursor: pointer;
 }
 
 button:hover {
-  background-color: #0056b3;
+  background-color: var(--color-primary-hover);
 }
 
 /* 9. Accessibility fix for visually hidden labels (if used) */
@@ -114,13 +114,13 @@ button:hover {
 table {
   width: 100%;
   border-collapse: collapse;
-  background-color: #fff;
-  border: 1px solid #ccc;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
 }
 
 th,
 td {
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border);
   padding: 0.5rem 0.75rem;
   text-align: left;
   vertical-align: top;
@@ -128,17 +128,17 @@ td {
 }
 
 th {
-  background-color: #f5f5f5;
+  background-color: var(--color-bg-secondary);
   font-weight: 600;
 }
 
 tr:nth-child(even) {
-  background-color: #f9f9f9;
+  background-color: var(--color-bg);
 }
 
 /* 11. Link color */
 a {
-  color: #007dc3;
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -148,9 +148,9 @@ a:hover {
 
 /* 12. Body text fallback */
 body {
-  font-family: 'Roboto', 'Inter', 'Helvetica Neue', sans-serif;
-  background: #fff;
-  color: #111;
+  font-family: var(--font-body);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 label[for] {
@@ -164,10 +164,10 @@ label[for] {
 /* === Vuetify v-select / v-autocomplete dropdown menu fix === */
 
 .v-overlay-container .v-overlay__content {
-  background-color: #ffffff !important;
-  border: 2px solid #444 !important; /* Stronger borders */
-  border-radius: 8px !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important; /* More prominent shadow */
+  background-color: var(--color-surface) !important;
+  border: 2px solid var(--color-border-strong) !important; /* Stronger borders */
+  border-radius: var(--radius-overlay) !important;
+  box-shadow: var(--shadow-overlay) !important; /* More prominent shadow */
   padding: 0 !important;
   overflow: hidden;
   z-index: 3000 !important;
@@ -175,24 +175,24 @@ label[for] {
 
 /* Style the dropdown items */
 .v-overlay-container .v-list-item {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   padding: 12px 16px !important;
   line-height: 1.5;
-  transition: background-color 0.2s ease;
-  color: #111;
+  transition: background-color var(--motion-duration) var(--motion-ease);
+  color: var(--color-text);
 }
 
 /* Hover / active styling */
 .v-overlay-container .v-list-item--active,
 .v-overlay-container .v-list-item:hover {
-  background-color: #f0f7ff !important;
-  color: #007dc3 !important;
+  background-color: var(--color-primary-light) !important;
+  color: var(--color-primary) !important;
   font-weight: bold;
 }
 
 /* Selected check icon (if used) */
 .v-list-item__append > .v-icon {
-  color: #007dc3 !important;
+  color: var(--color-primary) !important;
 }
 
 /* === Force Full Border Visibility for Vuetify Data Table === */
@@ -210,49 +210,49 @@ label[for] {
 
 .v-data-table th,
 .v-data-table td {
-  border: 3px solid #444 !important; /* Thicker borders */
+  border: 3px solid var(--color-border-strong) !important; /* Thicker borders */
   padding: 12px !important;
   text-align: left !important;
-  background-color: #fff !important; /* Strong white background */
-  color: #333 !important; /* Dark text for contrast */
+  background-color: var(--color-surface) !important; /* Strong white background */
+  color: var(--color-text) !important; /* Dark text for contrast */
 }
 
 /* Table header with darker borders */
 .v-data-table thead th {
-  background-color: #f5f5f5 !important;
+  background-color: var(--color-bg-secondary) !important;
   font-weight: bold !important;
-  border-bottom: 3px solid #666 !important; /* Stronger header border */
-  color: #333 !important;
+  border-bottom: 3px solid var(--color-border-strong) !important; /* Stronger header border */
+  color: var(--color-text) !important;
 }
 
 /* Rows with alternate coloring */
 .v-data-table tbody tr:nth-child(even) {
-  background-color: #f9f9f9 !important; /* Lighter rows */
+  background-color: var(--color-bg) !important; /* Lighter rows */
 }
 
 .v-data-table tbody tr:nth-child(odd) {
-  background-color: #ffffff !important; /* Standard white rows */
+  background-color: var(--color-surface) !important; /* Standard white rows */
 }
 
 /* Hover effect on rows */
 .v-data-table tbody tr:hover {
-  background-color: #f0f7ff !important;
+  background-color: var(--color-primary-light) !important;
   cursor: pointer !important;
 }
 
 /* Active row effect (when selected) */
 .v-data-table tbody tr.v-data-table__selected {
-  background-color: #d6eaff !important; /* Blue highlight for selected rows */
+  background-color: var(--color-primary-light) !important; /* Blue highlight for selected rows */
   font-weight: bold !important;
 }
 
 /* === v-overlay (Dropdown) Fix === */
 
 .v-overlay-container .v-overlay__content {
-  background-color: #fff !important;
-  border: 2px solid #444 !important; /* Thicker border for dropdown */
-  border-radius: 8px !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important; /* More prominent shadow */
+  background-color: var(--color-surface) !important;
+  border: 2px solid var(--color-border-strong) !important; /* Thicker border for dropdown */
+  border-radius: var(--radius-overlay) !important;
+  box-shadow: var(--shadow-overlay) !important; /* More prominent shadow */
   padding: 0 !important;
   overflow: hidden !important;
   z-index: 3000 !important;
@@ -260,22 +260,22 @@ label[for] {
 
 /* Style the dropdown items */
 .v-overlay-container .v-list-item {
-  font-size: 1rem !important;
+  font-size: var(--font-size-base) !important;
   padding: 12px 16px !important;
   line-height: 1.5 !important;
-  transition: background-color 0.2s ease;
-  color: #333 !important;
+  transition: background-color var(--motion-duration) var(--motion-ease);
+  color: var(--color-text) !important;
 }
 
 /* Active and hover effect for dropdown items */
 .v-overlay-container .v-list-item--active,
 .v-overlay-container .v-list-item:hover {
-  background-color: #f0f7ff !important;
-  color: #007dc3 !important;
+  background-color: var(--color-primary-light) !important;
+  color: var(--color-primary) !important;
   font-weight: bold !important;
 }
 
 /* Selected check icon in the dropdown */
 .v-list-item__append > .v-icon {
-  color: #007dc3 !important;
+  color: var(--color-primary) !important;
 }

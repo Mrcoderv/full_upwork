@@ -32,7 +32,7 @@ const buildTextSearchClause = (q) => {
     return { $text: { $search: tokens, $language: "none" } };
 };
 
-router.get("/courses", authenticateUser, canFeature(PERMISSION_FEATURES.SEARCH_USERS), async (req, res) => {
+router.get("/course-enrollments", authenticateUser, canFeature(PERMISSION_FEATURES.SEARCH_USERS), async (req, res) => {
     try {
         let query = {
             "education.type": "Course",

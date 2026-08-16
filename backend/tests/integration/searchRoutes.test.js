@@ -85,7 +85,7 @@ describe("Search Routes", () => {
         vi.restoreAllMocks();
     });
 
-    describe("GET /api/courses", () => {
+    describe("GET /api/course-enrollments", () => {
         it("returns unique courses for non-teacher users", async () => {
             const course = await Course.create({
                 courseName: "Math 101",
@@ -129,7 +129,7 @@ describe("Search Routes", () => {
             });
 
             const response = await request(searchApp)
-                .get("/api/courses")
+                .get("/api/course-enrollments")
                 .expect(200);
 
             expect(response.body).toHaveLength(1);
@@ -141,7 +141,7 @@ describe("Search Routes", () => {
 
         it("returns 403 when teacher profile is missing", async () => {
             const response = await request(searchApp)
-                .get("/api/courses")
+                .get("/api/course-enrollments")
                 .set("x-test-role", "teacher")
                 .set("x-test-userid", new mongoose.Types.ObjectId().toString())
                 .expect(403);
@@ -207,7 +207,7 @@ describe("Search Routes", () => {
             });
 
             const response = await request(searchApp)
-                .get("/api/courses")
+                .get("/api/course-enrollments")
                 .set("x-test-role", "teacher")
                 .set("x-test-userid", teacherUserId.toString())
                 .expect(200);
@@ -223,7 +223,7 @@ describe("Search Routes", () => {
             vi.spyOn(Student, "find").mockRejectedValue(new Error("boom"));
 
             const response = await request(searchApp)
-                .get("/api/courses")
+                .get("/api/course-enrollments")
                 .expect(500);
 
             expect(response.body).toEqual({

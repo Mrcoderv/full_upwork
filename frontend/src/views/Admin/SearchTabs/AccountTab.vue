@@ -366,7 +366,7 @@
             <span v-if="!editFields[key]">{{ value || '-' }}</span>
             <input v-else v-model="editablePersonalData[key]" class="form-control" />
             <button @click="toggleEdit(key)" class="btn btn-sm" :class="editFields[key] ? 'btn-primary' : 'btn-outline-primary'">
-              <i :class="editFields[key] ? 'fas fa-save' : 'fas fa-edit'"></i>
+              <v-icon size="16" :icon="editFields[key] ? 'mdi-content-save' : 'mdi-pencil'"></v-icon>
             </button>
           </div>
         </div>

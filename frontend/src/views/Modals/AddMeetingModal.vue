@@ -32,6 +32,7 @@
       :menu-props="{ maxHeight: '300px' }"
       :custom-filter="filterStudents"
       auto-select-first
+      ref="studentAuto"
     >
       <template #item="{ props, item }">
         <v-list-item v-bind="props" :title="item.raw.displayName || `${item.raw.name} (${item.raw.personalNumber || ''})`" />
@@ -217,6 +218,7 @@ async function submit() {
   try {
     const response = await client.post('/meetings', payload);
     const savedMeeting = response.data;
+    this.$refs.studentAuto.closeMenu();
     emit('event-added', savedMeeting);
     emit('close');
   } catch (err) {

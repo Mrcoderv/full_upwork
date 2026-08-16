@@ -103,12 +103,12 @@
                 @click="removePhoneNumber(index)"
                 :disabled="studentForm.phoneNumbers.length === 1"
               >
-                <i class="fas fa-trash"></i>
+                <v-icon size="16">mdi-delete</v-icon>
               </button>
             </div>
           </div>
           <button type="button" class="btn btn-outline-primary btn-sm mt-2" @click="addPhoneNumber">
-            <i class="fas fa-plus"></i>
+            <v-icon size="16">mdi-plus</v-icon>
             Lägg till telefonnummer
           </button>
         </div>
@@ -118,13 +118,13 @@
       <div class="form-section">
         <h3>Utbildning</h3>
         <div class="alert alert-info mb-3">
-          <i class="fas fa-info-circle me-2"></i>
+          <v-icon size="18" class="me-2">mdi-information-outline</v-icon>
           <strong>Betygssättning:</strong>
           Elever som läggs till här kommer automatiskt att visas i betygsmodulen 1 vecka innan
           kursen slutar för betygsättning.
         </div>
         <div class="alert alert-success mb-3">
-          <i class="fas fa-check-circle me-2"></i>
+          <v-icon size="18" class="me-2">mdi-check-circle-outline</v-icon>
           <strong>APL Integration:</strong>
           Elever med kurspaket kommer automatiskt att visas på APL-listan med status "Ej börjat"
           (GRAY). Enskilda kurser läggs till utan APL-status.
@@ -164,8 +164,8 @@
         <div class="mb-3">
           <label for="individualCourse" class="form-label">Enskild kurs:</label>
           <div class="alert alert-light mb-2">
-            <i class="fas fa-info-circle me-2"></i>
-            <small>Du kan välja enskilda kurser utan att välja program eller kurspaket.</small>
+          <v-icon size="18" class="me-2">mdi-information-outline</v-icon>
+          <small>Du kan välja enskilda kurser utan att välja program eller kurspaket.</small>
           </div>
           <div class="course-selection-container">
             <v-select
@@ -212,7 +212,7 @@
               class="btn btn-sm btn-outline-danger ms-2"
               @click="removeCourse(course._id)"
             >
-              <i class="fas fa-times"></i>
+              <v-icon size="16">mdi-close</v-icon>
             </button>
           </div>
         </div>
@@ -226,7 +226,7 @@
             Revidera kurspaket:
           </label>
           <div class="alert alert-warning mb-2 py-2">
-            <i class="fas fa-list-check me-2"></i>
+          <v-icon size="18" class="me-2">mdi-clipboard-check-outline</v-icon>
             <small>
               Bocka ur de kurser som ska tas bort från paketet. De övriga
               kurserna skapas automatiskt med auto-beräknade datum.
@@ -456,7 +456,7 @@
       <!-- Submit Button -->
       <div class="form-section">
         <button type="submit" class="btn btn-success btn-lg w-100" :disabled="isSubmitting">
-          <i v-if="isSubmitting" class="fas fa-spinner fa-spin me-2"></i>
+          <v-icon v-if="isSubmitting" size="18" class="mdi-spin me-2">mdi-loading</v-icon>
           {{ isSubmitting ? 'Lägger till elev...' : 'Lägg till elev' }}
         </button>
       </div>

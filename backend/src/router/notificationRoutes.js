@@ -173,23 +173,6 @@ router.get("/notifications", authenticateUser, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-/*
-
-  
-router.put("/notifications/:id/resolve", async (req, res) => {
-  const note = await Notification.findById(req.params.id);
-  if (!note) return res.status(404).send("Notis hittades inte");
-
-  note.resolved = true;
-  note.resolvedBy = req.body.userId; // valfritt
-  await note.save();
-
-  // Uppdatera globalnotis-status
-  await evaluateActionPlanStatusAndNotify();
-
-  res.json({ message: "Notis markerad som hanterad", note });
-});
-*/
 
 router.put('/notifications/resolve/:studentId', authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
   try {

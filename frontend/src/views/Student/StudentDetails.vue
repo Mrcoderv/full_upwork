@@ -67,6 +67,7 @@ import PermissionsTab from './tabs/PermissionsTab.vue';
 import DocumentsTab from './tabs/DocumentsTab.vue';
 import CourseArchiveTab from './tabs/CourseArchiveTab.vue';
 import AplTab from './tabs/AplTab.vue';
+import LogbookTab from './tabs/LogbookTab.vue';
 
 export default {
   name: 'StudentDetails',
@@ -77,6 +78,7 @@ export default {
     DocumentsTab,
     CourseArchiveTab,
     AplTab,
+    LogbookTab,
   },
   setup() {
     const route = useRoute();
@@ -229,8 +231,6 @@ export default {
           console.log(`[APL Tab] ✅ Showing APL tab for ${student.value.name}`, { reason });
           allTabs.push({ name: 'APL', component: AplTab });
         } else {
-          // Expanded logging to help debug why tab isn't showing
-          console.log(`[APL Tab] ❌ NOT showing APL tab for ${student.value.name}`);
           console.log(`[APL Tab Debug] Full check details:`, {
             studentId,
             hasCoursePackage,
@@ -257,6 +257,13 @@ export default {
             })(),
             educationArray: JSON.stringify(student.value.education, null, 2),
           });
+        }
+
+        // Show the Logbook tab for APL-managed students or when logbook entries already exist
+        const hasLogbookEntries =
+          Array.isArray(student.value.logbook) && student.value.logbook.length > 0;
+        if (shouldShowAplTab || hasLogbookEntries) {
+          allTabs.push({ name: 'Loggbok', component: LogbookTab });
         }
       }
 

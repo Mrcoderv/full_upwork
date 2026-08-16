@@ -158,13 +158,13 @@
             <v-btn
               color="primary"
               :disabled="!selectedInstance || !selectedStudent"
-              @downloadReport
+              @downloadReport.prevent
             >
               Exportera rapport
             </v-btn>
             <v-spacer></v-spacer>
             <v-btn
-              @resetFilters
+              @resetFilters.prevent
               variant="text"
             >
               Återställ filter

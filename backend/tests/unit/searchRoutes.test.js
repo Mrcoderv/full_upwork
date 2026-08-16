@@ -35,7 +35,7 @@ describe("searchRoutes handlers", () => {
         vi.restoreAllMocks();
     });
 
-    describe("GET /courses", () => {
+    describe("GET /course-enrollments", () => {
         it("returns deduplicated courses for non-teachers", async () => {
             const studentId = new mongoose.Types.ObjectId();
             const courseId = new mongoose.Types.ObjectId();
@@ -51,7 +51,7 @@ describe("searchRoutes handlers", () => {
                 populate: populateMock,
             });
 
-            const handler = getRouteHandler("/courses");
+            const handler = getRouteHandler("/course-enrollments");
             const req = { user: { role: "admin" } };
             const res = buildRes();
 
@@ -69,7 +69,7 @@ describe("searchRoutes handlers", () => {
 
         it("returns 403 when teacher profile is missing", async () => {
             vi.spyOn(Teacher, "findOne").mockResolvedValueOnce(null);
-            const handler = getRouteHandler("/courses");
+            const handler = getRouteHandler("/course-enrollments");
             const req = { user: { role: "teacher", userId: "user-1" } };
             const res = buildRes();
 
@@ -95,7 +95,7 @@ describe("searchRoutes handlers", () => {
                 populate: populateMock,
             });
 
-            const handler = getRouteHandler("/courses");
+            const handler = getRouteHandler("/course-enrollments");
             const req = { user: { role: "teacher", userId: "user-2" } };
             const res = buildRes();
 

@@ -16,6 +16,8 @@ const AddTeacher = () => import('@/views/Admin/AddTeacher.vue')
 const EducationEditor = () => import('@/views/Admin/EducationEditor.vue')
 const ProgramsAndCourses = () => import('@/views/Admin/ProgramsAndCourses.vue')
 const ProgramsAndPackages = () => import('@/views/Admin/ProgramsAndPackages.vue')
+const ScheduleParameters = () => import('@/views/Admin/ScheduleParameters.vue')
+const GradeLookups = () => import('@/views/Admin/GradeLookups.vue')
 const AddUser = () => import('@/views/Admin/AddUser.vue')
 const EditStudent = () => import('@/views/Admin/EditStudent.vue')
 const SearchUser = () => import('@/views/Admin/SearchUser.vue')
@@ -175,6 +177,18 @@ const routes = [
     path: '/programsandpackages',
     component: ProgramsAndPackages,
     meta: { title: 'Programs & Packages', role: 'admin' },
+  },
+  {
+    path: '/schedule-parameters',
+    name: 'ScheduleParameters',
+    component: ScheduleParameters,
+    meta: { title: 'Schemaparametrar', role: 'admin' },
+  },
+  {
+    path: '/grade-lookups',
+    name: 'GradeLookups',
+    component: GradeLookups,
+    meta: { title: 'Betygsuppföljning', role: 'admin' },
   },
   {
     path: '/editstudent',

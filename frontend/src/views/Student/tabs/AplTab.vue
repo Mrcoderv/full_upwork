@@ -106,6 +106,13 @@
                   —
                 </td>
                 <td>
+                  <v-badge
+                    v-if="student.aplBehindSchedule"
+                    color="warning"
+                    small
+                    >Bak i schema</v-badge>
+                </td>
+                <td>
                   <v-btn
                     small
                     color="primary"

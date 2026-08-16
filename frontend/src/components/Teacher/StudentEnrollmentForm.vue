@@ -263,7 +263,7 @@ const submitForm = async () => {
   };
 
   try {
-      await client.post('/course-matching/process-education', payload);
+      await client.post('/process-education', payload);
       // Handle success
       toast.success('Eleven har anmälts till kursen framgångsrikt!');
       

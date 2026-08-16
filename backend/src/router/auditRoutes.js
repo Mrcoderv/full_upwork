@@ -3,12 +3,13 @@
 import { Router } from 'express'
 import FileAuditLog from '../models/FileAuditLog.js'
 import { isAuthenticated, hasRole } from '../middleware/auth.js'
+import { validateId } from '../middleware/validation.js'
 import logger from "../utils/logger.js";
 
 const router = Router()
 
 // GET audit logs for a student with pagination and optional filtering by action
-router.get('/:studentId', isAuthenticated, hasRole(['admin', 'teacher', 'coordinator']), async (req, res) => {
+router.get('/:studentId', isAuthenticated, hasRole(['admin', 'teacher', 'coordinator']), validateId('studentId'), async (req, res) => {
   try {
     const { studentId } = req.params
     const { page = 1, limit = 10, action } = req.query

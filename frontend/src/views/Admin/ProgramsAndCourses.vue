@@ -1,13 +1,178 @@
+<template>
+  <div class="scrollable-view">
+    <v-container class="py-5">
+      <v-card class="pa-5">
+        <div class="d-flex align-center justify-space-between">
+          <v-card-title class="text-h4 font-weight-bold pa-0">Kurskatalog</v-card-title>
+          <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">
+            Ny kurs
+          </v-btn>
+        </div>
+
+        <v-progress-linear v-if="loading" indeterminate color="primary" class="my-5"></v-progress-linear>
+
+        <v-alert v-else-if="error" type="error" class="my-3">{{ error }}</v-alert>
+
+        <v-table v-else dense class="mt-4">
+          <thead>
+            <tr>
+              <th class="text-left">Kursnamn</th>
+              <th class="text-left">Kod</th>
+              <th class="text-left">Poäng</th>
+              <th class="text-left">Omfattning</th>
+              <th class="text-left">Program</th>
+              <th class="text-left">Status</th>
+              <th class="text-left">Åtgärder</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="course in courses" :key="course._id">
+              <td>
+                <strong>{{ course.courseName }}</strong>
+              </td>
+              <td>{{ course.courseCode }}</td>
+              <td>{{ course.coursePoints || '–' }}</td>
+              <td>{{ course.courseExtent || '–' }}</td>
+              <td>
+                <v-chip
+                  v-for="p in programNames(course)"
+                  :key="p._id"
+                  size="small"
+                  variant="tonal"
+                  class="mr-1"
+                >
+                  {{ p.programName }}
+                </v-chip>
+                <span v-if="!programNames(course).length">–</span>
+              </td>
+              <td>
+                <v-chip :color="course.isActive === false ? 'grey' : 'success'" size="small">
+                  {{ course.isActive === false ? 'Inaktiv' : 'Aktiv' }}
+                </v-chip>
+              </td>
+              <td>
+                <v-btn size="small" variant="text" @click="openEdit(course)">Redigera</v-btn>
+                <v-btn size="small" variant="text" color="error" @click="confirmDelete(course)">
+                  Ta bort
+                </v-btn>
+              </td>
+            </tr>
+            <tr v-if="courses.length === 0">
+              <td colspan="7" class="text-center text-grey">Inga kurser ännu.</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card>
+    </v-container>
+
+    <!-- Create / Edit Modal -->
+    <v-dialog v-model="showModal" max-width="600">
+      <v-card>
+        <v-card-title>{{ editing ? 'Redigera kurs' : 'Ny kurs' }}</v-card-title>
+        <v-card-text>
+          <v-form @submit.prevent="save">
+            <v-text-field
+              v-model="form.courseName"
+              label="Kursnamn *"
+              required
+              :error-messages="validationErrors.courseName"
+            />
+            <v-text-field
+              v-model="form.courseCode"
+              label="Kurskod *"
+              required
+              :error-messages="validationErrors.courseCode"
+            />
+            <v-text-field v-model="form.coursePoints" label="Poäng" />
+            <v-text-field v-model="form.courseExtent" label="Omfattning" />
+            <v-select
+              v-model="form.programs"
+              :items="programOptions"
+              label="Program"
+              item-title="title"
+              item-value="value"
+              multiple
+              clearable
+            />
+            <v-checkbox v-model="form.isActive" label="Aktiv" hide-details class="mt-2" />
+          </v-form>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="showModal = false">Avbryt</v-btn>
+          <v-btn color="primary" :loading="saving" @click="save">
+            {{ editing ? 'Uppdatera' : 'Skapa' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Delete Confirmation -->
+    <v-dialog v-model="showDeleteModal" max-width="400">
+      <v-card>
+        <v-card-title>Ta bort kurs</v-card-title>
+        <v-card-text>
+          Är du säker på att du vill ta bort "{{ pendingDelete?.courseName }}"? Detta kan inte ångras.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="showDeleteModal = false">Avbryt</v-btn>
+          <v-btn color="error" :loading="deleting" @click="remove">Ta bort</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
+</template>
+
 <script setup>
-  import { ref, onMounted } from 'vue'
+  import { ref, computed, onMounted } from 'vue'
   import client from '@/api/client.js'
   import { useToast } from '@/composables/useToast.js'
 
   const toast = useToast()
 
+  const courses = ref([])
   const programs = ref([])
-  const isLoading = ref(true)
+  const loading = ref(true)
   const error = ref(null)
+  const showModal = ref(false)
+  const showDeleteModal = ref(false)
+  const editing = ref(null)
+  const pendingDelete = ref(null)
+  const saving = ref(false)
+  const deleting = ref(false)
+  const validationErrors = ref({})
+
+  const programOptions = computed(() =>
+    programs.value.map((program) => ({
+      title: program.programName,
+      value: program._id,
+    }))
+  )
+
+  const programNames = (course) =>
+    programs.value.filter((program) => (course.programs || []).includes(program._id))
+
+  const form = ref({
+    courseName: '',
+    courseCode: '',
+    coursePoints: '',
+    courseExtent: '',
+    programs: [],
+    isActive: true,
+  })
+
+  const fetchCourses = async () => {
+    try {
+      const response = await client.get('/courses')
+      courses.value = response.data
+    } catch (err) {
+      console.error('Error fetching courses:', err)
+      error.value = 'Kunde inte hämta kurser.'
+    } finally {
+      loading.value = false
+    }
+  }
 
   const fetchPrograms = async () => {
     try {
@@ -15,170 +180,96 @@
       programs.value = response.data
     } catch (err) {
       console.error('Error fetching programs:', err)
-      error.value = 'Failed to load programs. Please try again.'
+    }
+  }
+
+  const openCreate = () => {
+    editing.value = null
+    validationErrors.value = {}
+    form.value = {
+      courseName: '',
+      courseCode: '',
+      coursePoints: '',
+      courseExtent: '',
+      programs: [],
+      isActive: true,
+    }
+    showModal.value = true
+  }
+
+  const openEdit = (course) => {
+    editing.value = course
+    validationErrors.value = {}
+    form.value = {
+      courseName: course.courseName,
+      courseCode: course.courseCode,
+      coursePoints: course.coursePoints || '',
+      courseExtent: course.courseExtent || '',
+      programs: (course.programs || []).map((p) => (typeof p === 'string' ? p : p._id)),
+      isActive: course.isActive !== false,
+    }
+    showModal.value = true
+  }
+
+  const save = async () => {
+    validationErrors.value = {}
+    if (!form.value.courseName || !form.value.courseName.trim()) {
+      validationErrors.value.courseName = 'Kursnamn är obligatoriskt.'
+      return
+    }
+    if (!form.value.courseCode || !form.value.courseCode.trim()) {
+      validationErrors.value.courseCode = 'Kurskod är obligatorisk.'
+      return
+    }
+
+    saving.value = true
+    try {
+      const payload = {
+        courseName: form.value.courseName.trim(),
+        courseCode: form.value.courseCode.trim(),
+        coursePoints: form.value.coursePoints || undefined,
+        courseExtent: form.value.courseExtent || undefined,
+        programs: form.value.programs || [],
+        isActive: form.value.isActive,
+      }
+      if (editing.value) {
+        await client.put(`/course/${editing.value._id}`, payload)
+        toast.success('Kursen uppdaterades.')
+      } else {
+        await client.post('/course', payload)
+        toast.success('Kursen skapades.')
+      }
+      showModal.value = false
+      await fetchCourses()
+    } catch (err) {
+      console.error('Error saving course:', err)
+      toast.error('Ett fel uppstod när kursen skulle sparas.')
     } finally {
-      isLoading.value = false
+      saving.value = false
+    }
+  }
+
+  const confirmDelete = (course) => {
+    pendingDelete.value = course
+    showDeleteModal.value = true
+  }
+
+  const remove = async () => {
+    deleting.value = true
+    try {
+      await client.delete(`/course/${pendingDelete.value._id}`)
+      courses.value = courses.value.filter((course) => course._id !== pendingDelete.value._id)
+      showDeleteModal.value = false
+      toast.success('Kursen togs bort.')
+    } catch (err) {
+      console.error('Error deleting course:', err)
+      toast.error('Ett fel uppstod när kursen skulle tas bort.')
+    } finally {
+      deleting.value = false
     }
   }
 
   onMounted(async () => {
-    await fetchPrograms()
-    window.programs = programs
+    await Promise.all([fetchCourses(), fetchPrograms()])
   })
 </script>
-
-<template>
-  <div class="scrollable-view">
-    <v-container class="no-scroll">
-      <v-card class="elevation-2 card-centered">
-        <!-- Title Centered -->
-        <v-card-title class="text-h5 title-center">Programs and Courses</v-card-title>
-
-        <v-card-text class="table-container">
-          <!-- Loading Indicator -->
-          <v-progress-linear v-if="isLoading" indeterminate color="blue"></v-progress-linear>
-
-          <!-- Error Alert -->
-          <v-alert v-if="error" type="error" class="my-3">
-            {{ error }}
-          </v-alert>
-
-          <!-- Table Wrapper to Ensure Full Width Without Scrolling -->
-          <div class="table-wrapper">
-            <v-table class="fixed-table">
-              <thead>
-                <tr>
-                  <th class="program-name-column">Program Name</th>
-                  <th class="course-name-column">Course Name</th>
-                  <th class="fixed-width">Code</th>
-                  <th class="fixed-width">Points</th>
-                  <th class="fixed-width">Extent</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template v-for="program in programs" :key="program._id">
-                  <template v-if="program.programCourses.length">
-                    <tr v-for="(course, index) in program.programCourses" :key="course._id">
-                      <!-- Display Program Name only once per program using rowspan -->
-                      <td
-                        v-if="index === 0"
-                        :rowspan="program.programCourses.length"
-                        class="program-name-column align-top"
-                      >
-                        <strong>{{ program.programName }}</strong>
-                      </td>
-                      <td class="course-name-column">
-                        {{ course.courseName || 'No coursename found' }}
-                      </td>
-                      <td class="fixed-width">{{ course.courseCode || 'N/A' }}</td>
-                      <td class="fixed-width">{{ course.coursePoints || 'N/A' }}</td>
-                      <td class="fixed-width">{{ course.courseExtent || 'N/A' }}</td>
-                    </tr>
-                  </template>
-                </template>
-              </tbody>
-            </v-table>
-          </div>
-        </v-card-text>
-      </v-card>
-    </v-container>
-  </div>
-</template>
-
-<style scoped>
-  /* 1️⃣ Completely Remove Horizontal Scrolling */
-  html,
-  body {
-    overflow-x: hidden !important;
-    /* 🔥 Enforce no horizontal scroll */
-    margin: 0;
-    padding: 0;
-    width: 100vw;
-  }
-
-  /* 2️⃣ Prevent Any Element from Extending Past Viewport */
-  .no-scroll {
-    overflow-x: hidden !important;
-    max-width: 100vw;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  /* 3️⃣ Center Card & Table */
-  .card-centered {
-    max-width: 80%;
-    margin: 20px auto;
-    text-align: center;
-  }
-
-  /* 4️⃣ Center Title */
-  .title-center {
-    text-align: center;
-    padding: 16px;
-  }
-
-  /* 5️⃣ Table Container Ensuring No Overflow */
-  .table-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-  }
-
-  /* 6️⃣ Ensure Table Doesn't Cause Scrolling */
-  .table-wrapper {
-    width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden !important;
-    /* 🔥 Force No Scroll */
-    display: flex;
-    justify-content: center;
-  }
-
-  /* 7️⃣ Fixed Table Layout */
-  .fixed-table {
-    width: auto;
-    min-width: 100%;
-    margin: 0 auto;
-    table-layout: fixed;
-    border-collapse: collapse;
-  }
-
-  /* 8️⃣ Program Name Column - Align to Top */
-  .program-name-column {
-    width: 250px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: bold;
-    vertical-align: top !important;
-    /* 🔥 Align Top */
-  }
-
-  /* 9️⃣ Course Name Column */
-  .course-name-column {
-    width: 300px;
-    white-space: wrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* 🔟 Fixed-Width Columns */
-  .fixed-width {
-    width: 100px;
-    text-align: left;
-  }
-
-  /* 🔥 Ensure Programs Stack Vertically */
-  .program-container {
-    display: block;
-    width: 100%;
-    margin-bottom: 20px;
-  }
-
-  /* 🔥 Alternating Row Colors */
-  tbody tr:nth-child(even) {
-    background: #f9f9f9;
-  }
-</style>

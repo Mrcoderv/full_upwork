@@ -1,15 +1,14 @@
 <template>
   <div class="scrollable-view">
     <div class="inactive-students-container">
-      <div class="header-section">
-        <h3 class="page-title">Inaktiva elever</h3>
-        <div class="breadcrumb">
-          <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">
-            <path fill="#2c9316" d="M20 9v6h-8v4.84L4.16 12L12 4.16V9z" />
-          </svg>
-          <router-link to="/admin/users" class="breadcrumb-link">Tillbaka till Admin</router-link>
-        </div>
-      </div>
+      <PageHeader
+        title="Inaktiva elever"
+        subtitle="Elever med registrerat avbrott"
+        :crumbs="[
+          { label: 'Admin', to: '/admin/users' },
+          { label: 'Inaktiva elever' },
+        ]"
+      />
 
       <!-- Search -->
       <div class="filters-section">
@@ -24,7 +23,7 @@
           />
         </div>
         <div class="filter-group">
-          <span class="inactive-count">{{ filteredStudents.length }} elever med avbrott</span>
+          <span class="inactive-count tnum">{{ filteredStudents.length }} elever med avbrott</span>
         </div>
       </div>
 
@@ -34,10 +33,11 @@
       </div>
 
       <!-- Inactive Students Table -->
-      <div class="table-container">
+      <div class="table-responsive">
         <table class="table">
           <thead>
             <tr>
+              <th>Status</th>
               <th>Namn</th>
               <th>Personnummer</th>
               <th>E-post</th>
@@ -50,26 +50,26 @@
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="8" class="text-center">Laddar inaktiva elever...</td>
-            </tr>
-            <tr v-else-if="filteredStudents.length === 0">
-              <td colspan="8" class="text-center">Inga inaktiva elever hittades</td>
+              <td colspan="9" class="text-center">Laddar inaktiva elever...</td>
             </tr>
             <tr v-for="student in filteredStudents" :key="student._id">
+              <td>
+                <StatusBadge hue="danger" label="Avbrott" />
+              </td>
               <td>
                 <router-link :to="`/student/${student._id}`" class="student-name-link">
                   {{ student.name }}
                 </router-link>
               </td>
-              <td>{{ student.personalNumber }}</td>
+              <td class="tnum">{{ student.personalNumber }}</td>
               <td>{{ student.email }}</td>
               <td>{{ student.municipality || '-' }}</td>
               <td>
                 <span v-if="student.teacherId">{{ student.teacherId.name }}</span>
                 <span v-else>-</span>
               </td>
-              <td>{{ formatDate(student.startDate) }}</td>
-              <td>{{ formatDate(student.endDate) }}</td>
+              <td class="tnum">{{ formatDate(student.startDate) }}</td>
+              <td class="tnum">{{ formatDate(student.endDate) }}</td>
               <td>
                 <div class="action-buttons">
                   <button class="btn btn-success btn-sm" @click="openReactivateDialog(student)">
@@ -82,22 +82,22 @@
         </table>
       </div>
 
-      <!-- Reactivate Confirmation Dialog -->
-      <div v-if="dialogStudent" class="modal-overlay" @click.self="closeDialog">
-        <div class="modal-box">
-          <h4>Återaktivera elev?</h4>
-          <p>
-            {{ dialogStudent.name }} återaktiveras som aktiv elev. Eleven läggs tillbaka i
-            slutprovslistan och kan återigen delta i aktiviteter.
-          </p>
-          <div class="modal-actions">
-            <button class="btn btn-secondary" @click="closeDialog">Avbryt</button>
-            <button class="btn btn-success" :disabled="reactivating" @click="reactivateStudent">
-              {{ reactivating ? 'Återaktiverar...' : 'Bekräfta återaktivering' }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <EmptyState
+        v-if="!loading && filteredStudents.length === 0"
+        icon="mdi-account-off-outline"
+        title="Inga inaktiva elever hittades"
+        description="Just nu finns inga elever med registrerat avbrott."
+      />
+
+      <ConfirmDialog
+        v-model="dialogOpen"
+        title="Återaktivera elev?"
+        :message="`${dialogStudent?.name || 'Eleven'} återaktiveras som aktiv elev. Eleven läggs tillbaka i slutprovslistan och kan återigen delta i aktiviteter.`"
+        confirm-label="Bekräfta återaktivering"
+        cancel-label="Avbryt"
+        :loading="reactivating"
+        @confirm="reactivateStudent"
+      />
     </div>
   </div>
 </template>
@@ -106,6 +106,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast.js'
 import axios from 'axios'
+import PageHeader from '@/components/base/PageHeader.vue'
+import StatusBadge from '@/components/base/StatusBadge.vue'
+import EmptyState from '@/components/base/EmptyState.vue'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 
 const toast = useToast()
 
@@ -114,6 +118,7 @@ const loading = ref(false)
 const errorMessage = ref('')
 const searchQuery = ref('')
 const dialogStudent = ref(null)
+const dialogOpen = ref(false)
 const reactivating = ref(false)
 
 const filteredStudents = computed(() => {
@@ -146,10 +151,12 @@ function formatDate(dateString) {
 
 function openReactivateDialog(student) {
   dialogStudent.value = student
+  dialogOpen.value = true
 }
 
 function closeDialog() {
   if (reactivating.value) return
+  dialogOpen.value = false
   dialogStudent.value = null
 }
 
@@ -177,15 +184,39 @@ onMounted(loadInactiveStudents)
   padding: 20px;
 }
 
+.filters-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 16rem;
+  max-width: 32rem;
+}
+
+.search-group label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ink-secondary);
+  white-space: nowrap;
+}
+
 .inactive-count {
-  font-size: 0.9rem;
-  color: #555;
+  font-size: var(--font-size-sm);
+  color: var(--color-ink-muted);
   padding: 8px 0;
 }
 
 .student-name-link {
-  color: #2c9316;
-  font-weight: 600;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
 }
 
@@ -195,38 +226,6 @@ onMounted(loadInactiveStudents)
 
 .action-buttons {
   display: flex;
-  gap: 8px;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-box {
-  background: #fff;
-  padding: 24px;
-  border-radius: 8px;
-  max-width: 480px;
-  width: 90%;
-}
-
-.modal-box h4 {
-  margin-bottom: 12px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
+  gap: var(--space-2);
 }
 </style>

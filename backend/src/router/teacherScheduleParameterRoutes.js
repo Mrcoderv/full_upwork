@@ -1,6 +1,6 @@
 import express from "express";
-import { isAuthenticated } from "../middleware/auth.js";
-import { can } from "../middleware/authorization.js";
+import { isAuthenticated, hasRole } from "../middleware/auth.js";
+import { validate, validateId } from "../middleware/validation.js";
 import {
     listTeacherScheduleParameters,
     getTeacherScheduleParameter,
@@ -11,62 +11,80 @@ import {
 
 const router = express.Router();
 
-// List a teacher's saved schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any teacher's
+const ADMIN_ROLES = ["systemadmin", "admin"];
+const VALID_LENGTHS = [5, 10, 20];
+
+// sectionOffsets: 5 numbers (weeks-from-course-start, one per module/section)
+const sectionOffsetsRule = {
+    custom: (value) => {
+        if (value === undefined || value === null) return null;
+        if (!Array.isArray(value)) return "måste vara en lista med 5 tal";
+        if (value.length !== 5) return "måste ha exakt 5 värden (en per modul)";
+        if (value.some((n) => typeof n !== "number" || Number.isNaN(n) || n < 0)) {
+            return "måste vara icke-negativa tal";
+        }
+        return null;
+    },
+};
+
+const createSchema = {
+    teacherId: { type: "string", required: true, objectId: true },
+    courseId: { type: "string", required: true, min: 1, max: 50 },
+    lengthWeeks: {
+        type: "number",
+        required: true,
+        custom: (value) => (VALID_LENGTHS.includes(value) ? null : "måste vara 5, 10 eller 20"),
+    },
+    sectionOffsets: sectionOffsetsRule,
+};
+
+const updateSchema = {
+    sectionOffsets: { ...sectionOffsetsRule, required: true },
+};
+
+// List a teacher's saved schedule parameters (admin only)
 router.get(
     "/teacher-schedule-parameters",
     isAuthenticated,
-    can("courseTemplates:read"),
+    hasRole(ADMIN_ROLES),
     listTeacherScheduleParameters
 );
 
-// Get a single teacher's schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any teacher's
+// Get a single teacher's schedule parameters (admin only)
 router.get(
     "/teacher-schedule-parameters/:teacherId/:courseId/:lengthWeeks",
     isAuthenticated,
-    can("courseTemplates:read"),
-    validateIdParams,
+    hasRole(ADMIN_ROLES),
+    validateId("teacherId"),
     getTeacherScheduleParameter
 );
 
-// Create new schedule parameters
-// - Teacher: only for their own courses
-// - Admin/systemadmin: any teacher/course/length
+// Create new schedule parameters (admin only)
 router.post(
     "/teacher-schedule-parameters",
     isAuthenticated,
-    can("courseTemplates:create"),
+    hasRole(ADMIN_ROLES),
+    validate(createSchema),
     createTeacherScheduleParameter
 );
 
-// Update schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any
+// Update schedule parameters (admin only)
 router.put(
     "/teacher-schedule-parameters/:teacherId/:courseId/:lengthWeeks",
     isAuthenticated,
-    can("courseTemplates:update"),
+    hasRole(ADMIN_ROLES),
+    validateId("teacherId"),
+    validate(updateSchema),
     updateTeacherScheduleParameter
 );
 
-// Delete schedule parameters
-// - Teacher: only their own
-// - Admin/systemadmin: any
+// Delete schedule parameters (admin only)
 router.delete(
     "/teacher-schedule-parameters/:teacherId/:courseId/:lengthWeeks",
     isAuthenticated,
-    can("courseTemplates:delete"),
+    hasRole(ADMIN_ROLES),
+    validateId("teacherId"),
     deleteTeacherScheduleParameter
 );
-
-// Helper: validate params for the :teacherId/:courseId/:lengthWeeks pattern
-function validateIdParams(req, res, next) {
-    // Accept ObjectId or String courseId; lengthWeeks must be 5/10/20
-    // We'll just proceed; specific validation happens in the controller
-    next();
-}
 
 export default router;
