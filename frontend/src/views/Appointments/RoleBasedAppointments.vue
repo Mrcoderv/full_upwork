@@ -67,6 +67,25 @@ export default {
         total: 0,
         totalPages: 1
       },
+      selectedStudent: null,
+      profileForm: {
+        additionalInfo: '',
+        aplStatus: 'GRAY',
+        specialNeeds: '',
+        supportContactName: '',
+        supportContactPhone: '',
+        supportContactEmail: ''
+      },
+      studyPlan: {
+        aplStatus: 'GRAY',
+        notes: ''
+      },
+      examAccommodations: {
+        extraTime: 0,
+        computer: false,
+        separateRoom: false,
+        notes: ''
+      }
     };
   },
   computed: {
@@ -93,11 +112,49 @@ export default {
     '$route'(to, from) {
       if (to.path !== from.path) {
         this.fetchMeetings();
+        this.selectedStudent = null;
+        this.profileForm = {
+          additionalInfo: '',
+          aplStatus: 'GRAY',
+          specialNeeds: '',
+          supportContactName: '',
+          supportContactPhone: '',
+          supportContactEmail: ''
+        };
+        this.examAccommodations = {
+          extraTime: 0,
+          computer: false,
+          separateRoom: false,
+          notes: ''
+        };
+        this.studyPlan = {
+          aplStatus: 'GRAY',
+          notes: ''
+        };
       }
     },
     // Also watch activeRole in case route meta changes
     activeRole() {
       this.fetchMeetings();
+      this.selectedStudent = null;
+      this.profileForm = {
+        additionalInfo: '',
+        aplStatus: 'GRAY',
+        specialNeeds: '',
+        supportContactName: '',
+        supportContactPhone: '',
+        supportContactEmail: ''
+      };
+      this.examAccommodations = {
+        extraTime: 0,
+        computer: false,
+        separateRoom: false,
+        notes: ''
+      };
+      this.studyPlan = {
+        aplStatus: 'GRAY',
+        notes: ''
+      };
     }
   },
   methods: {
@@ -155,18 +212,89 @@ export default {
       if (confirm('Är du säker på att du vill radera detta möte?')) {
         try {
           await client.delete(`/meetings/${id}`);
-          this.fetchMeetings(); // Refresh list
+          this.fetchMeetings();
         } catch (error) {
           console.error("Kunde inte radera mötet:", error);
           toast.error('Kunde inte radera mötet.');
         }
       }
     },
-    changePage(newPage) {
-      if (newPage > 0 && newPage <= this.pagination.totalPages) {
-        this.pagination.page = newPage;
+    async saveProfile() {
+      if (!this.selectedStudent) return;
+      
+      try {
+        await client.put(`/students/${this.selectedStudent._id}/profile`, {
+          additionalInfo: this.profileForm.additionalInfo,
+          specialNeeds: this.profileForm.specialNeeds,
+          supportContactName: this.profileForm.supportContactName,
+          supportContactPhone: this.profileForm.supportContactPhone,
+          supportContactEmail: this.profileForm.supportContactEmail
+        });
+        
+        toast.success('Profil uppdaterad.');
         this.fetchMeetings();
+        this.closeProfile();
+      } catch (error) {
+        console.error('Kunde inte spara profil:', error);
+        toast.error('Kunde inte spara profil, försök igen.');
       }
+    },
+    closeProfile() {
+      this.selectedStudent = null;
+      this.profileForm = {
+        additionalInfo: '',
+        aplStatus: 'GRAY',
+        specialNeeds: '',
+        supportContactName: '',
+        supportContactPhone: '',
+        supportContactEmail: ''
+      };
+    },
+    async saveStudyPlan() {
+      if (!this.selectedStudent) return;
+      
+      try {
+        await client.put(`/students/${this.selectedStudent._id}/study-plan`, {
+          aplStatus: this.studyPlan.aplStatus,
+          notes: this.studyPlan.notes
+        });
+        
+        toast.success('Studieplan justerad.');
+        this.fetchMeetings();
+        this.closeStudyPlan();
+      } catch (error) {
+        console.error('Kunde inte spara studieplan:', error);
+        toast.error('Kunde inte spara studieplan, försök igen.');
+      }
+    },
+    closeStudyPlan() {
+      this.studyPlan = {
+        aplStatus: 'GRAY',
+        notes: ''
+      };
+    },
+    async saveExamAccommodations() {
+      if (!this.selectedStudent) return;
+      
+      try {
+        await client.put(`/meetings/students/${this.selectedStudent._id}/exam-accommodations`, this.examAccommodations);
+        
+        toast.success('Examensackommodationer sparade.');
+        this.fetchMeetings();
+        this.closeExamAccommodations();
+      } catch (error) {
+        console.error('Kunde inte spara examenackommodationer:', error);
+        toast.error('Kunde inte spara examenackommodationer, försök igen.');
+      }
+    },
+    closeExamAccommodations() {
+      this.selectedStudent = null;
+      this.examAccommodations = {
+        extraTime: 0,
+        computer: false,
+        separateRoom: false,
+        notes: ''
+      };
     }
   }
 };

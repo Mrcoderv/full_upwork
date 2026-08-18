@@ -1,0 +1,246 @@
+/* ============================================================
+   DESIGN TOKENS — Phase 1
+   Single source of truth for color, type, spacing, radii,
+   elevation, motion, focus. Loaded before all other styles.
+   ------------------------------------------------------------
+   Palette (approved):
+     Primary   #175083  deep steel blue
+     Success   #2E7D57  gran (pine)
+     Warning   #B77A0A  bärnsten (amber)
+     Danger    #B3261E  signal red
+     Info      #0E6BA8  hav (ocean)
+     Violet    #6D4FA8  uppföljning (only human-action states)
+   ============================================================ */
+
+:root {
+  /* ---------- Brand / action hues ---------- */
+  --color-primary: #175083;
+  --color-primary-hover: #0E3D63;
+  --color-primary-active: #0B3050;
+  --color-primary-light: #E7EFF5;
+  --color-primary-contrast: #FFFFFF;
+
+  /* Secondary accent (gradients, decorative) — Hav family.
+     The semantic success/status hue stays pine (--color-success). */
+  --color-secondary: #0E6BA8;
+  --color-secondary-hover: #0B5686;
+  --color-secondary-light: #E4F1F9;
+  --color-secondary-contrast: #FFFFFF;
+
+  /* ---------- Status hue families (shared language) ---------- */
+  --status-neutral: #6B7480;
+  --status-neutral-tint: #EEF0F2;
+  --status-neutral-ink: #3F454D;
+
+  --status-info: #0E6BA8;      /* Hav — Antagen, Kontaktad, pågående */
+  --status-info-tint: #E4F1F9;
+  --status-info-ink: #0B5686;
+
+  --status-warning: #B77A0A;   /* Bärnsten — Reviderad, APL på gång, varnad, E–D */
+  --status-warning-tint: #FBF1DE;
+  --status-warning-ink: #6B4A06;
+
+  --status-danger: #B3261E;    /* Signal — Avbrott, Snart slut, F, auto-avbrott */
+  --status-danger-tint: #FBEAE9;
+  --status-danger-ink: #921E18;
+
+  --status-success: #2E7D57;   /* Gran — Betygsatt, Klar praktik, A–B */
+  --status-success-tint: #E4F2EB;
+  --status-success-ink: #256B4A;
+
+  --status-violet: #6D4FA8;    /* Uppföljning — Behöver uppföljning */
+  --status-violet-tint: #EFEAF7;
+  --status-violet-ink: #52397D;
+
+  /* ---------- Neutrals ---------- */
+  --color-canvas: #F6F7F8;
+  --color-surface: #FFFFFF;
+  --color-ink: #22272E;
+  --color-ink-secondary: #4B5560;
+  --color-ink-muted: #5A6470;
+  --color-border: #D9DEE4;
+  --color-border-strong: #B6BFC9;
+  --color-overlay: rgba(22, 27, 33, 0.5);
+
+  /* ---------- Semantic aliases (legacy CSS continuity) ---------- */
+  --color-bg: var(--color-canvas);
+  --color-bg-secondary: #EEF0F2;
+  --color-text: var(--color-ink);
+  --color-text-secondary: var(--color-ink-secondary);
+  --color-text-muted: var(--color-ink-muted);
+  --color-border-hover: var(--color-border-strong);
+  --color-success: var(--status-success);
+  --color-success-light: var(--status-success-tint);
+  --color-warning: var(--status-warning);
+  --color-warning-light: var(--status-warning-tint);
+  --color-warning-ink: var(--status-warning-ink);
+  --color-error: var(--status-danger);
+  --color-error-light: var(--status-danger-tint);
+  --color-error-ink: var(--status-danger-ink);
+  --color-info: var(--status-info);
+  --color-info-light: var(--status-info-tint);
+  --color-violet: var(--status-violet);
+  --color-violet-light: var(--status-violet-tint);
+  --color-violet-ink: var(--status-violet-ink);
+  --color-neutral: var(--status-neutral);
+  --color-neutral-light: var(--status-neutral-tint);
+  --color-neutral-ink: var(--status-neutral-ink);
+
+  /* ---------- Typography ---------- */
+  --font-body: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Sofia Sans', 'Inter', 'SF Pro Display', -apple-system,
+    BlinkMacSystemFont, sans-serif;
+  --font-size-xs: 0.75rem;      /* 12px */
+  --font-size-sm: 0.8125rem;    /* 13px */
+  --font-size-base: 0.9375rem;  /* 15px body */
+  --font-size-table: 0.875rem;  /* 14px data tables */
+  --font-size-md: 1rem;         /* 16px */
+  --font-size-lg: 1.125rem;     /* 18px */
+  --font-size-xl: 1.375rem;     /* 22px */
+  --font-size-2xl: 1.75rem;     /* 28px */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-body: 1.5;
+  --line-height-dense: 1.35;    /* data tables */
+
+  /* ---------- Spacing (4px grid) ---------- */
+  --space-0-5: 0.125rem; /* 2 */
+  --space-1: 0.25rem;    /* 4 */
+  --space-2: 0.5rem;     /* 8 */
+  --space-3: 0.75rem;    /* 12 */
+  --space-4: 1rem;       /* 16 */
+  --space-6: 1.5rem;     /* 24 */
+  --space-8: 2rem;       /* 32 */
+  --space-12: 3rem;      /* 48 */
+  --control-height: 2.25rem;   /* 36px controls */
+  --table-row-height: 2.5rem;  /* 40px table rows */
+
+  /* ---------- Radii (controls/cards/modals) ---------- */
+  --radius-sm: 0.25rem;  /* 4px controls */
+  --radius-md: 0.375rem; /* 6px cards */
+  --radius-lg: 0.5rem;   /* 8px modals/overlays */
+  --radius-xl: 0.75rem;  /* 12px large surfaces */
+  --radius-pill: 999px;
+  --radius-control: var(--radius-sm);
+  --radius-card: var(--radius-md);
+  --radius-overlay: var(--radius-lg);
+
+  /* ---------- Elevation (cards flat; only popovers/modals raised) ---------- */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 1px 2px rgba(16, 24, 40, 0.05), 0 2px 4px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 2px 4px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.12);
+  --shadow-raise: var(--shadow-lg);
+  --shadow-overlay: 0 4px 8px rgba(16, 24, 40, 0.08), 0 16px 40px rgba(16, 24, 40, 0.16);
+
+  /* ---------- Motion (single 200ms ease, state changes only) ---------- */
+  --motion-duration: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---------- Focus ---------- */
+  --focus-ring-width: 2px;
+  --focus-ring-color: var(--color-primary);
+  --focus-ring-offset: 2px;
+  --focus-ring: var(--focus-ring-width) solid var(--focus-ring-color);
+}
+
+/* ---------- Hue modifier classes (single source for status styling) ---------- */
+.hue-neutral { --hue: var(--status-neutral); --hue-tint: var(--status-neutral-tint); --hue-ink: var(--status-neutral-ink); }
+.hue-info    { --hue: var(--status-info);    --hue-tint: var(--status-info-tint);    --hue-ink: var(--status-info-ink); }
+.hue-warning { --hue: var(--status-warning); --hue-tint: var(--status-warning-tint); --hue-ink: var(--status-warning-ink); }
+.hue-danger  { --hue: var(--status-danger);  --hue-tint: var(--status-danger-tint);  --hue-ink: var(--status-danger-ink); }
+.hue-success { --hue: var(--status-success); --hue-tint: var(--status-success-tint); --hue-ink: var(--status-success-ink); }
+.hue-violet  { --hue: var(--status-violet);  --hue-tint: var(--status-violet-tint);  --hue-ink: var(--status-violet-ink); }
+
+/* ---------- Typography base ---------- */
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-body);
+  font-weight: var(--font-weight-regular);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+/* Vuetify app shell follows the token fonts */
+.v-application {
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+}
+
+.v-application h1, .v-application h2, .v-application h3,
+.v-application h4, .v-application h5, .v-application h6,
+.v-application .text-h1, .v-application .text-h2, .v-application .text-h3,
+.v-application .text-h4, .v-application .text-h5, .v-application .text-h6 {
+  font-family: var(--font-heading);
+}
+
+/* Tabular numerals for dates, personnummer, scores */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* ---------- Focus (keyboard only, never mouse) ---------- */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* ---------- Vuetify component surface (follows tokens) ---------- */
+.v-btn {
+  border-radius: var(--radius-control);
+  text-transform: none;
+  font-weight: var(--font-weight-medium);
+}
+
+.v-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+}
+
+.v-dialog .v-card,
+.v-overlay__content .v-card {
+  border-radius: var(--radius-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.v-chip {
+  font-weight: var(--font-weight-medium);
+}
+
+.v-table th,
+.v-data-table th {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ink-secondary);
+}
+
+/* ---------- Reduced motion (kill non-essential motion) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -32,6 +32,11 @@ const UserSchema = new mongoose.Schema(
         },
         mustChangePassword: { type: Boolean, default: false },
         lastLoginAt: { type: Date, default: null },
+        // Staff vacation tracking (Section 6.7)
+        onVacation: { type: Boolean, default: false },
+        vacationStart: { type: Date },
+        vacationEnd: { type: Date },
+        vacationNote: { type: String },
         createdAt: { type: Date, default: Date.now },
         updatedAt: { type: Date, default: Date.now },
     },

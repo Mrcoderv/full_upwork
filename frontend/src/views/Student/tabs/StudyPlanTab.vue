@@ -25,6 +25,20 @@
           <strong>{{ student.enrollmentStats.activeEnrollments }}</strong>
           aktiva
         </span>
+        <button
+          v-if="canEditStatus"
+          class="btn btn-sm btn-primary placement-button"
+          @click="showPlacementWizard = true"
+        >
+          + Placera kurs
+        </button>
+        <button
+          v-if="canEditStatus"
+          class="btn btn-sm btn-warning revision-button"
+          @click="showRevisionModal = true"
+        >
+          Revidera plan
+        </button>
       </div>
     </div>
     <div class="card-body">
@@ -84,7 +98,15 @@
                 <div class="education-details">
                   <!-- Teacher Information -->
                   <div v-if="getTeacherName(element)" class="education-teacher">
-                    <strong>Lärare:</strong> {{ getTeacherName(element) }}
+                    <strong>Lärare:</strong>
+                    <router-link
+                      v-if="getTeacherId(element)"
+                      :to="`/teacher/${getTeacherId(element)}`"
+                      class="teacher-link"
+                    >
+                      {{ getTeacherName(element) }}
+                    </router-link>
+                    <span v-else>{{ getTeacherName(element) }}</span>
                   </div>
 
                   <!-- Status Dropdown (only for enrollments) -->
@@ -180,21 +202,72 @@
           </div>
         </div>
       </div>
+
+      <!-- Revision History -->
+      <div v-if="revisionHistory.length > 0" class="revision-history-section">
+        <h4
+          class="revision-history-title"
+          @click="showRevisionHistory = !showRevisionHistory"
+        >
+          Revideringshistorik
+          <span class="revision-history-toggle">{{ showRevisionHistory ? '▲' : '▼' }}</span>
+        </h4>
+        <div v-if="showRevisionHistory" class="revision-history-list">
+          <div
+            v-for="(rev, idx) in revisionHistory"
+            :key="idx"
+            class="revision-history-item"
+          >
+            <div class="revision-history-header">
+              <span class="revision-history-reason">{{ getRevisionReasonLabel(rev.reason) }}</span>
+              <span class="revision-history-date">{{ formatDate(rev.timestamp) }}</span>
+            </div>
+            <div v-if="rev.description" class="revision-history-desc">{{ rev.description }}</div>
+            <div class="revision-history-changes">
+              <span v-if="rev.previousValues?.tempoWeeks">
+                Tempo: {{ rev.previousValues.tempoWeeks }}v → {{ rev.newValues?.tempoWeeks }}v
+              </span>
+              <span v-if="rev.previousValues?.removedEnrollmentIds">
+                Borttagna kurser: {{ rev.previousValues.removedEnrollmentIds.length }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <CoursePlacementWizard
+    v-if="showPlacementWizard"
+    :student="student"
+    @close="showPlacementWizard = false"
+    @placed="handlePlacementComplete"
+  />
+
+  <StudyPlanRevisionModal
+    v-model="showRevisionModal"
+    :student="student"
+    :active-enrollments="activeEnrollments"
+    :current-tempo="selectedTempo"
+    @revised="handleRevisionComplete"
+  />
 </template>
 
 <script>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import client from '@/api/client.js';
 import { useToast } from '@/composables/useToast.js';
 import draggable from 'vuedraggable';
+import CoursePlacementWizard from '../CoursePlacementWizard.vue';
+import StudyPlanRevisionModal from '../StudyPlanRevisionModal.vue';
 
 export default {
   name: 'StudyPlanTab',
   components: {
     draggable,
+    CoursePlacementWizard,
+    StudyPlanRevisionModal,
   },
   props: {
     student: {
@@ -410,6 +483,24 @@ export default {
       return null;
     };
 
+    const getTeacherId = (edu) => {
+      // Check enrollment teacherId (may be populated or just an id)
+      if (edu.teacherId) {
+        if (typeof edu.teacherId === 'object') {
+          return edu.teacherId._id || null;
+        }
+        return edu.teacherId;
+      }
+      // Check courseInstance teacherId
+      if (edu.courseInstance?.teacherId) {
+        if (typeof edu.courseInstance.teacherId === 'object') {
+          return edu.courseInstance.teacherId._id || null;
+        }
+        return edu.courseInstance.teacherId;
+      }
+      return null;
+    };
+
     const getStatusLabel = (status) => {
       const statusMap = {
         'enrolled': 'Antagen',
@@ -551,6 +642,63 @@ export default {
 
     const downloadingCertificate = ref({});
 
+    const showPlacementWizard = ref(false);
+    const showRevisionModal = ref(false);
+    const revisionHistory = ref([]);
+    const showRevisionHistory = ref(false);
+
+    const activeEnrollments = computed(() => {
+      return sortedEducation.value.filter(
+        (edu) => edu.isEnrollment && edu.type === 'Course' && !['completed', 'dropped', 'cancelled'].includes(edu.status)
+      );
+    });
+
+    const handlePlacementComplete = async () => {
+      showPlacementWizard.value = false;
+      try {
+        const refreshed = await client.get(`/student-details/${props.student._id}`);
+        emit('student-updated', refreshed.data);
+        toast.success('Kursen har placerats!');
+      } catch (err) {
+        console.error('Error refreshing student:', err);
+      }
+    };
+
+    const handleRevisionComplete = async () => {
+      try {
+        const refreshed = await client.get(`/student-details/${props.student._id}`);
+        emit('student-updated', refreshed.data);
+        toast.success('Studieplanen har reviderats!');
+        await loadRevisionHistory();
+      } catch (err) {
+        console.error('Error refreshing student after revision:', err);
+      }
+    };
+
+    const loadRevisionHistory = async () => {
+      if (!props.student?._id) return;
+      try {
+        const response = await client.get(`/student-details/${props.student._id}/revision-history`);
+        revisionHistory.value = response.data.history || [];
+      } catch (err) {
+        // Silently fail — revision history is non-critical
+      }
+    };
+
+    const getRevisionReasonLabel = (reason) => {
+      const labels = {
+        pace_change: 'Tempoändring',
+        course_added: 'Kurs tillagd',
+        course_removed: 'Kurs borttagen',
+        date_adjustment: 'Datumjustering',
+        package_swap: 'Paketbyte',
+        other: 'Övrigt',
+      };
+      return labels[reason] || reason;
+    };
+
+    onMounted(loadRevisionHistory);
+
     const handleDownloadCertificate = async (course) => {
       if (!course?.enrollmentId || !props.student?._id) return;
       const key = course.enrollmentId;
@@ -643,6 +791,7 @@ export default {
       getCourseInstanceCode,
       getCourseLink,
       getTeacherName,
+      getTeacherId,
       getStatusLabel,
       updateStatus,
       canEditStatus,
@@ -657,6 +806,14 @@ export default {
       handleReEnroll,
       downloadingCertificate,
       handleDownloadCertificate,
+      showPlacementWizard,
+      handlePlacementComplete,
+      showRevisionModal,
+      activeEnrollments,
+      handleRevisionComplete,
+      revisionHistory,
+      showRevisionHistory,
+      getRevisionReasonLabel,
     };
   },
 };
@@ -912,6 +1069,14 @@ export default {
   color: #ffc107;
   font-weight: 500;
 }
+.teacher-link {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+.teacher-link:hover {
+  text-decoration: underline;
+}
 .course-instance-info {
   margin-top: 5px;
   font-size: 12px;
@@ -1049,5 +1214,80 @@ export default {
 .completed-course-certificate {
   color: #6c757d;
   font-size: 13px;
+}
+.placement-button {
+  margin-left: 12px;
+  white-space: nowrap;
+}
+.revision-button {
+  margin-left: 8px;
+  white-space: nowrap;
+  background-color: #ffc107;
+  color: #212529;
+  border: none;
+}
+.revision-button:hover {
+  background-color: #e0a800;
+}
+
+.revision-history-section {
+  margin-top: 24px;
+  padding: 10px;
+  border-top: 1px solid #dee2e6;
+}
+.revision-history-title {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.revision-history-title:hover {
+  color: #007bff;
+}
+.revision-history-toggle {
+  font-size: 12px;
+  color: #6c757d;
+}
+.revision-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.revision-history-item {
+  padding: 10px 12px;
+  border: 1px solid #dee2e6;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+  background: #fffaf0;
+}
+.revision-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.revision-history-reason {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+.revision-history-date {
+  color: #6c757d;
+  font-size: 13px;
+}
+.revision-history-desc {
+  margin-top: 4px;
+  color: #495057;
+  font-size: 13px;
+}
+.revision-history-changes {
+  margin-top: 4px;
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #6c757d;
 }
 </style>

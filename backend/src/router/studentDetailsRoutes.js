@@ -11,12 +11,21 @@ import {
     getChangeHistory,
     setStudentDropout,
     removeStudentDropout,
+    reactivateStudentWithCourses,
+    getRevisionReasons,
+    reviseStudyPlan,
+    getStudyplanRevisionHistory,
+    getSupportInfo,
+    updateSupportInfo,
+    getDeviations,
+    createDeviation,
+    updateDeviation,
 } from "../controllers/studentDetailsController.js";
 
 const router = express.Router();
 
 // Get student details with populated references
-router.get("/student-details/:id", isAuthenticated, asyncHandler(getStudentDetails));
+router.get("/student-details/:id", isAuthenticated, hasRole(["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"]), asyncHandler(getStudentDetails));
 
 // Update student information (admin+ only)
 router.put(
@@ -36,16 +45,19 @@ router.post(
 router.put(
     "/student-details/:id/comments/:commentId",
     isAuthenticated,
+    hasRole(["teacher", "admin", "systemadmin"]),
     asyncHandler(editComment)
 );
 router.delete(
     "/student-details/:id/comments/:commentId",
     isAuthenticated,
+    hasRole(["teacher", "admin", "systemadmin"]),
     asyncHandler(deleteComment)
 );
 router.put(
     "/student-details/:id/comments/:commentId/seen",
     isAuthenticated,
+    hasRole(["teacher", "admin", "systemadmin", "coordinator", "syv", "specped"]),
     asyncHandler(markCommentSeen)
 );
 
@@ -71,6 +83,84 @@ router.delete(
     isAuthenticated,
     hasRole(["admin", "systemadmin"]),
     asyncHandler(removeStudentDropout)
+);
+
+// Reactivate student with optional course re-enrollment - admin+ only
+router.post(
+    "/student-details/:id/reactivate",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(reactivateStudentWithCourses)
+);
+
+// ─── Study-Plan Revision Endpoints ──────────────────────────────────────────
+
+// Get available revision reasons
+router.get(
+    "/student-details/:id/revision-reasons",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin", "teacher"]),
+    asyncHandler(getRevisionReasons)
+);
+
+// Perform a study-plan revision - admin+ only
+router.post(
+    "/student-details/:id/revise-studyplan",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(reviseStudyPlan)
+);
+
+// Get revision history for a student
+router.get(
+    "/student-details/:id/revision-history",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin", "teacher"]),
+    asyncHandler(getStudyplanRevisionHistory)
+);
+
+// ─── Support Info Endpoints ─────────────────────────────────────────────────
+
+// Get support contacts for a student
+router.get(
+    "/student-details/:id/support",
+    isAuthenticated,
+    hasRole(["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"]),
+    asyncHandler(getSupportInfo)
+);
+
+// Update support contacts for a student (admin+ only)
+router.put(
+    "/student-details/:id/support",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(updateSupportInfo)
+);
+
+// ─── Deviation Endpoints ────────────────────────────────────────────────────
+
+// Get all deviations for a student
+router.get(
+    "/student-details/:id/deviations",
+    isAuthenticated,
+    hasRole(["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"]),
+    asyncHandler(getDeviations)
+);
+
+// Create a new deviation (teacher+ only)
+router.post(
+    "/student-details/:id/deviations",
+    isAuthenticated,
+    hasRole(["teacher", "admin", "systemadmin"]),
+    asyncHandler(createDeviation)
+);
+
+// Update a deviation status (admin+ only)
+router.put(
+    "/student-details/:id/deviations/:deviationId",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(updateDeviation)
 );
 
 export default router;

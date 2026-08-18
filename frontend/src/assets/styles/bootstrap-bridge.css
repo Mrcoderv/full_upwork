@@ -1,0 +1,290 @@
+/* ============================================================
+   BOOTSTRAP → DESIGN TOKEN BRIDGE (Phase 1)
+   Maps Bootstrap component classes to the shared design tokens so
+   legacy views inherit the system until full migration (Phase 6).
+   Loaded AFTER main.css/global.css so it wins the cascade.
+   Bootstrap JS keeps driving modals/close until Phase 6.
+   ============================================================ */
+
+/* ---------- Buttons ---------- */
+.btn {
+  border-radius: var(--radius-control);
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid transparent;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--color-primary);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-bg: var(--color-primary-hover);
+  --bs-btn-hover-border-color: var(--color-primary-hover);
+  --bs-btn-active-bg: var(--color-primary-active);
+  --bs-btn-active-border-color: var(--color-primary-active);
+  --bs-btn-disabled-bg: var(--color-primary);
+  --bs-btn-disabled-border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-secondary {
+  --bs-btn-bg: var(--color-neutral);
+  --bs-btn-border-color: var(--color-neutral);
+  --bs-btn-hover-bg: var(--status-neutral-ink);
+  --bs-btn-hover-border-color: var(--status-neutral-ink);
+  --bs-btn-active-bg: var(--status-neutral-ink);
+  --bs-btn-active-border-color: var(--status-neutral-ink);
+  --bs-btn-disabled-bg: var(--color-neutral);
+  --bs-btn-disabled-border-color: var(--color-neutral);
+  background-color: var(--color-neutral);
+  border-color: var(--color-neutral);
+}
+
+.btn-success {
+  --bs-btn-bg: var(--color-success);
+  --bs-btn-border-color: var(--color-success);
+  --bs-btn-hover-bg: var(--status-success-ink);
+  --bs-btn-hover-border-color: var(--status-success-ink);
+  --bs-btn-active-bg: var(--status-success-ink);
+  --bs-btn-active-border-color: var(--status-success-ink);
+  --bs-btn-disabled-bg: var(--color-success);
+  --bs-btn-disabled-border-color: var(--color-success);
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.btn-danger {
+  --bs-btn-bg: var(--color-danger);
+  --bs-btn-border-color: var(--color-danger);
+  --bs-btn-hover-bg: var(--color-danger-hover);
+  --bs-btn-hover-border-color: var(--color-danger-hover);
+  --bs-btn-active-bg: var(--color-danger-hover);
+  --bs-btn-active-border-color: var(--color-danger-hover);
+  --bs-btn-disabled-bg: var(--color-danger);
+  --bs-btn-disabled-border-color: var(--color-danger);
+  background-color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.btn-warning {
+  --bs-btn-bg: var(--color-warning);
+  --bs-btn-border-color: var(--color-warning);
+  --bs-btn-hover-bg: var(--status-warning-ink);
+  --bs-btn-hover-border-color: var(--status-warning-ink);
+  --bs-btn-active-bg: var(--status-warning-ink);
+  --bs-btn-active-border-color: var(--status-warning-ink);
+  --bs-btn-disabled-bg: var(--color-warning);
+  --bs-btn-disabled-border-color: var(--color-warning);
+  background-color: var(--color-warning);
+  border-color: var(--color-warning);
+  color: var(--color-surface);
+}
+
+.btn-info {
+  --bs-btn-bg: var(--color-info);
+  --bs-btn-border-color: var(--color-info);
+  --bs-btn-hover-bg: var(--color-info-hover);
+  --bs-btn-hover-border-color: var(--color-info-hover);
+  --bs-btn-active-bg: var(--color-info-hover);
+  --bs-btn-active-border-color: var(--color-info-hover);
+  --bs-btn-disabled-bg: var(--color-info);
+  --bs-btn-disabled-border-color: var(--color-info);
+  background-color: var(--color-info);
+  border-color: var(--color-info);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--color-primary);
+  --bs-btn-border-color: var(--color-primary);
+  --bs-btn-hover-bg: var(--color-primary);
+  --bs-btn-hover-border-color: var(--color-primary);
+  --bs-btn-hover-color: var(--color-surface);
+  --bs-btn-active-bg: var(--color-primary-active);
+  --bs-btn-active-border-color: var(--color-primary-active);
+  --bs-btn-active-color: var(--color-surface);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-outline-secondary {
+  --bs-btn-color: var(--color-neutral);
+  --bs-btn-border-color: var(--color-neutral);
+  --bs-btn-hover-bg: var(--color-neutral);
+  --bs-btn-hover-border-color: var(--color-neutral);
+  --bs-btn-hover-color: var(--color-surface);
+  --bs-btn-active-bg: var(--status-neutral-ink);
+  --bs-btn-active-border-color: var(--status-neutral-ink);
+  --bs-btn-active-color: var(--color-surface);
+  color: var(--color-neutral);
+  border-color: var(--color-neutral);
+}
+
+.btn-outline-danger {
+  --bs-btn-color: var(--color-danger);
+  --bs-btn-border-color: var(--color-danger);
+  --bs-btn-hover-bg: var(--color-danger);
+  --bs-btn-hover-border-color: var(--color-danger);
+  --bs-btn-hover-color: var(--color-surface);
+  --bs-btn-active-bg: var(--color-danger-hover);
+  --bs-btn-active-border-color: var(--color-danger-hover);
+  --bs-btn-active-color: var(--color-surface);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.btn-outline-warning {
+  --bs-btn-color: var(--color-warning);
+  --bs-btn-border-color: var(--color-warning);
+  --bs-btn-hover-bg: var(--color-warning);
+  --bs-btn-hover-border-color: var(--color-warning);
+  --bs-btn-hover-color: var(--color-surface);
+  --bs-btn-active-bg: var(--status-warning-ink);
+  --bs-btn-active-border-color: var(--status-warning-ink);
+  --bs-btn-active-color: var(--color-surface);
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+.btn-outline-info {
+  --bs-btn-color: var(--color-info);
+  --bs-btn-border-color: var(--color-info);
+  --bs-btn-hover-bg: var(--color-info);
+  --bs-btn-hover-border-color: var(--color-info);
+  --bs-btn-hover-color: var(--color-surface);
+  --bs-btn-active-bg: var(--color-info-hover);
+  --bs-btn-active-border-color: var(--color-info-hover);
+  --bs-btn-active-color: var(--color-surface);
+  color: var(--color-info);
+  border-color: var(--color-info);
+}
+
+.btn-close {
+  border-radius: var(--radius-control);
+}
+
+/* ---------- Badges / background utilities ---------- */
+.badge {
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-pill);
+}
+
+.bg-primary { background-color: var(--color-primary) !important; color: var(--color-surface) !important; }
+.bg-secondary { background-color: var(--color-neutral) !important; color: var(--color-surface) !important; }
+.bg-success { background-color: var(--color-success) !important; color: var(--color-surface) !important; }
+.bg-danger { background-color: var(--color-danger) !important; color: var(--color-surface) !important; }
+.bg-warning { background-color: var(--color-warning) !important; color: var(--color-surface) !important; }
+.bg-info { background-color: var(--color-info) !important; color: var(--color-surface) !important; }
+
+/* ---------- Tables ---------- */
+.table {
+  --bs-table-color: var(--color-text);
+  --bs-table-bg: var(--color-surface);
+  --bs-table-border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.table thead th {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ink-secondary);
+  border-bottom: 2px solid var(--color-border-strong);
+}
+
+.table td,
+.table th {
+  font-size: var(--font-size-table);
+  line-height: var(--line-height-dense);
+  vertical-align: middle;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: var(--color-bg);
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: var(--color-primary-light);
+}
+
+.table-light { --bs-table-bg: var(--color-bg-secondary) !important; }
+.table-primary { --bs-table-bg: var(--color-primary-light) !important; }
+
+/* ---------- Form controls ---------- */
+.form-control,
+.form-select {
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-dense);
+}
+
+.form-control:focus,
+.form-select:focus {
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+/* ---------- Alerts ---------- */
+.alert {
+  border-radius: var(--radius-card);
+}
+
+.alert-danger {
+  --bs-alert-color: var(--color-error-ink);
+  --bs-alert-bg: var(--color-error-light);
+  --bs-alert-border-color: var(--color-error);
+  color: var(--color-error-ink);
+  background-color: var(--color-error-light);
+  border-color: var(--color-error);
+}
+
+.alert-warning {
+  --bs-alert-color: var(--color-warning-ink);
+  --bs-alert-bg: var(--color-warning-light);
+  --bs-alert-border-color: var(--color-warning);
+  color: var(--color-warning-ink);
+  background-color: var(--color-warning-light);
+  border-color: var(--color-warning);
+}
+
+.alert-success {
+  --bs-alert-color: var(--status-success-ink);
+  --bs-alert-bg: var(--color-success-light);
+  --bs-alert-border-color: var(--color-success);
+  color: var(--status-success-ink);
+  background-color: var(--color-success-light);
+  border-color: var(--color-success);
+}
+
+.alert-info {
+  --bs-alert-color: var(--color-info);
+  --bs-alert-bg: var(--color-info-light);
+  --bs-alert-border-color: var(--color-info);
+  color: var(--color-info);
+  background-color: var(--color-info-light);
+  border-color: var(--color-info);
+}
+
+/* ---------- Modals ---------- */
+.modal-content {
+  border-radius: var(--radius-overlay);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-overlay);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-footer {
+  border-top: 1px solid var(--color-border);
+}
+
+/* ---------- Text utilities ---------- */
+.text-primary { color: var(--color-primary) !important; }
+.text-secondary { color: var(--color-neutral) !important; }
+.text-success { color: var(--color-success) !important; }
+.text-danger { color: var(--color-danger) !important; }
+.text-warning { color: var(--color-warning) !important; }
+.text-info { color: var(--color-info) !important; }
+.text-muted { color: var(--color-ink-muted) !important; }
+.text-grey { color: var(--color-ink-muted) !important; }

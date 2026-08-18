@@ -61,7 +61,11 @@ vi.mock("../../src/middleware/auth.js", () => ({
   },
   hasRole: (allowedRoles) => (req, res, next) => {
     const userRole = req.headers["x-user-role"] || "teacher";
-    if (allowedRoles.includes(userRole)) {
+    const rolesHeader = req.headers["x-user-roles"];
+    const roles = rolesHeader ? JSON.parse(rolesHeader) : undefined;
+    const userRoles = roles || (userRole ? [userRole] : []);
+    const hasAllowedRole = userRoles.some((r) => allowedRoles.includes(r));
+    if (hasAllowedRole) {
       next();
     } else {
       res.status(403).json({ error: "Forbidden" });
@@ -1317,9 +1321,7 @@ describe("examRoutes", () => {
       .set("x-user-role", "user")
       .send(validPayload);
     expect(userResponse.status).toBe(403);
-    expect(userResponse.body.error).toBe(
-      "Only admins or the responsible teacher can move exam dates"
-    );
+    expect(userResponse.body.error).toBe("Forbidden");
 
     // Test 2: User with roles array ['user'] should get 403 Forbidden
     const userRolesResponse = await request(app)
@@ -1328,9 +1330,7 @@ describe("examRoutes", () => {
       .set("x-user-roles", JSON.stringify(["user"]))
       .send(validPayload);
     expect(userRolesResponse.status).toBe(403);
-    expect(userRolesResponse.body.error).toBe(
-      "Only admins or the responsible teacher can move exam dates"
-    );
+    expect(userRolesResponse.body.error).toBe("Forbidden");
 
     // Test 3: User with role 'admin' should get 200 OK
     StudentEnrollment.updateMany.mockResolvedValueOnce({ modifiedCount: 0 });

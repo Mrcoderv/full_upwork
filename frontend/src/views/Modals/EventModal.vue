@@ -160,6 +160,39 @@
             </select>
           </div>
 
+          <div v-if="canEdit" class="mb-3">
+            <h6>🏫 Rum</h6>
+            <select v-model="examRoom" class="form-select">
+              <option value="">— Välj rum —</option>
+              <option v-for="(locations, municipality) in examMunicipalities" :key="municipality">
+                <optgroup :label="municipality">
+                  <option v-for="location in locations" :key="location" :value="location">
+                    {{ location }}
+                  </option>
+                </optgroup>
+              </optgroup>
+            </select>
+          </div>
+
+          <!-- Ackommodationer -->
+          <div v-if="canEdit" class="mb-3">
+            <h6>🎯 Ackommodationer</h6>
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label>Extra skrivtid (minuter)</label>
+                <input type="number" v-model="examAccommodations.extraTime" class="form-control form-control-sm" min="0" />
+              </div>
+              <div class="col-md-4">
+                <label>Dator</label>
+                <v-checkbox v-model="examAccommodations.computer" :disabled="!canEdit" /></v-checkbox>
+              </div>
+              <div class="col-md-4">
+                <label>Separate rum</label>
+                <v-checkbox v-model="examAccommodations.separateRoom" :disabled="!canEdit" /></v-checkbox>
+              </div>
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-primary ms-auto" :disabled="isSaving">
             {{ isSaving ? 'Sparar...' : 'Spara prov' }}
           </button>
@@ -195,6 +228,12 @@
         examTime: '',
         examMunicipality: '',
         examLocation: '',
+        examRoom: '',
+        examAccommodations: {
+          extraTime: 0,
+          computer: false,
+          separateRoom: false,
+        },
       }
     },
     computed: {
@@ -263,6 +302,12 @@
       },
     },
     async mounted() {
+      // Fetch exam rooms from backend
+      try {
+        const { data } = await client.get('/exam-rooms')
+        this.examMunicipalities = data
+      } catch {}
+
       // Get current teacher ID if user is a teacher (for permission checks)
       const currentUser = this.$store?.state?.user
       if (currentUser && currentUser.role === 'teacher') {

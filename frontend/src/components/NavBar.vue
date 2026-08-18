@@ -62,7 +62,16 @@
 
         <!-- Search results -->
         <div v-if="showResults" class="search-results">
-          <ul class="result-list">
+          <div v-if="searchLoading" class="search-status">
+            Söker...
+          </div>
+          <div v-else-if="searchError" class="search-status search-error">
+            {{ searchError }}
+          </div>
+          <div v-else-if="filteredResults.length === 0" class="search-status">
+            Inga träffar
+          </div>
+          <ul v-else class="result-list">
             <li
               v-for="result in filteredResults"
               :key="result.id"
@@ -478,6 +487,8 @@
 
       const selectedSearchType = ref('Alla')
       const showSearchTypeDropdown = ref(false)
+      const searchLoading = ref(false)
+      const searchError = ref('')
 
       const toggleMobileMenu = (event) => {
         event?.preventDefault()
@@ -604,6 +615,10 @@
         studyplan_changed: 'Studieplan',
         grades_pending: 'Betyg väntar',
         action_plan_required: 'Åtgärdsplan krävs',
+        global_action_plan_required: 'Handlingsplan krävs',
+        signing_required: 'Signering krävs',
+        grade_locked: 'Betyg låst',
+        grade_unlocked: 'Betyg upplåst',
       }
 
       const notificationTypeLabel = (type) => notificationTypeLabels[type] || type
@@ -611,6 +626,10 @@
       const openNotification = (notification) => {
         if (notification.meta?.url) {
           router.push(notification.meta.url)
+        } else if (notification.type === 'action_plan_required' && notification.meta?.studentId) {
+          router.push(`/student/${notification.meta.studentId}?showActionPlan=true`)
+        } else if (notification.type === 'signing_required') {
+          router.push('/admin/betygsrapporter')
         }
       }
 
@@ -685,9 +704,8 @@
       }
 
       const handleSearch = async () => {
-        console.log('🔍 Starting search with type:', selectedSearchType.value)
-        console.log('📝 Search query:', searchQuery.value)
-        console.log('📅 Selected date:', selectedDate.value)
+        searchLoading.value = true
+        searchError.value = ''
         try {
           const params = new URLSearchParams()
           const isDateSearch = selectedSearchType.value === 'Datum'
@@ -707,7 +725,6 @@
             searchQuery.value &&
             /^\d{4}-\d{2}-\d{2}$/.test(searchQuery.value)
           ) {
-            // If 'Alla' and input matches yyyy-mm-dd, treat as date search
             params.append('type', 'Datum')
             params.append('date', searchQuery.value)
           } else {
@@ -720,22 +737,17 @@
             params.append('q', searchQuery.value)
           }
 
-          console.log(
-            '🌐 Search URL:',
-            `/search?${params.toString()}`
-          )
-
           const res = await client.get(
             `/search?${params.toString()}`
           )
-          console.log('✅ Search response:', res.data)
           searchResults.value = res.data
-          showResults.value = res.data.length > 0
-          console.log('📊 Show results:', showResults.value, 'Results count:', res.data.length)
+          showResults.value = true
         } catch (err) {
-          console.error('Sökfel:', err)
+          searchError.value = err.message || 'Sökningen misslyckades'
           searchResults.value = []
-          showResults.value = false
+          showResults.value = true
+        } finally {
+          searchLoading.value = false
         }
       }
 
@@ -780,6 +792,8 @@
         selectedDate.value = null
         searchResults.value = []
         showResults.value = false
+        searchLoading.value = false
+        searchError.value = ''
       }
 
       const fetchCourses = async () => {
@@ -987,6 +1001,8 @@
         showResults,
         showFilters,
         searchResults,
+        searchLoading,
+        searchError,
         isLoggedIn,
         logout,
         filteredMenuItems,
@@ -1153,6 +1169,17 @@
     z-index: 1000;
     display: flex;
     flex-direction: column;
+  }
+
+  .search-status {
+    text-align: center;
+    padding: 16px;
+    color: #666;
+    font-size: 14px;
+  }
+
+  .search-error {
+    color: #e53935;
   }
 
   .filter-buttons {

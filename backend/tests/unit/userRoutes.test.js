@@ -33,6 +33,8 @@ vi.mock("../../src/models/User.js", () => {
     constructor.findById = vi.fn();
     constructor.findOne = vi.fn();
     constructor.findByIdAndUpdate = vi.fn();
+    constructor.find = vi.fn();
+    constructor.countDocuments = vi.fn().mockResolvedValue(0);
 
     return {
         __esModule: true,
@@ -92,6 +94,24 @@ describe("userRoutes", () => {
             expect(res.body).toEqual({ message: "Roles must be an array." });
         });
 
+        it("returns 400 when roles contain invalid values", async () => {
+            const res = await request(app)
+                .put("/api/users/user-1/roles")
+                .send({ roles: ["admin", "fake_role"] })
+                .expect(400);
+
+            expect(res.body.message).toMatch(/Invalid role/);
+        });
+
+        it("returns 400 when roles array is empty", async () => {
+            const res = await request(app)
+                .put("/api/users/user-1/roles")
+                .send({ roles: [] })
+                .expect(400);
+
+            expect(res.body.message).toMatch(/At least one role/);
+        });
+
         it("returns 404 when user does not exist", async () => {
             User.findById.mockResolvedValueOnce(null);
 
@@ -144,12 +164,21 @@ describe("userRoutes", () => {
             });
         });
 
+        it("returns 400 when permission keys are invalid", async () => {
+            const res = await request(app)
+                .put("/api/users/user-1/permissions")
+                .send({ permissions: { "students:read": true } })
+                .expect(400);
+
+            expect(res.body.message).toMatch(/Invalid permission key/);
+        });
+
         it("returns 404 when user does not exist", async () => {
             User.findById.mockResolvedValueOnce(null);
 
             const res = await request(app)
                 .put("/api/users/user-1/permissions")
-                .send({ permissions: { "students:read": true } })
+                .send({ permissions: { statistics: true } })
                 .expect(404);
 
             expect(res.body).toEqual({ message: "User not found." });
@@ -165,10 +194,10 @@ describe("userRoutes", () => {
 
             const res = await request(app)
                 .put("/api/users/user-1/permissions")
-                .send({ permissions: { "students:read": true } })
+                .send({ permissions: { statistics: true } })
                 .expect(200);
 
-            expect(user.permissions).toEqual({ "students:read": true });
+            expect(user.permissions).toEqual({ statistics: true });
             expect(user.save).toHaveBeenCalled();
             expect(res.body.message).toBe(
                 "User permissions updated successfully."
@@ -180,7 +209,7 @@ describe("userRoutes", () => {
 
             const res = await request(app)
                 .put("/api/users/user-1/permissions")
-                .send({ permissions: { "students:read": true } })
+                .send({ permissions: { statistics: true } })
                 .expect(500);
 
             expect(res.body.message).toBe(
@@ -229,6 +258,91 @@ describe("userRoutes", () => {
             expect(res.body.message).toBe(
                 "An error occurred while resetting password."
             );
+        });
+    });
+
+    describe("GET /api/users", () => {
+        it("returns paginated user list", async () => {
+            const mockUsers = [
+                { _id: "507f1f77bcf86cd799439011", name: "Alice", email: "alice@test.com", roles: ["admin"] },
+                { _id: "507f1f77bcf86cd799439012", name: "Bob", email: "bob@test.com", roles: ["teacher"] },
+            ];
+            User.find.mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                    sort: vi.fn().mockReturnValue({
+                        skip: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockReturnValue({
+                                lean: vi.fn().mockResolvedValue(mockUsers),
+                            }),
+                        }),
+                    }),
+                }),
+            });
+            User.countDocuments.mockResolvedValue(2);
+
+            const res = await request(app)
+                .get("/api/users")
+                .expect(200);
+
+            expect(res.body.users).toHaveLength(2);
+            expect(res.body.total).toBe(2);
+        });
+
+        it("filters users by role", async () => {
+            User.find.mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                    sort: vi.fn().mockReturnValue({
+                        skip: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockReturnValue({
+                                lean: vi.fn().mockResolvedValue([]),
+                            }),
+                        }),
+                    }),
+                }),
+            });
+            User.countDocuments.mockResolvedValue(0);
+
+            await request(app)
+                .get("/api/users?role=teacher")
+                .expect(200);
+
+            expect(User.find).toHaveBeenCalledWith(
+                expect.objectContaining({ roles: { $in: ["teacher"] } })
+            );
+        });
+    });
+
+    describe("GET /api/users/:userId", () => {
+        it("returns a single user without password", async () => {
+            const userId = "507f1f77bcf86cd799439011";
+            User.findById.mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                    lean: vi.fn().mockResolvedValue({
+                        _id: userId, name: "Alice", email: "alice@test.com", roles: ["admin"],
+                    }),
+                }),
+            });
+
+            const res = await request(app)
+                .get(`/api/users/${userId}`)
+                .expect(200);
+
+            expect(res.body._id).toBe(userId);
+        });
+
+        it("returns 404 when user not found", async () => {
+            const userId = "507f1f77bcf86cd799439011";
+            User.findById.mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                    lean: vi.fn().mockResolvedValue(null),
+                }),
+            });
+
+            const res = await request(app)
+                .get(`/api/users/${userId}`)
+                .expect(404);
+
+            expect(res.body).toEqual({ message: "User not found." });
         });
     });
 

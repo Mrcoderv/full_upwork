@@ -39,6 +39,13 @@
           Visa senaste kommentar längst ner
         </label>
       </div>
+      <div class="color-filter-section">
+        <label>Filtrera efter färg:</label>
+        <select v-model="colorFilter" class="color-filter-select">
+          <option value="">Alla</option>
+          <option v-for="status in allStatusMap" :key="status.key" :value="status.key">{{ status.label }}</option>
+        </select>
+      </div>
     </div>
   </div>
   <div class="apl-board">
@@ -73,12 +80,20 @@
           class="auto-red-badge"
           title="Auto-röd – APL-perioden slutar snart"
         >AUTO</span>
-        <!-- Behind-schedule badge: computed from aplStartDate and current date -->
+        <!-- Behind-schedule badge -->
         <span
           v-if="isBehindSchedule(student)"
           class="auto-behind-schedule-badge"
           title="Bak i schema – påbörjad för minst 14 dagar sedan"
         >BAK i schema</span>
+        <!-- File uploaded badge -->
+        <v-icon
+          v-if="hasFiles(student._id)"
+          size="16"
+          color="green"
+          class="ml-1"
+          title="Filer uppladdade"
+        >mdi-paperclip</v-icon>
         <v-icon
           v-if="commentStatus(student)"
           :class="['comment-icon', { pulse: commentStatus(student) === 'unseen' }]"
@@ -311,6 +326,20 @@
   const currentUser = computed(() => store.state.user)
   const currentUserId = computed(() => store.state.user?.userId?.toString() || '')
   const totalStudents = computed(() => filteredStudents.value.length)
+  const fileCounts = ref({})
+
+  const fetchFileCounts = async () => {
+    const studentIds = (props.students || []).map(s => s._id).join(',')
+    if (!studentIds) return
+    try {
+      const { data } = await client.get('/uploads/file-counts', { params: { studentIds } })
+      fileCounts.value = data
+    } catch {}
+  }
+
+  const hasFiles = (studentId) => {
+    return (fileCounts.value[studentId] || 0) > 0
+  }
 // Behind-schedule detection: computes whether student's APL period has been active
 // for at least 14 days based on the APL start date from education entries
 const isBehindSchedule = (student) => {
@@ -323,6 +352,7 @@ const isBehindSchedule = (student) => {
 
   const commentAscOrder = ref(true)
   const summaryExpanded = ref(false)
+  const colorFilter = ref('')
   const copied = ref(false)
   const blinkedField = ref('')
   const copiedPosition = ref({ x: 0, y: 0 })
@@ -375,14 +405,18 @@ const isBehindSchedule = (student) => {
     } catch {}
   }
 
+  const allStatusMap = computed(() => {
+    return APL_STATUS_ORDER.map((key) => ({ key, ...APL_STATUS[key] }))
+  })
+
   const statusMap = computed(() => {
-    // Single source of truth: src/utils/statusSystem.js (Phase 1)
-    const allStatuses = APL_STATUS_ORDER.map((key) => ({ key, ...APL_STATUS[key] }))
+    const allStatuses = allStatusMap.value
     if (props.filterType === 'completed') {
-      // In "Avslutad" tab, only show GREEN
       return allStatuses.filter((s) => s.key === 'GREEN')
     }
-    // In "Pågående" tab, show all statuses including GREEN (as redundancy)
+    if (colorFilter.value) {
+      return allStatuses.filter((s) => s.key === colorFilter.value)
+    }
     return allStatuses
   })
 
@@ -466,7 +500,12 @@ const isBehindSchedule = (student) => {
   onMounted(() => {
     loadManualAplIds()
     loadExcludedAplIds()
+    fetchFileCounts()
   })
+
+  watch(() => props.students, () => {
+    fetchFileCounts()
+  }, { deep: true })
 
   watch(manualAplIds, saveManualAplIds, { deep: false })
   watch(excludedAplIds, saveExcludedAplIds, { deep: false })
@@ -1199,5 +1238,25 @@ const isBehindSchedule = (student) => {
 
   .refresh-btn i {
     font-size: 16px;
+  }
+
+  .color-filter-section {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .color-filter-section label {
+    font-weight: 500;
+    color: var(--color-ink-secondary);
+  }
+
+  .color-filter-select {
+    padding: 4px 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
   }
 </style>

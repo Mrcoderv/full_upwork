@@ -139,6 +139,21 @@ export const getDocument = async ({ documentId }) => {
   return data;
 };
 
+/**
+ * GET /api/v2/documents/{id}/files/main – fetch the signed main PDF document.
+ * Returns a Buffer of the signed document.
+ */
+export const getSignedDocumentFile = async ({ documentId }) => {
+  const response = await axios.get(
+    `${getScriveBaseUrl()}/api/v2/documents/${documentId}/files/main`,
+    {
+      headers: { Authorization: getScriveAuthHeader() },
+      responseType: "arraybuffer",
+    }
+  );
+  return Buffer.from(response.data);
+};
+
 const STATUS_MAP = {
   preparation: "uploaded",
   awaiting_start: "pending",

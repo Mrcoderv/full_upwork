@@ -21,14 +21,14 @@
       <div v-if="!course.isCourseTemplate">
         <div v-if="course.teacher && course.teacher._id" class="teacher-info">
           <strong>Ansvarig lärare:</strong>
-          <router-link :to="`/detaljer/Lärare/${course.teacher._id}`">
+          <router-link :to="`/teacher/${course.teacher._id}`">
             {{ course.teacher.username }}
           </router-link>
         </div>
         <div v-else-if="course.teachers && course.teachers.length > 0" class="teacher-info">
           <strong>Lärare:</strong>
           <span v-for="(teacher, index) in course.teachers" :key="teacher._id">
-            <router-link :to="`/detaljer/Lärare/${teacher._id}`">
+            <router-link :to="`/teacher/${teacher._id}`">
               {{ teacher.username }}
             </router-link>
             <span v-if="index < course.teachers.length - 1">, </span>

@@ -167,7 +167,7 @@ describe('StudyPlanTab.vue - "Lästa kurser" re-registration', () => {
         await wrapper.vm.handleReEnroll(wrapper.vm.completedCourses[0])
 
         expect(client.post).toHaveBeenCalledWith(
-            '/course-matching/process-education',
+            '/process-education',
             expect.objectContaining({
                 studentId: 'stu-1',
                 educationEntries: [

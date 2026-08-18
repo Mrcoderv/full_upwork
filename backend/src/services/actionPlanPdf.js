@@ -10,16 +10,45 @@ function normalizeList(value) {
     return [value];
 }
 
-export function buildActionPlanPdf({ plan, studentName }) {
+const KNOWN_KEYS = new Set([
+    "studentId",
+    "educationId",
+    "courseId",
+    "studentName",
+    "courseName",
+    "teacherId",
+    "teacherName",
+    "date",
+    "reason",
+    "schoolEfforts",
+    "studentEfforts",
+    "studyTime",
+    "meetings",
+    "notified",
+    "answers",
+    "pdf",
+    "pdfContentType",
+    "type",
+    "createdAt",
+    "updatedAt",
+    "locked",
+    "lockedAt",
+    "_id",
+    "__v",
+]);
+
+export function buildActionPlanPdf({ plan, studentName, courseName, questions }) {
     const builder = new PdfBuilder();
-    builder.heading("Handlingsplan");
+    builder.heading("Handlingsplan / Åtgärdsprogram");
 
+    const effectiveStudentName = studentName || plan.studentName || "-";
     builder.label("Elev");
-    builder.paragraph(studentName || "-");
+    builder.paragraph(effectiveStudentName);
 
-    if (plan.educationId) {
-        builder.label("Utbildning");
-        builder.paragraph(String(plan.educationId));
+    const effectiveCourse = courseName || plan.courseName || plan.educationId;
+    if (effectiveCourse) {
+        builder.label("Kurs / Utbildning");
+        builder.paragraph(String(effectiveCourse));
     }
 
     if (plan.teacherName) {
@@ -64,6 +93,37 @@ export function buildActionPlanPdf({ plan, studentName }) {
     if (notified.length) {
         builder.label("Eleven har meddelats handlingsplan");
         for (const item of notified) builder.bullet(String(item));
+    }
+
+    // Dynamic questionnaire questions / answers if provided
+    const answersSource = plan.answers || {};
+    const questionMap = new Map();
+    if (Array.isArray(questions)) {
+        for (const q of questions) {
+            if (q.key) questionMap.set(q.key, q.label || q.key);
+        }
+    }
+
+    // Check answers object
+    const extraEntries = Object.entries(answersSource);
+    // Also check direct properties on plan not in KNOWN_KEYS
+    for (const [k, v] of Object.entries(plan)) {
+        if (!KNOWN_KEYS.has(k) && !answersSource[k]) {
+            extraEntries.push([k, v]);
+        }
+    }
+
+    for (const [key, value] of extraEntries) {
+        if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+            continue;
+        }
+        const label = questionMap.get(key) || key;
+        builder.label(String(label));
+        if (Array.isArray(value)) {
+            for (const item of value) builder.bullet(String(item));
+        } else {
+            builder.paragraph(String(value));
+        }
     }
 
     if (plan.createdAt) {

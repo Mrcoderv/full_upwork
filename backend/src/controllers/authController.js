@@ -13,7 +13,7 @@ export const register = async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
-        const allowedRoles = ["admin", "user", "moderator"];
+        const allowedRoles = ["student", "user"];
         const primaryRole = role && allowedRoles.includes(role) ? role : "user";
         const roles = [primaryRole];
 

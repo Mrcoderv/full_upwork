@@ -113,8 +113,32 @@ vi.mock("../../src/router/router.js", () => ({
   default: routerMock,
 }));
 
+const SchemaConstructorMock = vi.fn(() => ({
+  Methods: vi.fn(),
+  Statics: vi.fn(),
+  Index: vi.fn(),
+  plugin: vi.fn(),
+  path: vi.fn(),
+  virtual: vi.fn(),
+}));
+SchemaConstructorMock.Types = {
+  ObjectId: class ObjectId extends String {},
+  Mixed: class Mixed {},
+  String: String,
+  Number: Number,
+  Boolean: Boolean,
+  Date: Date,
+  Buffer: Buffer,
+  Array: Array,
+  Map: Map,
+};
+
 const mongooseMock = {
   connect: vi.fn(),
+  Schema: SchemaConstructorMock,
+  Types: {
+    ObjectId: class ObjectId extends String {},
+  },
   connection: {
     readyState: 1,
     host: "localhost",

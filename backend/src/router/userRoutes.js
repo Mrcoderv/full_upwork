@@ -8,9 +8,17 @@ import { isAuthenticated, hasRole } from "../middleware/auth.js";
 import { validate, validateId } from "../middleware/validation.js";
 import { asyncHandler } from "../utils/errorHandler.js";
 import { recordAudit } from "../utils/auditLog.js";
+import { PERMISSION_FEATURES } from "../config/permissions.js";
 import logger from "../utils/logger.js";
 
 const LOGBOOK_ROLES = ["admin", "systemadmin", "teacher"];
+
+const VALID_USER_ROLES = [
+    "guest", "user", "student", "coordinator", "specped",
+    "syv", "teacher", "admin", "systemadmin",
+];
+
+const VALID_FEATURE_KEYS = Object.values(PERMISSION_FEATURES);
 
 
 const router = express.Router();
@@ -26,9 +34,9 @@ const resetPasswordSchema = {
     newPassword: { type: "string", required: true, password: true },
 };
 
-router.post("/register", validate(registerSchema), async (req, res) => {
+router.post("/register", isAuthenticated, hasRole(["admin", "systemadmin"]), validate(registerSchema), async (req, res) => {
     try {
-        const { email, password, name } = req.body;
+        const { email, password, name, role } = req.body;
 
         if (!email || !password || !name) {
             return res
@@ -44,7 +52,8 @@ router.post("/register", validate(registerSchema), async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ name, email, password: hashedPassword });
+        const primaryRole = role && VALID_USER_ROLES.includes(role) ? role : "user";
+        const newUser = new User({ name, email, password: hashedPassword, roles: [primaryRole] });
         await newUser.save();
 
         return res.status(201).send({ message: "Användare registrerad!" });
@@ -86,6 +95,88 @@ router.post("/reset-password", validate(resetPasswordSchema), async (req, res) =
     }
 });
 
+/**
+ * List / search users
+ * GET /api/users
+ * Requires admin or systemadmin role.
+ * Supports query params: firstName, lastName, username, role, email, q (text search), page, limit
+ */
+router.get(
+    "/users",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(async (req, res) => {
+        try {
+            const { firstName, lastName, username, role, email, q, page, limit } = req.query;
+            const query = {};
+
+            if (q && q.length >= 1) {
+                const regex = { $regex: q, $options: "i" };
+                query.$or = [
+                    { name: regex },
+                    { username: regex },
+                    { email: regex },
+                ];
+            } else {
+                if (firstName) query.name = { $regex: firstName, $options: "i" };
+                if (lastName) query.name = { ...query.name, $regex: lastName, $options: "i" };
+                if (username) query.username = { $regex: username, $options: "i" };
+                if (email) query.email = { $regex: email, $options: "i" };
+            }
+
+            if (role) {
+                query.roles = { $in: [role] };
+            }
+
+            const pageNum = Math.max(1, parseInt(page) || 1);
+            const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 25));
+            const skip = (pageNum - 1) * limitNum;
+
+            const [users, total] = await Promise.all([
+                User.find(query)
+                    .select("-password")
+                    .sort({ name: 1 })
+                    .skip(skip)
+                    .limit(limitNum)
+                    .lean(),
+                User.countDocuments(query),
+            ]);
+
+            res.setHeader("X-Total-Count", total);
+            res.setHeader("X-Total-Pages", Math.ceil(total / limitNum));
+            res.setHeader("X-Current-Page", pageNum);
+
+            res.json({ users, total });
+        } catch (error) {
+            logger.error({ err: error }, "Error listing users");
+            res.status(500).json({ message: "Kunde inte hämta användare" });
+        }
+    })
+);
+
+/**
+ * Get a single user by ID
+ * GET /api/users/:userId
+ */
+router.get(
+    "/users/:userId",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    validateId("userId"),
+    asyncHandler(async (req, res) => {
+        try {
+            const user = await User.findById(req.params.userId).select("-password").lean();
+            if (!user) {
+                return res.status(404).json({ message: "User not found." });
+            }
+            res.json(user);
+        } catch (error) {
+            logger.error({ err: error }, "Error fetching user");
+            res.status(500).json({ message: "Kunde inte hämta användare" });
+        }
+    })
+);
+
 router.put(
     "/users/:userId/roles",
     isAuthenticated,
@@ -101,6 +192,19 @@ router.put(
                     .send({ message: "Roles must be an array." });
             }
 
+            const invalidRoles = roles.filter((r) => !VALID_USER_ROLES.includes(r));
+            if (invalidRoles.length > 0) {
+                return res
+                    .status(400)
+                    .send({ message: `Invalid role(s): ${invalidRoles.join(", ")}. Valid roles: ${VALID_USER_ROLES.join(", ")}` });
+            }
+
+            if (roles.length === 0) {
+                return res
+                    .status(400)
+                    .send({ message: "At least one role is required." });
+            }
+
             const user = await User.findById(userId);
 
             if (!user) {
@@ -110,7 +214,7 @@ router.put(
             user.roles = roles;
             await user.save();
 
-            res.send({ message: "User roles updated successfully.", user });
+            res.send({ message: "User roles updated successfully.", user: { _id: user._id, name: user.name, email: user.email, roles: user.roles } });
         } catch (error) {
             logger.error({ err: error }, "Error updating user roles");
             res.status(500).send({
@@ -139,6 +243,15 @@ router.put(
                     .send({ message: "Permissions must be an object." });
             }
 
+            const invalidKeys = Object.keys(permissions).filter(
+                (k) => !VALID_FEATURE_KEYS.includes(k)
+            );
+            if (invalidKeys.length > 0) {
+                return res
+                    .status(400)
+                    .send({ message: `Invalid permission key(s): ${invalidKeys.join(", ")}. Valid keys: ${VALID_FEATURE_KEYS.join(", ")}` });
+            }
+
             const user = await User.findById(userId);
 
             if (!user) {
@@ -148,7 +261,7 @@ router.put(
             user.permissions = permissions;
             await user.save();
 
-            res.send({ message: "User permissions updated successfully.", user });
+            res.send({ message: "User permissions updated successfully.", user: { _id: user._id, name: user.name, email: user.email, permissions: user.permissions } });
         } catch (error) {
             logger.error({ err: error }, "Error updating user permissions");
             res.status(500).send({

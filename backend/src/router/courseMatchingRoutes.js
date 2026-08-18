@@ -66,7 +66,7 @@ router.get(
     hasRole(["teacher", "admin", "systemadmin"]),
     asyncHandler(getMyCourseInstances)
 );
-router.get("/course-instances", isAuthenticated, asyncHandler(getCourseInstances));
+router.get("/course-instances", isAuthenticated, hasRole(["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"]), asyncHandler(getCourseInstances));
 router.post(
     "/course-instances",
     isAuthenticated,
@@ -99,6 +99,7 @@ router.delete(
 router.get(
     "/students/:studentId/enrollments",
     isAuthenticated,
+    hasRole(["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"]),
     asyncHandler(getStudentEnrollments)
 );
 
@@ -106,6 +107,7 @@ router.get(
 router.get(
     "/course-instances/:instanceId/enrollments",
     isAuthenticated,
+    hasRole(["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"]),
     asyncHandler(getCourseInstanceEnrollments)
 );
 router.post(

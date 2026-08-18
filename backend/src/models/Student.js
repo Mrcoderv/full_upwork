@@ -91,6 +91,14 @@ const StudentSchema = new mongoose.Schema(
         attendedExam: { type: Boolean, default: false },
         paidExamFee: { type: Boolean, default: false },
 
+        // Exam accommodations (Section 19.8, 21.5)
+        examAccommodations: {
+            extraTime: { type: Boolean, default: false },
+            computer: { type: Boolean, default: false },
+            separateRoom: { type: Boolean, default: false },
+            notes: { type: String },
+        },
+
         aplStatus: {
             type: String,
             enum: ["GRAY", "BLUE", "YELLOW", "PURPLE", "RED", "GREEN"],
@@ -159,6 +167,19 @@ const StudentSchema = new mongoose.Schema(
                 // Optional: link to the student's APL CoursePackage enrollment
                 coursePackageId: { type: mongoose.Schema.Types.ObjectId, ref: "CoursePackage" },
             }
+        ],
+
+        supportInfo: [
+            {
+                contactName: { type: String, required: true },
+                contactRole: String,
+                contactPhone: String,
+                contactEmail: String,
+                supportType: String,
+                notes: String,
+                addedAt: { type: Date, default: Date.now },
+                addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            },
         ],
 
         changeHistory: [

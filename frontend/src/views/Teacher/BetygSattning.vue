@@ -344,6 +344,12 @@
   }
 
   const saveGrade = async (studentId, course) => {
+    // Validate grade justification is provided
+    if (!course.reason || course.reason.trim() === '') {
+      toast.error('Betygsättning måste ha en motivering.')
+      return
+    }
+    
     try {
       // Check if this is a new enrollment-based course (has enrollmentId)
       if (course.enrollmentId && course.source === 'enrollment') {

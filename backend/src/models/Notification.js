@@ -5,6 +5,8 @@ const notificationSchema = new mongoose.Schema({
   type: { type: String, required: true }, // t.ex. "grades_pending"
   resolved: { type: Boolean, default: false }, // Legacy field - kept for backwards compatibility
   message: String,
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
   createdAt: { type: Date, default: Date.now },
   resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Legacy field
   resolvedByUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Array of user IDs who have resolved this notification

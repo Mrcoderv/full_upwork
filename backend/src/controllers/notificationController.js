@@ -1,7 +1,10 @@
+import mongoose from "mongoose";
 import Notification from "../models/Notification.js";
 import Student from "../models/Student.js";
 import User from "../models/User.js";
+import Teacher from "../models/Teacher.js";
 import Course from "../models/Course.js";
+import { sendEmail, getEmailSignature } from "../services/emailService.js";
 import logger from "../utils/logger.js";
 
 
@@ -64,23 +67,29 @@ export const checkPendingGradesAndNotify = async () => {
  * @param {string} params.message - Notification message
  * @returns {Promise<Object|undefined>} The created notification or undefined if already exists
  */
-export async function createNotification({ studentId, courseId, type, message }) {
+export async function createNotification({ studentId, courseId, type, message, teacher, meta, createdByAdmin }) {
+    const normStudentId = studentId && mongoose.Types.ObjectId.isValid(studentId) ? new mongoose.Types.ObjectId(studentId) : studentId;
+    const normCourseId = courseId && mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId;
     const existing = await Notification.findOne({
-      studentId,
-      courseId,
+      studentId: normStudentId,
+      courseId: normCourseId,
       type,
       resolved: false
     });
   
     if (!existing) {
       return await Notification.create({
-        studentId,
-        courseId,
+        studentId: normStudentId,
+        courseId: normCourseId,
         type,
         message,
+        teacher: teacher || undefined,
+        meta: meta || undefined,
+        createdByAdmin: createdByAdmin || undefined,
         resolved: false,
       });
     }
+    return undefined;
   }
   
   /**
@@ -315,6 +324,80 @@ export async function sendStudyplanChangedNotification({ doc, changeType, change
             },
             resolved: false,
         });
+
+        // Send email confirmation to teacher and student on study plan revision
+        if (changeType === 'updated' || changeType === 'created') {
+            const isRevised = changes?.newValues?.status === "reviderad";
+            if (isRevised || changeType === 'created') {
+                const emailSubject = changeType === 'created'
+                    ? `Ny studieplan – ${student.name} – ${courseName}`
+                    : `Studieplan reviderad – ${student.name} – ${courseName}`;
+
+                const formatDate = (value) => {
+                    if (!value) return "";
+                    const date = new Date(value);
+                    if (isNaN(date.getTime())) return "";
+                    return date.toISOString().slice(0, 10);
+                };
+
+                const dateInfo = changes?.newValues
+                    ? [formatDate(changes.newValues.startDate), formatDate(changes.newValues.endDate)].filter(Boolean).join(' – ')
+                    : '';
+
+                const emailBody = [
+                    `Hej,`,
+                    ``,
+                    changeType === 'created'
+                        ? `En ny studieplan har skapats för ${student.name} i kursen ${courseName}.`
+                        : `Studieplanen för ${student.name} i kursen ${courseName} har reviderats.`,
+                    dateInfo ? `Nya datum: ${dateInfo}` : '',
+                    ``,
+                    `Med vänliga hälsningar,`,
+                    getEmailSignature(),
+                ].filter(Boolean).join('\n');
+
+                // Resolve teacher email
+                let teacherEmail = null;
+                try {
+                    if (doc.teacherId) {
+                        const teacher = await Teacher.findById(doc.teacherId).populate('userId', 'email');
+                        teacherEmail = teacher?.userId?.email || null;
+                    }
+                } catch (e) {
+                    logger.error({ err: e }, "Error resolving teacher email for study plan notification");
+                }
+
+                // Send to teacher
+                if (teacherEmail) {
+                    await sendEmail({
+                        to: teacherEmail,
+                        subject: emailSubject,
+                        text: emailBody,
+                    });
+                }
+
+                // Send to student
+                if (student.email) {
+                    const studentEmailBody = [
+                        `Hej ${student.name},`,
+                        ``,
+                        changeType === 'created'
+                            ? `Din studieplan för kursen ${courseName} har skapats.`
+                            : `Din studieplan för kursen ${courseName} har reviderats.`,
+                        dateInfo ? `Nya datum: ${dateInfo}` : '',
+                        ``,
+                        `Med vänliga hälsningar,`,
+                        getEmailSignature(),
+                    ].filter(Boolean).join('\n');
+
+                    await sendEmail({
+                        to: student.email,
+                        subject: emailSubject,
+                        text: studentEmailBody,
+                    });
+                }
+            }
+        }
 
     } catch (error) {
         logger.error({ err: error }, "Error creating study plan change notification");

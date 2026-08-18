@@ -7,9 +7,12 @@ import Exam from "../models/Provning.js";
 import CalendarEvent from "../models/Event.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
+import { asyncHandler } from "../utils/errorHandler.js";
 import { createGlobalNotification } from "../controllers/notificationController.js"; // Lägg till högst upp
 import Notification from "../models/Notification.js";
 import logger from "../utils/logger.js";
+
+const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"];
 
 function calculateExamDate(requestedMonth) {
     const months = {
@@ -36,6 +39,42 @@ function calculateExamDate(requestedMonth) {
     }
 
     return new Date(Date.UTC(year, month, 15));
+}
+
+/**
+ * Scheduled notification if exam is within 3-4 weeks.
+ * Sends FINAL_EXAM_SOON notification to relevant parties.
+ */
+function scheduleExamNotification(exam) {
+    if (!exam.requestedMonth) return;
+
+    const examDate = calculateExamDate(exam.requestedMonth);
+    if (!examDate) return;
+
+    const today = new Date();
+    const daysUntilExam = Math.ceil(
+        (examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Send notification if exam is within 4-3 weeks (28-21 days)
+    if (daysUntilExam > 21 && daysUntilExam <= 28) {
+        const message = `Om ${daysUntilExam} dagar är det slutprov för prövning "${exam.name}" (${exam.course}) för personalnummer ${exam.personalNumber}.`;
+
+        // Check if notification already exists
+        Notification.findOneAndUpdate(
+            { type: "final_exam_soon", examId: exam._id },
+            {
+                $set: {
+                    message,
+                    examId: exam._id,
+                    studentId: exam.studentId,
+                    personalNumber: exam.personalNumber,
+                },
+                resolved: false,
+            },
+            { upsert: true, new: true }
+        );
+    }
 }
 
 const MONTHS = [
@@ -83,6 +122,9 @@ router.post("/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), async 
             `Ny prövning registrerad för ${exam.name} (${exam.course})`
         );
 
+        // Scheduled notification if exam is within 3-4 weeks
+        scheduleExamNotification(savedExam);
+
         res.status(201).json(savedExam);
     } catch (err) {
         logger.error({ err }, "Error saving exam");
@@ -120,6 +162,17 @@ router.put("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), asy
     }
 });
 
+// GET exam room configuration
+router.get("/exam-rooms", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+    try {
+        const { default: examRooms } = await import("../config/examRooms.js");
+        res.json(examRooms);
+    } catch (err) {
+        logger.error({ err }, "Error fetching exam rooms");
+        res.status(500).json({ error: "Failed to fetch exam rooms." });
+    }
+});
+
 // GET all exams (Admin)
 router.get("/admin/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), async (req, res) => {
     try {
@@ -137,7 +190,7 @@ router.get("/admin/exams", isAuthenticated, hasRole(['admin', 'systemadmin']), a
     }
 });
 
-router.get("/exams", isAuthenticated, async (req, res) => {
+router.get("/exams", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         let query = {};
 
@@ -208,7 +261,7 @@ router.get("/exams", isAuthenticated, async (req, res) => {
     }
 });
 
-router.post("/calendar-events", isAuthenticated, async (req, res) => {
+router.post("/calendar-events", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const event = new CalendarEvent(req.body);
         await event.save();
@@ -219,7 +272,7 @@ router.post("/calendar-events", isAuthenticated, async (req, res) => {
     }
 });
 
-router.get("/calendar-events", isAuthenticated, async (req, res) => {
+router.get("/calendar-events", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         let query = {
             // Exclude "slutprov" type events - these should come from /calendar-events/syncable instead
@@ -267,6 +320,7 @@ router.get("/calendar-events", isAuthenticated, async (req, res) => {
 router.put(
     "/calendar-events/move-group",
     isAuthenticated,
+    hasRole(["systemadmin", "admin", "teacher"]),
     async (req, res) => {
         // Check if transactions are supported (they require a replica set)
         // For local development with standalone MongoDB, skip transactions
@@ -701,7 +755,7 @@ router.put(
     }
 );
 
-router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
+router.put("/calendar-events/:id", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const { id } = req.params;
         const updateFields = req.body;
@@ -850,7 +904,7 @@ router.put("/calendar-events/:id", isAuthenticated, async (req, res) => {
     }
 });
 
-router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
+router.get("/calendar-events/syncable", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     function pickFirstNonEmpty(arr, field) {
         return (
             (arr.find((e) => e[field] && e[field] !== "") || {})[field] || ""
@@ -1911,7 +1965,7 @@ router.get("/calendar-events/syncable", isAuthenticated, async (req, res) => {
 });
 
 // POST: Cleanup and fix calendar event titles (use teacher names instead of course names)
-router.post("/calendar-events/fix-titles", isAuthenticated, async (req, res) => {
+router.post("/calendar-events/fix-titles", isAuthenticated, hasRole(["systemadmin", "admin"]), async (req, res) => {
     try {
         if (req.user.role !== "admin" && req.user.role !== "systemadmin") {
             return res.status(403).json({ error: "Only admins can fix event titles" });
@@ -2029,7 +2083,7 @@ router.post("/calendar-events/fix-titles", isAuthenticated, async (req, res) => 
 });
 
 // DELETE old duplicate "slutprov" type calendar events (cleanup endpoint)
-router.delete("/calendar-events/cleanup-slutprov", isAuthenticated, async (req, res) => {
+router.delete("/calendar-events/cleanup-slutprov", isAuthenticated, hasRole(["systemadmin", "admin"]), async (req, res) => {
     try {
         // Only admins can clean up
         if (!["admin", "systemadmin"].includes(req.user.role)) {
@@ -2053,7 +2107,7 @@ router.delete("/calendar-events/cleanup-slutprov", isAuthenticated, async (req, 
 });
 
 // GET specific calendar event by ID
-router.get("/calendar-events/:id", isAuthenticated, async (req, res) => {
+router.get("/calendar-events/:id", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const { id } = req.params;
         const event = await CalendarEvent.findById(id);
@@ -2070,7 +2124,7 @@ router.get("/calendar-events/:id", isAuthenticated, async (req, res) => {
 });
 
 // GET attendance data for a specific event (date + teacher)
-router.get("/calendar-events/attendance/:date/:teacherId", isAuthenticated, async (req, res) => {
+router.get("/calendar-events/attendance/:date/:teacherId", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const { date, teacherId } = req.params;
 
@@ -2110,7 +2164,7 @@ router.get("/calendar-events/attendance/:date/:teacherId", isAuthenticated, asyn
     }
 });
 
-router.put("/update-exam/:id", isAuthenticated, async (req, res) => {
+router.put("/update-exam/:id", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     const { id } = req.params;
     const { examTime, examMunicipality, examLocation } = req.body;
 
@@ -2138,7 +2192,7 @@ router.put("/update-exam/:id", isAuthenticated, async (req, res) => {
     }
 });
 
-router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res) => {
+router.put("/mark-attendance/:personalNumber", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     logger.debug({ bodyKeys: req.body ? Object.keys(req.body) : [] }, "API /mark-attendance called");
     try {
         const { personalNumber } = req.params;
@@ -2165,7 +2219,7 @@ router.put("/mark-attendance/:personalNumber", isAuthenticated, async (req, res)
     }
 });
 
-router.post("/examtime-location", isAuthenticated, async (req, res) => {
+router.post("/examtime-location", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     const { studentIds, examTime, examMunicipality, examLocation } = req.body;
 
     if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
@@ -2196,7 +2250,7 @@ router.post("/examtime-location", isAuthenticated, async (req, res) => {
 });
 
 // Get attendance statistics for a student
-router.get("/attendance-stats/:studentId", isAuthenticated, async (req, res) => {
+router.get("/attendance-stats/:studentId", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const { studentId } = req.params;
         const { default: ExamAttendance } = await import(
@@ -2266,7 +2320,7 @@ router.delete("/exams/:id", isAuthenticated, hasRole(['admin', 'systemadmin']), 
 });
 
 // PATCH: Batch update attendance for a specific event (date + teacher)
-router.post("/calendar-events/mark-attendance", isAuthenticated, async (req, res) => {
+router.post("/calendar-events/mark-attendance", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     logger.info("mark-attendance endpoint called");
     logger.debug({ bodyKeys: req.body ? Object.keys(req.body) : [] }, "mark-attendance request body");
     logger.debug({ method: req.method }, "mark-attendance request method");
@@ -2563,11 +2617,130 @@ router.put("/exams/:id/decision", isAuthenticated, hasRole(['admin', 'systemadmi
     }
 });
 
+/**
+ * IMPORT Exams from CSV/Excel file.
+ * Expected columns: name, personalNumber, phone, email, address, course, 
+ * requestedMonth, municipality, teacherId, paymentDate, materialReceived
+ * 
+ * Duplicate handling: skips students already registered for the same course+month.
+ */
+router.post(
+    "/exams/import",
+    isAuthenticated,
+    hasRole(["admin", "systemadmin"]),
+    asyncHandler(async (req, res) => {
+        try {
+            const { file, type } = req.body;
+            if (!file) {
+                return res.status(400).json({ error: "Fil krävs" });
+            }
+
+            let parsed;
+            if (type === "csv") {
+                const { parse } = await import("csv/sync");
+                parsed = parse(file, { headers: true, skipEmptyLines: true });
+            } else if (type === "excel") {
+                const { parse } = await import("exceljs");
+                const workbook = new exceljs.Workbook();
+                await workbook.xlsx.load(file);
+                const worksheet = workbook.getWorksheet(1);
+                parsed = worksheet.getRows();
+            } else {
+                return res.status(400).json({ error: "Ogiltigt filformat. Använd csv eller excel." });
+            }
+
+            const saved = [];
+            const skipped = [];
+            const now = new Date();
+
+            for (const row of parsed) {
+                const {
+                    name,
+                    personalNumber,
+                    phone,
+                    email,
+                    address,
+                    course,
+                    requestedMonth,
+                    municipality,
+                    teacher_id,
+                    paymentDate,
+                    materialReceived,
+                } = row;
+
+                // Skip rows with missing essential data
+                if (!name || !personalNumber || !requestedMonth || !course) {
+                    skipped.push({ row, reason: "Saknade obligatoriska fält" });
+                    continue;
+                }
+
+                // Check for duplicate: student already has an exam for this course+month
+                const existing = await Exam.findOne({
+                    personalNumber,
+                    course,
+                    requestedMonth,
+                    status: { $ne: "denied" },
+                });
+
+                if (existing) {
+                    skipped.push({
+                        row,
+                        reason: `Elev ${personalNumber} har redan en pågående anmälan för ${course} ${requestedMonth}`,
+                    });
+                    continue;
+                }
+
+                // Find teacher if provided
+                let teacherId = null;
+                if (teacher_id) {
+                    const teacher = await Teacher.findById(teacher_id);
+                    if (teacher) teacherId = teacher._id;
+                }
+
+                const materialStatus = materialReceived === "true" || materialReceived === true;
+
+                const examData = {
+                    name,
+                    personalNumber,
+                    phone,
+                    email,
+                    address,
+                    course,
+                    requestedMonth,
+                    municipality: municipality || "",
+                    teacherId,
+                    paymentDate: paymentDate || null,
+                    materialReceived: {
+                        status: materialStatus,
+                        receivedDate: materialStatus ? now : null,
+                    },
+                    status: "intresse",
+                    studentId: null, // Will be set when decision is made
+                };
+
+                const newExam = new Exam(examData);
+                await newExam.save();
+                saved.push({ personalNumber, name });
+            }
+
+            res.json({
+                success: true,
+                message: `Import klar: ${saved.length} sparade, ${skipped.length} språngna`,
+                saved,
+                skipped,
+            });
+        } catch (err) {
+            logger.error({ err }, "Error importing exams");
+            res.status(500).json({ error: "Kunde inte importera examinationer" });
+        }
+    })
+);
+
 export default router;
 
 // --- Student exam instances listing ---
 // List all exam instances (manual + course-linked) recorded for a student
-router.get("/exams/student/:studentId", isAuthenticated, async (req, res) => {
+router.get("/exams/student/:studentId", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const { studentId } = req.params;
         const { default: ExamAttendance } = await import(

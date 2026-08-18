@@ -26,6 +26,51 @@
           <h2>INAKTIV</h2>
           <p>Denna elev har markerats som avbrott (inaktiv).</p>
         </div>
+
+        <!-- Certificate & Diploma Generation Section -->
+        <div v-if="canGenerateCertificates" class="certificate-generation-section">
+          <div class="card">
+            <div class="card-header">
+              <h3>Intyggande & Diploma</h3>
+            </div>
+            <div class="card-body">
+              <div v-if="student.enrollments && student.enrollments.length > 0" class="generation-options">
+                <!-- Study Certificate -->
+                <div v-for="enrollment in student.enrollments" :key="enrollment._id" class="generation-option">
+                  <div v-if="enrollment.status === 'completed'" class="option eligible">
+                    <v-icon left>mdi-file-document</v-icon>
+                    <span>Generera studieintyg</span>
+                    <v-tooltip top>
+                      <template #content>
+                        Studieintyg genereras för slutförda kurser
+                      </template>
+                    </v-tooltip>
+                  </div>
+                  <div v-else class="option disabled">
+                    <v-icon left>mdi-file-document-outline</v-icon>
+                    <span>Kursen måste vara slutförd</span>
+                  </div>
+                </div>
+
+                <!-- Diploma -->
+                <div v-if="student.coursePackageId && student.aplStatus === 'GREEN'" class="generation-option">
+                  <v-icon left>mdi-medal</v-icon>
+                  <span>Generera diplom</span>
+                  <v-tooltip top>
+                    <template #content>
+                      Diplom genereras när alla kurser och APL är godkända efter kursens slutdatum
+                    </template>
+                  </v-tooltip>
+                </div>
+              </div>
+
+              <div v-if="student.enrollments.length === 0" class="no-enrollments">
+                Inga kurser inlagda ännu
+              </div>
+            </div>
+          </div>
+        </div>
+
         <ul class="nav nav-tabs">
           <li class="nav-item" v-for="tab in tabs" :key="tab.name">
             <a
@@ -33,6 +78,7 @@
               :class="{ active: activeTab === tab.component }"
               @click.prevent="activeTab = tab.component"
               href="#"
+              :title="tab.description || tab.name"
             >
               {{ tab.name }}
             </a>
@@ -44,6 +90,7 @@
             <component
               :is="activeTab"
               :student="student"
+              :userData="student"
               :changeHistory="changeHistory"
               @student-updated="handleStudentUpdate"
             />
@@ -68,6 +115,7 @@ import DocumentsTab from './tabs/DocumentsTab.vue';
 import CourseArchiveTab from './tabs/CourseArchiveTab.vue';
 import AplTab from './tabs/AplTab.vue';
 import LogbookTab from './tabs/LogbookTab.vue';
+import ActionPlanTab from '../Admin/SearchTabs/ActionPlanTab.vue';
 
 export default {
   name: 'StudentDetails',
@@ -79,6 +127,7 @@ export default {
     CourseArchiveTab,
     AplTab,
     LogbookTab,
+    ActionPlanTab,
   },
   setup() {
     const route = useRoute();
@@ -120,125 +169,88 @@ export default {
     };
 
     const tabs = computed(() => {
+      const studentId = String(student.value?._id || '');
+
       const allTabs = [
-        { name: 'Allmänt', component: GeneralTab },
-        { name: 'Studieplan', component: StudyPlanTab },
-        { name: 'Dokument', component: DocumentsTab },
-        { name: 'Kursarkiv', component: CourseArchiveTab },
+        { name: 'Allmänt', component: GeneralTab, alwaysShow: true, description: 'Elevens grundinformation och kontaktuppgifter' },
+        { name: 'Studieplan', component: StudyPlanTab, alwaysShow: true, description: 'Kurser, perioder och studieuppehåll' },
+        { name: 'Kursarkiv', component: CourseArchiveTab, alwaysShow: true, description: 'Historik över genomförda kurser' },
       ];
 
-      // Conditionally add APL tab
-      // Show APL tab if student has CoursePackage in education OR is manually added to APL
-      // OR has an aplStatusHistory (indicating they've been in APL system)
+      // Conditionally show APL tab - work placement
       if (student.value) {
-        const studentId = String(student.value._id);
-        
-        // Check if student has CoursePackage in education
-        // Check both direct type and nested structures
         const hasCoursePackage = student.value.education && 
           Array.isArray(student.value.education) &&
-          student.value.education.some(e => {
-            // Check direct type
-            if (e.type === 'CoursePackage') return true;
-            // Check if refId is a CoursePackage (populated)
-            if (e.refId && (e.refId.coursePackageName || e.refId.coursePackageCode)) return true;
-            // Check if there's a coursePackageId field
-            if (e.coursePackageId) return true;
-            return false;
-          });
-        
-        // Check if student is manually added to APL (using reactive ref)
-        // Normalize all IDs to strings for comparison
-        const normalizedManualIds = new Set(Array.from(manualAplIds.value).map(id => String(id)));
-        const isManuallyAdded = normalizedManualIds.has(studentId);
-        
-        // Also check localStorage directly as a fallback (in case reactive ref hasn't updated)
-        let isManuallyAddedDirect = false;
-        try {
-          const raw = localStorage.getItem('manualAplIds');
-          if (raw) {
-            const arr = JSON.parse(raw);
-            const ids = Array.isArray(arr) ? arr.map(String) : [];
-            isManuallyAddedDirect = ids.includes(studentId);
-          }
-        } catch (e) {
-          // Ignore errors
-        }
-        
-        // Use either check
-        const isManuallyAddedFinal = isManuallyAdded || isManuallyAddedDirect;
-        
-        // Check if student has APL status history (indicates they've been in APL system)
+          student.value.education.some(e => 
+            e.type === 'CoursePackage' || 
+            (e.refId && (e.refId.coursePackageName || e.refId.coursePackageCode)) || 
+            e.coursePackageId
+          );
+
+        const hasActiveApplStatus = student.value.aplStatus && 
+          student.value.aplStatus !== 'GRAY' && 
+          !student.value.dropout;
+
         const hasAplHistory = student.value.aplStatusHistory && 
           Array.isArray(student.value.aplStatusHistory) && 
           student.value.aplStatusHistory.length > 0;
-        
-        // Check if student has a non-default APL status (not just the default GRAY)
-        // If they have status history, they've been actively managed in APL
-        const hasActiveAplStatus = hasAplHistory || 
-          (student.value.aplStatus && student.value.aplStatus !== 'GRAY');
-        
-        // Debug logging with detailed education structure
-        const educationDetails = student.value.education?.map(e => ({
-          type: e.type,
-          hasRefId: !!e.refId,
-          refIdType: e.refId?.constructor?.name,
-          refIdKeys: e.refId ? Object.keys(e.refId) : [],
-          coursePackageId: e.coursePackageId,
-          allKeys: Object.keys(e || {}),
-        })) || [];
-        
-        console.log('[APL Tab Check]', {
-          studentName: student.value.name,
-          studentId: studentId,
-          studentIdType: typeof studentId,
-          hasCoursePackage,
-          isManuallyAdded,
-          isManuallyAddedDirect,
-          isManuallyAddedFinal,
-          hasAplHistory,
-          aplStatus: student.value.aplStatus,
-          manualAplIdsRaw: Array.from(manualAplIds.value),
-          manualAplIdsNormalized: Array.from(normalizedManualIds),
-          educationCount: student.value.education?.length || 0,
-          educationDetails,
-          fullEducation: JSON.stringify(student.value.education, null, 2),
-        });
 
-        // Show APL tab if any condition is met:
-        // 1. Has CoursePackage in education
-        // 2. Is manually added to APL (check both reactive ref and direct localStorage)
-        // 3. Has APL status history (been actively managed in APL)
-        // 4. Has an aplStatus set AND is not a dropout
-        //    Note: If student appears in APL board, they should have the tab.
-        //    Since all students have default GRAY status, we use this as a fallback
-        //    to ensure students visible in APL board have the tab.
-        const hasAplStatusSet = student.value.aplStatus && 
-          student.value.aplStatus !== null && 
-          student.value.aplStatus !== undefined &&
-          !student.value.dropout;
-        
-        const shouldShowAplTab = hasCoursePackage || 
-          isManuallyAddedFinal || 
-          hasAplHistory ||
-          hasAplStatusSet;
-        
-        if (shouldShowAplTab) {
-          const reason = hasCoursePackage ? 'has CoursePackage' : 
-                        isManuallyAddedFinal ? 'manually added' : 
-                        hasAplHistory ? 'has APL history' :
-                        'has APL status set';
-          console.log(`[APL Tab] ✅ Showing APL tab for ${student.value.name}`, { reason });
-          allTabs.push({ name: 'APL', component: AplTab });
-        } else {
-          console.log(`[APL Tab Debug] Full check details:`, {
-            studentId,
-            hasCoursePackage,
-            isManuallyAdded,
-            isManuallyAddedDirect,
-            isManuallyAddedFinal,
-            hasAplHistory,
-            aplStatus: student.value.aplStatus,
+        const isManuallyAdded = manualAplIds.value.has(studentId);
+
+        // Show APL tab if any condition is met
+        const showAplTab = hasCoursePackage || isManuallyAdded || hasAplHistory || hasActiveApplStatus;
+
+        if (showAplTab) {
+          let apReason = '';
+          if (hasCoursePackage) apReason = 'har CoursePackage i utbildningen';
+          else if (isManuallyAdded) apReason = 'är manuellt kopplad till APL';
+          else if (hasAplHistory) apReason = 'har APL-historia';
+          else if (hasActiveApplStatus) apReason = 'har aktiv APL-status';
+
+          allTabs.push({
+            name: 'APL',
+            component: AplTab,
+            alwaysShow: false,
+            description: apReason,
+          });
+        }
+      }
+
+      // Conditionally show Action Plan tab
+      if (student.value) {
+        const hasApCoursePackage = student.value.education && 
+          Array.isArray(student.value.education) &&
+          student.value.education.some(e => 
+            e.type === 'CoursePackage' || 
+            (e.refId && (e.refId.coursePackageName || e.refId.coursePackageCode)) || 
+            e.coursePackageId
+          );
+
+        if (hasApCoursePackage) {
+          allTabs.push({
+            name: 'Handlingsplan',
+            component: ActionPlanTab,
+            alwaysShow: false,
+            description: 'APL-åtgärdsplan och mål',
+          });
+        }
+      }
+
+      // Conditionally show Documents tab
+      if (student.value && student.value.enrollments && student.value.enrollments.length > 0) {
+        const hasCompleted = student.value.enrollments.some(e => e.status === 'completed');
+        if (hasCompleted) {
+          allTabs.push({
+            name: 'Dokument',
+            component: DocumentsTab,
+            alwaysShow: false,
+            description: 'Genererade intygg och diplom',
+          });
+        }
+      }
+
+      return allTabs;
+    });
             dropout: student.value.dropout,
             manualAplIdsCount: manualAplIds.value.size,
             manualAplIdsList: Array.from(manualAplIds.value),
@@ -331,6 +343,12 @@ export default {
       loadManualAplIds();
     });
 
+    watch(() => route.query.showActionPlan, (val) => {
+      if (val === 'true') {
+        activeTab.value = ActionPlanTab;
+      }
+    });
+
     const handleDeleteStudent = async () => {
       if (!student.value?._id) return;
       const confirmed = window.confirm(
@@ -349,7 +367,11 @@ export default {
 
     onMounted(() => {
       loadManualAplIds();
-      loadStudent();
+      loadStudent().then(() => {
+        if (route.query.showActionPlan === 'true') {
+          activeTab.value = ActionPlanTab;
+        }
+      });
       // Listen for storage changes (cross-tab)
       window.addEventListener('storage', handleStorageChange);
       

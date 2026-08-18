@@ -115,6 +115,18 @@ const studentEnrollmentSchema = new mongoose.Schema(
         // Slutprov (final exam) date
         slutprovDate: { type: Date, default: null },
 
+        // Exam configuration (per-enrollment overrides)
+        examMunicipality: { type: String, default: null },
+        examLocation: { type: String, default: null },
+        examTime: { type: String, default: null },
+
+        // Certificate for internship (APL)
+        certificateDocId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Document",
+            default: null,
+        },
+
         // Attendance tracking
         attendancePercentage: { type: Number, min: 0, max: 100, default: null },
         lastAttendanceDate: { type: Date, default: null },

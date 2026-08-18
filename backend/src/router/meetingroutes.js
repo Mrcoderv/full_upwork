@@ -174,6 +174,46 @@ router.put('/meetings/:id', authenticateUser, async (req, res) => {
     }
 });
 
+// PUT: Uppdatera elevens examenackommodationer (specped/admin)
+router.put('/students/:id/exam-accommodations', authenticateUser, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { extraTime, computer, separateRoom, notes } = req.body;
+
+        // Validate that the user has permission
+        const { role, userId } = req.user;
+        const isAdmin = ['admin', 'systemadmin'].includes(role);
+        const isSpecped = role === 'specped';
+
+        if (!isAdmin && !isSpecped) {
+            return res.status(403).json({ error: "Behörighet saknas för att uppdatera examenackommodationer" });
+        }
+
+        const student = await Student.findByIdAndUpdate(
+            id,
+            {
+                examAccommodations: {
+                    extraTime: extraTime !== undefined ? extraTime : undefined,
+                    computer: computer !== undefined ? computer : undefined,
+                    separateRoom: separateRoom !== undefined ? separateRoom : undefined,
+                    notes: notes !== undefined ? notes : undefined,
+                },
+            },
+            { new: true }
+        );
+
+        if (!student) {
+            return res.status(404).json({ error: "Elev hittades inte" });
+        }
+
+        logger.info({ studentId: student._id, role, extraTime, computer, separateRoom, notes }, "Exam accommodations updated");
+        res.json(student);
+    } catch (err) {
+        logger.error({ err }, "Failed to update exam accommodations");
+        res.status(500).json({ error: 'Serverfel vid uppdatering av examenackommodationer' });
+    }
+});
+
 // DELETE /meetings/:id: Add a new, secure endpoint for deleting meetings.
 router.delete('/meetings/:id', authenticateUser, async (req, res) => {
     try {

@@ -51,7 +51,31 @@ const roles = {
         "courseTemplates:update",
         "courseTemplates:delete",
     ],
-    // ... other roles
+    student: [
+        "viewOwnGrades",
+        "viewOwnSchedule",
+        "viewOwnProfile",
+        "viewCourseInfo",
+        "viewNotifications",
+    ],
+    coordinator: [
+        "students:view_list:assigned",
+        "students:view_grades:assigned",
+        "analytics:read",
+        "inactivity:read",
+    ],
+    syv: [
+        "students:view_list:assigned",
+        "students:view_grades:assigned",
+        "analytics:read",
+        "inactivity:read",
+    ],
+    specped: [
+        "students:view_list:assigned",
+        "students:view_grades:assigned",
+        "analytics:read",
+        "inactivity:read",
+    ],
 };
 
 export default roles;

@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import Student from "../models/Student.js";
 import Notification from "../models/Notification.js";
 import Teacher from "../models/Teacher.js";
@@ -176,11 +177,28 @@ router.get("/notifications", authenticateUser, async (req, res) => {
 
 router.put('/notifications/resolve/:studentId', authenticateUser, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
   try {
-    const studentId = req.params.studentId;
-    await Notification.updateMany(
-      { studentId: studentId, type: 'action_plan_required', resolved: false },
-      { $set: { resolved: true } }
-    );
+    const rawId = req.params.studentId;
+    const filter = {
+      $or: [
+        { studentId: rawId },
+      ],
+      type: 'action_plan_required',
+      resolved: false,
+    };
+    if (mongoose.Types.ObjectId.isValid(rawId)) {
+      filter.$or.push({ studentId: new mongoose.Types.ObjectId(rawId) });
+      filter.$or.push({ "meta.studentId": new mongoose.Types.ObjectId(rawId) });
+    }
+    await Notification.updateMany(filter, { $set: { resolved: true } });
+    // Also resolve on raw collection in case documents were inserted bypass Mongoose
+    try {
+      await Notification.collection.updateMany(
+        { studentId: rawId, type: 'action_plan_required', resolved: false },
+        { $set: { resolved: true } }
+      );
+    } catch {
+      // Ignore raw collection error if not supported
+    }
     res.status(200).json({ message: 'Notification resolved' });
   } catch (error) {
     res.status(500).json({ message: 'Error resolving notification', error });

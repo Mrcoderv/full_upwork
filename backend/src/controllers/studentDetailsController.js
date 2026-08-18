@@ -4,6 +4,7 @@ import CoursePackage from "../models/CoursePackage.js";
 import Program from "../models/Program.js";
 import User from "../models/User.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
+import Deviation from "../models/Deviation.js";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 import { computeAplPeriod, computeAplEffectiveStatus } from "../utils/aplAutoStatus.js";
@@ -11,6 +12,11 @@ import {
     performStudentDropout,
     removeStudentDropoutRecord,
 } from "../services/dropoutService.js";
+import {
+    performStudyplanRevision,
+    getRevisionHistory,
+    REVISION_REASONS,
+} from "../services/revisionService.js";
 
 /**
  * Student Details Controller
@@ -570,6 +576,388 @@ export const removeStudentDropout = async (req, res) => {
             return res.status(404).json({ error: "Student not found" });
         }
         res.status(500).json({ error: "Failed to remove dropout status" });
+    }
+};
+
+/**
+ * Reactivate a student with optional course re-enrollment (admin+ only).
+ * Returns previous enrollment history for the frontend to display.
+ */
+export const reactivateStudentWithCourses = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role, userId } = req.user;
+        const { reEnrollCourseIds } = req.body;
+
+        if (!["admin", "systemadmin"].includes(role)) {
+            return res.status(403).json({ error: "Insufficient permissions to reactivate student" });
+        }
+
+        const student = await Student.findById(id);
+        if (!student) return res.status(404).json({ error: "Student not found" });
+
+        if (!student.dropout) {
+            return res.status(400).json({ error: "Student is not currently inactive" });
+        }
+
+        // Get previous enrollments before reactivation
+        const previousEnrollments = await StudentEnrollment.find({
+            studentId: id,
+            mainCourseId: { $exists: true, $ne: null },
+        })
+            .populate("mainCourseId", "courseName courseCode courseExtent")
+            .populate("coursePackageId", "coursePackageName coursePackageCode")
+            .sort({ startDate: -1 })
+            .lean();
+
+        // Reactivate via existing service
+        const { reactivateStudent } = await import("../services/dropoutService.js");
+        const updatedStudent = await reactivateStudent({
+            studentDoc: student,
+            userId,
+            role,
+        });
+
+        // Resolve dropout notifications
+        const Notification = (await import("../models/Notification.js")).default;
+        const dropoutNotifications = await Notification.find({
+            type: "dropout",
+            "meta.studentId": id,
+            resolved: false,
+        });
+        for (const notif of dropoutNotifications) {
+            notif.resolved = true;
+            if (!notif.resolvedByUsers) notif.resolvedByUsers = [];
+            notif.resolvedByUsers.push({ userId, resolvedAt: new Date() });
+            await notif.save();
+        }
+
+        // Re-enroll in selected courses if requested
+        let newEnrollments = [];
+        if (reEnrollCourseIds?.length > 0) {
+            const CourseMatchingService = (await import("../utils/courseMatchingService.js")).default;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tempoWeeks = student.tempoWeeks || 10;
+
+            // Find the last enrollment end date to continue from
+            const lastEnrollment = previousEnrollments[0];
+            let nextStartDate = lastEnrollment?.endDate
+                ? new Date(lastEnrollment.endDate)
+                : today;
+            if (nextStartDate < today) nextStartDate = today;
+
+            for (const courseId of reEnrollCourseIds) {
+                const startDate = new Date(nextStartDate);
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + tempoWeeks * 7);
+
+                const { instance } = await CourseMatchingService.findOrCreateCourseInstance(
+                    courseId,
+                    startDate,
+                    endDate,
+                    userId,
+                    student.teacherId || null
+                );
+
+                const enrollment = new StudentEnrollment({
+                    studentId: id,
+                    courseInstanceId: instance._id,
+                    mainCourseId: courseId,
+                    startDate,
+                    endDate,
+                    status: "enrolled",
+                    teacherId: student.teacherId || null,
+                });
+
+                await enrollment.save();
+                newEnrollments.push(enrollment);
+                nextStartDate = new Date(endDate);
+            }
+        }
+
+        // Record audit entry
+        if (!student.changeHistory) student.changeHistory = [];
+        student.changeHistory.push({
+            timestamp: new Date(),
+            changedBy: userId,
+            changedByRole: role,
+            changes: ["reactivation"],
+            previousValues: { dropout: true, reEnrollCourseIds: reEnrollCourseIds || [] },
+            newValues: { dropout: false, newEnrollmentCount: newEnrollments.length },
+        });
+        await student.save();
+
+        res.json({
+            success: true,
+            message: "Student reactivated successfully",
+            student: updatedStudent,
+            previousEnrollments,
+            newEnrollments,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error reactivating student");
+        if (error.statusCode === 404) return res.status(404).json({ error: "Student not found" });
+        res.status(500).json({ error: "Failed to reactivate student" });
+    }
+};
+
+// ─── Support Info Endpoints ─────────────────────────────────────────────────
+
+/**
+ * Get support contacts for a student
+ */
+export const getSupportInfo = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const student = await Student.findById(id).select("supportInfo name email");
+        if (!student) {
+            return res.status(404).json({ error: "Student not found" });
+        }
+
+        res.json({
+            studentId: student._id,
+            studentName: student.name,
+            studentEmail: student.email,
+            supportInfo: student.supportInfo || [],
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching support info");
+        res.status(500).json({ error: "Failed to fetch support info" });
+    }
+};
+
+/**
+ * Update support contacts for a student (admin+ only)
+ */
+export const updateSupportInfo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role, userId } = req.user;
+        const { supportInfo } = req.body;
+
+        if (!["admin", "systemadmin"].includes(role)) {
+            return res.status(403).json({
+                error: "Insufficient permissions to update support info",
+            });
+        }
+
+        if (!Array.isArray(supportInfo)) {
+            return res.status(400).json({ error: "supportInfo must be an array" });
+        }
+
+        const student = await Student.findById(id);
+        if (!student) {
+            return res.status(404).json({ error: "Student not found" });
+        }
+
+        student.supportInfo = supportInfo.map(contact => ({
+            contactName: contact.contactName,
+            contactRole: contact.contactRole || "",
+            contactPhone: contact.contactPhone || "",
+            contactEmail: contact.contactEmail || "",
+            supportType: contact.supportType || "",
+            notes: contact.notes || "",
+            addedAt: contact.addedAt || new Date(),
+            addedBy: userId,
+        }));
+
+        await student.save();
+
+        res.json({
+            success: true,
+            message: "Support info updated",
+            supportInfo: student.supportInfo,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error updating support info");
+        res.status(500).json({ error: "Failed to update support info" });
+    }
+};
+
+// ─── Deviation Endpoints ────────────────────────────────────────────────────
+
+/**
+ * Get all deviations for a student (optionally filtered by enrollmentId)
+ */
+export const getDeviations = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { enrollmentId } = req.query;
+
+        const query = { studentId: id };
+        if (enrollmentId) {
+            query.enrollmentId = enrollmentId;
+        }
+
+        const deviations = await Deviation.find(query)
+            .populate("enrollmentId", "courseInstanceId")
+            .populate("courseId", "courseName courseCode")
+            .populate("courseInstanceId", "courseName courseCode")
+            .sort({ createdAt: -1 });
+
+        res.json(deviations);
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching deviations");
+        res.status(500).json({ error: "Failed to fetch deviations" });
+    }
+};
+
+/**
+ * Create a new deviation (teacher+ only)
+ */
+export const createDeviation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role, userId, name } = req.user;
+        const { enrollmentId, courseId, courseInstanceId, type, title, description, reason } = req.body;
+
+        if (!["teacher", "admin", "systemadmin"].includes(role)) {
+            return res.status(403).json({ error: "Insufficient permissions to create deviations" });
+        }
+
+        if (!enrollmentId || !type || !title) {
+            return res.status(400).json({ error: "enrollmentId, type, and title are required" });
+        }
+
+        const student = await Student.findById(id);
+        if (!student) {
+            return res.status(404).json({ error: "Student not found" });
+        }
+
+        const deviation = new Deviation({
+            studentId: id,
+            enrollmentId,
+            courseId: courseId || undefined,
+            courseInstanceId: courseInstanceId || undefined,
+            type,
+            title,
+            description: description || "",
+            reason: reason || "",
+            status: "pending",
+            requestedBy: userId,
+            requestedByName: name,
+        });
+
+        await deviation.save();
+
+        res.status(201).json({
+            success: true,
+            message: "Deviation created",
+            deviation,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error creating deviation");
+        res.status(500).json({ error: "Failed to create deviation" });
+    }
+};
+
+/**
+ * Update a deviation status (admin+ only)
+ */
+export const updateDeviation = async (req, res) => {
+    try {
+        const { id, deviationId } = req.params;
+        const { role, userId, name } = req.user;
+        const { status, resolution } = req.body;
+
+        if (!["admin", "systemadmin"].includes(role)) {
+            return res.status(403).json({ error: "Insufficient permissions to update deviations" });
+        }
+
+        const deviation = await Deviation.findOne({ _id: deviationId, studentId: id });
+        if (!deviation) {
+            return res.status(404).json({ error: "Deviation not found" });
+        }
+
+        if (status) {
+            deviation.status = status;
+        }
+        if (resolution) {
+            deviation.resolution = resolution;
+        }
+        if (status === "approved" || status === "rejected") {
+            deviation.resolvedBy = userId;
+            deviation.resolvedByName = name;
+            deviation.resolvedAt = new Date();
+        }
+
+        await deviation.save();
+
+        res.json({
+            success: true,
+            message: "Deviation updated",
+            deviation,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error updating deviation");
+        res.status(500).json({ error: "Failed to update deviation" });
+    }
+};
+
+// ─── Study-Plan Revision Endpoints ──────────────────────────────────────────
+
+/**
+ * Get available revision reasons
+ */
+export const getRevisionReasons = async (req, res) => {
+    res.json({ reasons: REVISION_REASONS });
+};
+
+/**
+ * Perform a study-plan revision (admin+ only)
+ */
+export const reviseStudyPlan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role, userId } = req.user;
+        const { revisionReason, description, changes } = req.body;
+
+        if (!["admin", "systemadmin"].includes(role)) {
+            return res.status(403).json({ error: "Insufficient permissions to revise study plan" });
+        }
+
+        if (!revisionReason || !changes) {
+            return res.status(400).json({ error: "revisionReason and changes are required" });
+        }
+
+        const result = await performStudyplanRevision({
+            studentId: id,
+            revisionReason,
+            description,
+            changes,
+            userId,
+            userRole: role,
+        });
+
+        res.json(result);
+    } catch (error) {
+        logger.error({ err: error }, "Error revising study plan");
+        if (error.statusCode === 404) return res.status(404).json({ error: error.message });
+        if (error.statusCode === 400) return res.status(400).json({ error: error.message });
+        res.status(500).json({ error: "Failed to revise study plan" });
+    }
+};
+
+/**
+ * Get revision history for a student (admin+ only)
+ */
+export const getStudyplanRevisionHistory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role } = req.user;
+
+        if (!["admin", "systemadmin", "teacher"].includes(role)) {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        const history = await getRevisionHistory(id);
+        res.json({ success: true, history });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching revision history");
+        if (error.statusCode === 404) return res.status(404).json({ error: error.message });
+        res.status(500).json({ error: "Failed to fetch revision history" });
     }
 };
 

@@ -5,6 +5,7 @@ import logger from "../utils/logger.js";
 import Student from "../models/Student.js";
 import { authenticateUser } from "../controllers/authController.js";
 import Notification from "../models/Notification.js";
+import AuditLog from "../models/AuditLog.js";
 import Course from "../models/Course.js";
 import Program from "../models/Program.js";
 import CoursePackage from "../models/CoursePackage.js";
@@ -194,6 +195,18 @@ router.put("/admin/unlock-grade", authenticateUser, async (req, res) => {
       message: `Admin ${user.name || user.username || 'Admin'} låste upp betyget för ${studentName} (${courseName}).`,
       meta: { studentId, courseId, enrollmentId },
       resolved: false,
+    });
+
+    await AuditLog.create({
+      entityType: "StudentEnrollment",
+      entityId: enrollmentId || courseId,
+      action: "grade_unlock",
+      description: `Betyg upplåst för ${studentName} (${courseName})`,
+      performedBy: {
+        userId: user.userId,
+        role: user.role,
+        email: user.email,
+      },
     });
 
     res.send("Betyg upplåst");
@@ -485,6 +498,10 @@ router.post("/teacher/save-grade", authenticateUser, async (req, res) => {
   const { studentId, courseId, grade, reason, comments, npScore, type } =
     req.body;
 
+  if (grade === "F" && (!reason || reason.trim() === "")) {
+    return res.status(400).json({ error: "Motivering krävs vid betyg F" });
+  }
+
   try {
     const result = await Student.updateOne(
       {
@@ -502,12 +519,37 @@ router.post("/teacher/save-grade", authenticateUser, async (req, res) => {
       }
     );
 
+    let studentRecord = null;
+    let teacherRecord = null;
+    if (studentId && Student.findById) {
+      try {
+        const query = Student.findById(studentId);
+        studentRecord = query && typeof query.lean === "function" ? await query.lean() : await query;
+        if (studentRecord?.teacherId && Teacher?.findById) {
+          teacherRecord = await Teacher.findById(studentRecord.teacherId).catch(() => null);
+        }
+      } catch (findErr) {
+        studentRecord = null;
+      }
+    }
+    if (!teacherRecord && req.user?.userId && Teacher?.findOne) {
+      teacherRecord = await Teacher.findOne({ userId: req.user.userId }).catch(() => null);
+    }
+
     if (grade === "F") {
+      const studentName = studentRecord?.name || "Elev";
       await createNotification({
         studentId,
         courseId,
         type: "action_plan_required",
-        message: "Handlingsplan krävs pga elever med F i betyg",
+        message: `Handlingsplan krävs: ${studentName} har fått F i betyg`,
+        teacher: teacherRecord?._id || undefined,
+        meta: {
+          studentId,
+          courseId,
+          url: `/student/${studentId}?showActionPlan=true`,
+          teacherId: req.user?.userId,
+        },
       });
     } else {
       await resolveNotification({
@@ -603,6 +645,18 @@ router.post("/teacher/lock-grade", authenticateUser, async (req, res) => {
         teacherId: userId,
       },
       resolved: false,
+    });
+
+    await AuditLog.create({
+      entityType: "StudentEnrollment",
+      entityId: enrollmentId || targetCourseId,
+      action: "grade_lock",
+      description: `Betyg låst för ${studentName} (${courseName})`,
+      performedBy: {
+        userId: userId,
+        role: role,
+        email: req.user?.email,
+      },
     });
 
     return res.status(200).json({ message: "Grade locked", locked: true });
@@ -735,6 +789,10 @@ router.put('/update-grade/:enrollmentId', authenticateUser, async (req, res) => 
     const { grade, motivation, comments, nationalTestPoints } = req.body;
     const userId = req.user?.userId;
 
+    if (grade === "F" && (!motivation || motivation.trim() === "")) {
+      return res.status(400).json({ error: "Motivering krävs vid betyg F" });
+    }
+
     const enrollment = await StudentEnrollment.findById(enrollmentId);
     if (!enrollment) {
       return res.status(404).json({ error: 'Enrollment not found' });
@@ -754,6 +812,52 @@ router.put('/update-grade/:enrollmentId', authenticateUser, async (req, res) => 
     enrollment.gradeBy = userId;
 
     await enrollment.save();
+
+    const targetStudentId = enrollment.studentId?.toString() || enrollment.studentId;
+    const targetCourseId = enrollment.courseInstanceId?.toString() || enrollment.courseInstanceId;
+
+    if (grade === "F") {
+      let studentRecord = null;
+      let teacherRecord = null;
+      if (targetStudentId && Student?.findById) {
+        try {
+          const query = Student.findById(targetStudentId);
+          studentRecord = query && typeof query.lean === "function" ? await query.lean() : await query;
+          if (studentRecord?.teacherId && Teacher?.findById) {
+            teacherRecord = await Teacher.findById(studentRecord.teacherId).catch(() => null);
+          }
+        } catch (findErr) {
+          studentRecord = null;
+        }
+      }
+      if (!teacherRecord && userId && Teacher?.findOne) {
+        teacherRecord = await Teacher.findOne({ userId }).catch(() => null);
+      }
+      const studentName = studentRecord?.name || "Elev";
+      await createNotification({
+        studentId: targetStudentId,
+        courseId: targetCourseId,
+        type: "action_plan_required",
+        message: `Handlingsplan krävs: ${studentName} har fått F i betyg`,
+        teacher: teacherRecord?._id || undefined,
+        meta: {
+          studentId: targetStudentId,
+          courseId: targetCourseId,
+          enrollmentId,
+          url: `/student/${targetStudentId}?showActionPlan=true`,
+          teacherId: userId,
+        },
+      });
+    } else if (grade) {
+      await resolveNotification({
+        studentId: targetStudentId,
+        courseId: targetCourseId,
+        type: "action_plan_required",
+      });
+    }
+
+    await evaluateGradingStatusAndNotify();
+    await evaluateActionPlanStatusAndNotify();
 
     res.json({
       success: true,

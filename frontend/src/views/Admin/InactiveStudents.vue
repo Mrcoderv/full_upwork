@@ -43,8 +43,8 @@
               <th>E-post</th>
               <th>Kommun</th>
               <th>Lärare</th>
-              <th>Startdatum</th>
-              <th>Slutdatum</th>
+              <th>Avbrottsdatum</th>
+              <th>Föregående kurser</th>
               <th>Åtgärder</th>
             </tr>
           </thead>
@@ -63,15 +63,41 @@
               </td>
               <td class="tnum">{{ student.personalNumber }}</td>
               <td>{{ student.email }}</td>
-              <td>{{ student.municipality || '-' }}</td>
+              <td>{{ student.municipality?.type || student.municipality || '-' }}</td>
               <td>
                 <span v-if="student.teacherId">{{ student.teacherId.name }}</span>
                 <span v-else>-</span>
               </td>
-              <td class="tnum">{{ formatDate(student.startDate) }}</td>
-              <td class="tnum">{{ formatDate(student.endDate) }}</td>
+              <td class="tnum">{{ formatDate(student.dropoutDate) }}</td>
+              <td>
+                <div v-if="student.previousEnrollments?.length" class="previous-courses">
+                  <div
+                    v-for="enrollment in student.previousEnrollments.slice(0, 3)"
+                    :key="enrollment._id"
+                    class="prev-course-chip"
+                    :class="'status-' + (enrollment.status || 'enrolled')"
+                  >
+                    <span class="prev-course-name">
+                      {{ enrollment.mainCourseId?.courseName || enrollment.coursePackageId?.coursePackageName || 'Kurs' }}
+                    </span>
+                    <span class="prev-course-dates">
+                      {{ formatDate(enrollment.startDate) }} – {{ formatDate(enrollment.endDate) }}
+                    </span>
+                  </div>
+                  <span v-if="student.previousEnrollments.length > 3" class="more-courses">
+                    +{{ student.previousEnrollments.length - 3 }} till
+                  </span>
+                </div>
+                <span v-else class="no-courses">—</span>
+              </td>
               <td>
                 <div class="action-buttons">
+                  <router-link
+                    :to="`/student/${student._id}`"
+                    class="btn btn-outline-primary btn-sm"
+                  >
+                    Visa
+                  </router-link>
                   <button class="btn btn-success btn-sm" @click="openReactivateDialog(student)">
                     Återaktivera
                   </button>
@@ -89,15 +115,43 @@
         description="Just nu finns inga elever med registrerat avbrott."
       />
 
+      <!-- Reactivation Dialog -->
       <ConfirmDialog
         v-model="dialogOpen"
         title="Återaktivera elev?"
-        :message="`${dialogStudent?.name || 'Eleven'} återaktiveras som aktiv elev. Eleven läggs tillbaka i slutprovslistan och kan återigen delta i aktiviteter.`"
+        :message="reactivateMessage"
         confirm-label="Bekräfta återaktivering"
         cancel-label="Avbryt"
         :loading="reactivating"
         @confirm="reactivateStudent"
-      />
+      >
+        <template v-if="dialogStudent?.previousEnrollments?.length" #default>
+          <div class="re-enroll-section">
+            <p class="re-enroll-label">Välj kurser att återanmäla till:</p>
+            <div class="re-enroll-courses">
+              <label
+                v-for="enrollment in dialogStudent.previousEnrollments"
+                :key="enrollment._id"
+                class="re-enroll-option"
+              >
+                <input
+                  type="checkbox"
+                  :value="enrollment.mainCourseId?._id"
+                  v-model="selectedReEnrollCourseIds"
+                />
+                <span class="re-enroll-course-info">
+                  <span class="re-enroll-course-name">
+                    {{ enrollment.mainCourseId?.courseName || enrollment.coursePackageId?.coursePackageName || 'Kurs' }}
+                  </span>
+                  <span class="re-enroll-course-dates">
+                    {{ formatDate(enrollment.startDate) }} – {{ formatDate(enrollment.endDate) }}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </template>
+      </ConfirmDialog>
     </div>
   </div>
 </template>
@@ -120,6 +174,7 @@ const searchQuery = ref('')
 const dialogStudent = ref(null)
 const dialogOpen = ref(false)
 const reactivating = ref(false)
+const selectedReEnrollCourseIds = ref([])
 
 const filteredStudents = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -127,6 +182,16 @@ const filteredStudents = computed(() => {
   return students.value.filter((s) =>
     [s.name, s.personalNumber, s.email].some((field) => field && field.toLowerCase().includes(query))
   )
+})
+
+const reactivateMessage = computed(() => {
+  if (!dialogStudent.value) return ''
+  const name = dialogStudent.value.name
+  const count = selectedReEnrollCourseIds.value.length
+  if (count > 0) {
+    return `${name} återaktiveras som aktiv elev och anmäls till ${count} kurs${count > 1 ? 'er' : ''}.`
+  }
+  return `${name} återaktiveras som aktiv elev. Eleven läggs tillbaka i slutprovslistan och kan återigen delta i aktiviteter.`
 })
 
 async function loadInactiveStudents() {
@@ -151,6 +216,7 @@ function formatDate(dateString) {
 
 function openReactivateDialog(student) {
   dialogStudent.value = student
+  selectedReEnrollCourseIds.value = []
   dialogOpen.value = true
 }
 
@@ -158,6 +224,7 @@ function closeDialog() {
   if (reactivating.value) return
   dialogOpen.value = false
   dialogStudent.value = null
+  selectedReEnrollCourseIds.value = []
 }
 
 async function reactivateStudent() {
@@ -165,8 +232,15 @@ async function reactivateStudent() {
   reactivating.value = true
   try {
     const id = dialogStudent.value._id
-    await axios.delete(`/api/student-details/${id}/dropout`)
-    toast.success(`${dialogStudent.value.name} återaktiverades`)
+    await axios.post(`/api/student-details/${id}/reactivate`, {
+      reEnrollCourseIds: selectedReEnrollCourseIds.value,
+    })
+    const count = selectedReEnrollCourseIds.value.length
+    toast.success(
+      count > 0
+        ? `${dialogStudent.value.name} återaktiverades och anmäldes till ${count} kurs${count > 1 ? 'er' : ''}.`
+        : `${dialogStudent.value.name} återaktiverades.`
+    )
     await loadInactiveStudents()
     closeDialog()
   } catch (error) {
@@ -227,5 +301,111 @@ onMounted(loadInactiveStudents)
 .action-buttons {
   display: flex;
   gap: var(--space-2);
+}
+
+.previous-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 250px;
+}
+
+.prev-course-chip {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border-left: 3px solid #6c757d;
+  background: #f8f9fa;
+  font-size: 12px;
+}
+
+.prev-course-chip.status-enrolled {
+  border-left-color: #28a745;
+}
+
+.prev-course-chip.status-completed {
+  border-left-color: #6c757d;
+}
+
+.prev-course-chip.status-dropped {
+  border-left-color: #dc3545;
+}
+
+.prev-course-chip.status-reviderad {
+  border-left-color: #ffc107;
+}
+
+.prev-course-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.prev-course-dates {
+  color: #6c757d;
+  font-size: 11px;
+}
+
+.more-courses {
+  font-size: 11px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.no-courses {
+  color: #6c757d;
+}
+
+.re-enroll-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #dee2e6;
+}
+
+.re-enroll-label {
+  font-weight: 500;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.re-enroll-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.re-enroll-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.re-enroll-option:hover {
+  background: #f0f7ff;
+}
+
+.re-enroll-option input[type="checkbox"] {
+  margin: 0;
+}
+
+.re-enroll-course-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.re-enroll-course-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.re-enroll-course-dates {
+  color: #6c757d;
+  font-size: 12px;
 }
 </style>

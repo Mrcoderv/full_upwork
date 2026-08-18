@@ -357,6 +357,7 @@ export const getCourseInstanceReport = async (req, res) => {
             e => String(e.courseInstanceId) === String(instanceId)
         );
 
+        // Compute completion status from enrollment
         let completedComponents = {};
         let totalModules = 0;
         let completedModules = 0;
@@ -369,6 +370,62 @@ export const getCourseInstanceReport = async (req, res) => {
             ).length;
         }
 
+        // Get module information for component details
+        const modules = instance.modules || [];
+
+        // Compute assignment status per module
+        const assignmentStatus = {};
+        if (enrollment && enrollment._id) {
+            const submissions = await AssignmentSubmission.find({
+                enrollmentId: enrollment._id,
+                courseInstanceId: instance._id,
+            }).select("moduleNumber submittedText submittedAt feedback status fileId");
+            for (const submission of submissions) {
+                assignmentStatus[submission.moduleNumber] = {
+                    submitted: !!submission.submittedText || !!submission.fileId,
+                    status: submission.feedback?.status || "",
+                    submittedAt: submission.submittedAt,
+                    feedbackComment: submission.feedback?.comment || "",
+                };
+            }
+        }
+
+        // Compute student activity and last access
+        const now = new Date();
+        let lastAccess = null;
+        let activityDays = 0;
+
+        // Check last login from user model
+        const user = await User.findById(student._id).select("lastLoginAt");
+        if (user && user.lastLoginAt) {
+            const diffMs = now - user.lastLoginAt;
+            activityDays = Math.floor(diffMs / 86400000);
+            lastAccess = user.lastLoginAt;
+        }
+
+        // If no login activity, check last submission
+        if (activityDays === 0) {
+            const lastSub = await AssignmentSubmission.findOne({
+                studentId: student._id,
+                enrollmentId: enrollment?._id,
+            }).sort({ submittedAt: -1 });
+            if (lastSub && lastSub.submittedAt) {
+                const diffMs = now - lastSub.submittedAt;
+                activityDays = Math.floor(diffMs / 86400000);
+                lastAccess = lastSub.submittedAt;
+            }
+        }
+
+        // Determine status labels
+        const statuses = {};
+        for (const module of modules) {
+            statuses[module.moduleNumber] = {
+                completed: completedComponents[module.moduleNumber] === "✓",
+                submitted: !!(assignmentStatus[module.moduleNumber]?.submitted),
+                statusText: assignmentStatus[module.moduleNumber]?.status || "",
+            };
+        }
+
         res.json({
             success: true,
             instanceId,
@@ -377,10 +434,260 @@ export const getCourseInstanceReport = async (req, res) => {
             completedModules,
             completionRate: totalModules > 0 ? (completedModules / totalModules * 100).toFixed(1) : 0,
             completedComponents,
+            modules: modules.map((m) => ({
+                moduleNumber: m.moduleNumber,
+                title: m.title,
+                isPartialExam: m.isPartialExam,
+                isCaseStudy: m.isCaseStudy,
+                completed: completedComponents[m.moduleNumber] === "✓",
+                assignment: assignmentStatus[m.moduleNumber],
+            })),
+            assignmentStatus,
+            scheduledDates: instance.sectionDates?.map((d, i) => ({
+                moduleIndex: i,
+                date: d ? d.toISOString().split("T")[0] : null,
+            })) || [],
+            studentActivity: {
+                lastAccess,
+                activityDays,
+                lastLogin: user?.lastLoginAt,
+                lastSubmission: activityDays > 0 ? null : null,
+            },
+            participantCount: enrollment ? enrollment.students?.length || 0 : 0,
         });
     } catch (error) {
         logger.error({ err: error }, "Error fetching course instance report");
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+// Get participants for a course instance.
+// GET /learning/instances/:instanceId/participants
+export const getCourseInstanceParticipants = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId)) {
+            return res.status(400).json({ error: "Invalid course instance ID" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        // Get all enrollments for this instance
+        const enrollments = await StudentEnrollment.find({ courseInstanceId: instance._id })
+            .select("studentId students status")
+            .populate("studentId", "name email")
+            .lean();
+
+        const participants = enrollments.map((enrollment) => ({
+            participantId: enrollment.studentId._id,
+            name: enrollment.studentId.name,
+            email: enrollment.studentId.email,
+            role: "student",
+            status: enrollment.status,
+        }));
+
+        res.json({
+            success: true,
+            participants,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching course instance participants");
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Add a participant (student or staff) to a course instance.
+ * Only admin/systemadmin can add participants; teacher can add students in their own courses.
+ * POST /learning/instances/:instanceId/participants
+ */
+export const addCourseInstanceParticipant = async (req, res) => {
+    try {
+        const { instanceId } = req.params;
+        const { participantId, role } = req.body;
+
+        if (!participantId || !role) {
+            return res.status(400).json({ error: "Participant ID and role are required" });
+        }
+
+        if (!mongoose.isValidObjectId(participantId)) {
+            return res.status(400).json({ error: "Invalid participant ID" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        // Check permissions: admin/systemadmin can add anyone; teacher can add students in their course
+        const user = req.user;
+        const isAdmin = user.roles && user.roles.includes("systemadmin");
+        const isAdminStaff = user.roles && user.roles.includes("admin");
+        const isTeacher = user.role === "teacher";
+
+        let hasPermission = false;
+
+        if (isAdmin || isAdminStaff) {
+            hasPermission = true;
+        } else if (isTeacher) {
+            // Teacher can add students to their own course
+            hasPermission = instance.responsibleTeacher &&
+                String(instance.responsibleTeacher) === String(user.userId);
+        }
+
+        if (!hasPermission) {
+            return res.status(403).json({ error: "Saknad behörighet för att lägga till deltagare" });
+        }
+
+        // Check if participant already exists
+        const existingEnrollment = await StudentEnrollment.findOne({
+            courseInstanceId: instance._id,
+            studentId: participantId,
+        }).lean();
+
+        if (existingEnrollment) {
+            return res.status(409).json({ error: "Denna elev är redan inskriven på kursen" });
+        }
+
+        // Create new enrollment
+        const newEnrollment = new StudentEnrollment({
+            studentId: participantId,
+            courseInstanceId: instance._id,
+            status: "enrolled",
+        });
+
+        await newEnrollment.save();
+
+        res.json({
+            success: true,
+            enrollment: {
+                studentId: participantId,
+                courseInstanceId: instance._id,
+                status: "enrolled",
+            },
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error adding course instance participant");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
+/**
+ * Remove a participant from a course instance.
+ * Admin/systemadmin can remove anyone; teacher can remove students from their own course.
+ * DELETE /learning/instances/:instanceId/participants/:participantId
+ */
+export const removeCourseInstanceParticipant = async (req, res) => {
+    try {
+        const { instanceId, participantId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId) || !mongoose.isValidObjectId(participantId)) {
+            return res.status(400).json({ error: "Invalid IDs" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        // Check permissions
+        const user = req.user;
+        const isAdmin = user.roles && user.roles.includes("systemadmin");
+        const isAdminStaff = user.roles && user.roles.includes("admin");
+        const isTeacher = user.role === "teacher";
+
+        let hasPermission = false;
+
+        if (isAdmin || isAdminStaff) {
+            hasPermission = true;
+        } else if (isTeacher) {
+            hasPermission = instance.responsibleTeacher &&
+                String(instance.responsibleTeacher) === String(user.userId);
+        }
+
+        if (!hasPermission) {
+            return res.status(403).json({ error: "Saknad behörighet för att ta bort deltagare" });
+        }
+
+        // Find and remove the enrollment
+        const enrollment = await StudentEnrollment.findOne({
+            courseInstanceId: instance._id,
+            studentId: participantId,
+        });
+
+        if (!enrollment) {
+            return res.status(404).json({ error: "Deltagare hittades inte på den här kursen" });
+        }
+
+        // Soft remove: set status to withdrawn instead of deleting
+        enrollment.status = "withdrawn";
+        enrollment.dropoutDate = new Date();
+        enrollment.dropoutBy = user._id;
+        await enrollment.save();
+
+        res.json({
+            success: true,
+            message: "Deltagare har tagits bort från kursen",
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error removing course instance participant");
+        res.status(500).json({ error: "Intern servererror" });
+    }
+};
+
+/**
+ * Get last access time for a student in a course instance.
+ * Returns the last login date and last submission date.
+ * GET /learning/instances/:instanceId/access-last/:studentId
+ */
+export const getStudentLastAccess = async (req, res) => {
+    try {
+        const { instanceId, studentId } = req.params;
+
+        if (!mongoose.isValidObjectId(instanceId) || !mongoose.isValidObjectId(studentId)) {
+            return res.status(400).json({ error: "Invalid IDs" });
+        }
+
+        const instance = await CourseInstance.findById(instanceId);
+        if (!instance) {
+            return res.status(404).json({ error: "Course instance not found" });
+        }
+
+        const student = await Student.findById(studentId);
+        if (!student) {
+            return res.status(404).json({ error: "Student not found" });
+        }
+
+        // Get the student's enrollment for this instance
+        const enrollment = student.enrollments.find(
+            e => String(e.courseInstanceId) === String(instanceId)
+        );
+
+        // Check last login from user model
+        const user = await User.findById(student._id).select("lastLoginAt");
+        const lastLogin = user?.lastLoginAt || null;
+
+        // Check last submission
+        let lastSubmission = null;
+        if (enrollment && enrollment._id) {
+            const lastSub = await AssignmentSubmission.findOne({
+                studentId: student._id,
+                enrollmentId: enrollment._id,
+            }).sort({ submittedAt: -1 });
+            lastSubmission = lastSub?.submittedAt || null;
+        }
+
+        res.json({
+            success: true,
+            lastLogin,
+            lastSubmission,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Error fetching student last access");
+        res.status(500).json({ error: "Intern servererror" });
     }
 };
 

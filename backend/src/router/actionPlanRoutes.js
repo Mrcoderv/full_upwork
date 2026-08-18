@@ -3,22 +3,39 @@ import ActionPlan from "../models/ActionPlan.js";
 import Notification from "../models/Notification.js";
 import FormQuestions from "../models/ActionPlanQuestions.js"
 import Student from "../models/Student.js";
-import { isAuthenticated } from "../middleware/auth.js";
+import Course from "../models/Course.js";
+import { isAuthenticated, hasRole } from "../middleware/auth.js";
 import { buildActionPlanPdf } from "../services/actionPlanPdf.js";
+import { evaluateActionPlanStatusAndNotify } from "../controllers/notificationController.js";
 import logger from "../utils/logger.js";
 const router = Router();
 
-router.get("/actionplan/:studentId/pdf", isAuthenticated, async (req, res) => {
+const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped"];
+
+router.get("/actionplan/:studentId/pdf", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const plan = await ActionPlan.findOne({ studentId: req.params.studentId }).sort({ createdAt: -1 });
         if (!plan) {
             return res.status(404).json({ message: "Ingen handlingsplan hittad" });
         }
-        const student = await Student.findById(plan.studentId).select("name");
-        const pdf = buildActionPlanPdf({
-            plan: plan.toObject(),
-            studentName: student?.name || "",
-        });
+        let pdf = plan.pdf;
+        if (!pdf || pdf.length === 0) {
+            const student = await Student.findById(plan.studentId).select("name");
+            const formConfig = await FormQuestions.findOne({ type: "ACTION_PLAN" }).lean().catch(() => null);
+            let courseName = plan.courseName;
+            if (!courseName && plan.courseId) {
+                const course = await Course.findById(plan.courseId).select("courseName").lean().catch(() => null);
+                if (course) courseName = course.courseName;
+            }
+            pdf = buildActionPlanPdf({
+                plan: plan.toObject(),
+                studentName: student?.name || plan.studentName || "",
+                courseName,
+                questions: formConfig?.questions,
+            });
+            plan.pdf = pdf;
+            await plan.save().catch(() => null);
+        }
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader(
             "Content-Disposition",
@@ -31,20 +48,71 @@ router.get("/actionplan/:studentId/pdf", isAuthenticated, async (req, res) => {
     }
 });
 
-router.get("/actionplan/:studentId", isAuthenticated, async (req, res) => {
+router.get("/actionplan/document/:id/pdf", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+    try {
+        const plan = await ActionPlan.findById(req.params.id);
+        if (!plan) {
+            return res.status(404).json({ message: "Ingen handlingsplan hittad" });
+        }
+        let pdf = plan.pdf;
+        if (!pdf || pdf.length === 0) {
+            const student = await Student.findById(plan.studentId).select("name");
+            const formConfig = await FormQuestions.findOne({ type: "ACTION_PLAN" }).lean().catch(() => null);
+            let courseName = plan.courseName;
+            if (!courseName && plan.courseId) {
+                const course = await Course.findById(plan.courseId).select("courseName").lean().catch(() => null);
+                if (course) courseName = course.courseName;
+            }
+            pdf = buildActionPlanPdf({
+                plan: plan.toObject(),
+                studentName: student?.name || plan.studentName || "",
+                courseName,
+                questions: formConfig?.questions,
+            });
+            plan.pdf = pdf;
+            await plan.save().catch(() => null);
+        }
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="handlingsplan-${plan._id}.pdf"`
+        );
+        res.send(pdf);
+    } catch (error) {
+        logger.error({ err: error }, "Error downloading action plan PDF");
+        res.status(500).json({ message: "Något gick fel", error: error.message });
+    }
+});
+
+router.get("/actionplans/:studentId", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+    try {
+        const plans = await ActionPlan.find({ studentId: req.params.studentId })
+            .select("-pdf")
+            .sort({ createdAt: -1 })
+            .lean();
+        res.json(plans);
+    } catch (error) {
+        logger.error({ err: error }, "Error listing action plans");
+        res.status(500).json({ message: "Något gick fel", error: error.message });
+    }
+});
+
+router.get("/actionplan/:studentId", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
         const plan = await ActionPlan.findOne({ studentId: req.params.studentId }).sort({ createdAt: -1 });
         if (!plan) {
             return res.status(404).json({ message: "Ingen handlingsplan hittad" });
         }
-        res.json(plan.toObject());
+        const planObj = typeof plan.toObject === "function" ? plan.toObject() : { ...plan };
+        delete planObj.pdf;
+        res.json(planObj);
     } catch (error) {
         logger.error({ err: error }, "Error fetching action plan");
         res.status(500).json({ message: "Något gick fel", error: error.message });
     }
 });
 
-router.post("/form-questions", isAuthenticated, async (req, res) => {
+router.post("/form-questions", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
 
         const { type, questions} = req.body
@@ -67,7 +135,7 @@ router.post("/form-questions", isAuthenticated, async (req, res) => {
     }
 })
 
-router.get('/form-questions/:type', isAuthenticated, async (req, res) => {
+router.get('/form-questions/:type', isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     try {
       const formConfig = await FormQuestions.findOne({ type: req.params.type })
       
@@ -216,25 +284,91 @@ router.get('/form-questions/:type', isAuthenticated, async (req, res) => {
     }
   })
 
-router.post("/save-actionplan", isAuthenticated, async (req, res) => {
-  const allowedActionPlanFields = ['studentId', 'educationId', 'teacherName', 'date', 'reason', 'schoolEfforts', 'studentEfforts', 'studyTime', 'meetings', 'notified', 'courseId'];
-  const plan = {};
-  for (const field of allowedActionPlanFields) {
-    if (req.body[field] !== undefined) plan[field] = req.body[field];
+router.post("/save-actionplan", isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
+  try {
+    const allowedActionPlanFields = [
+      'studentId', 'educationId', 'teacherName', 'teacherId', 'studentName', 'courseName',
+      'date', 'reason', 'schoolEfforts', 'studentEfforts', 'studyTime', 'meetings',
+      'notified', 'courseId', 'answers'
+    ];
+    const plan = {};
+    for (const field of allowedActionPlanFields) {
+      if (req.body[field] !== undefined) plan[field] = req.body[field];
+    }
+    // Also capture any extra dynamic answers into plan.answers
+    const extraAnswers = {};
+    for (const [key, val] of Object.entries(req.body)) {
+      if (!allowedActionPlanFields.includes(key) && key !== '_id') {
+        extraAnswers[key] = val;
+      }
+    }
+    if (Object.keys(extraAnswers).length > 0) {
+      plan.answers = { ...(plan.answers || {}), ...extraAnswers };
+    }
+
+    if (!plan.studentId) {
+      return res.status(400).json({ error: "studentId krävs" });
+    }
+
+    let studentName = plan.studentName;
+    if (!studentName && plan.studentId) {
+      const student = await Student.findById(plan.studentId).select("name").lean().catch(() => null);
+      if (student?.name) {
+        studentName = student.name;
+        plan.studentName = student.name;
+      }
+    }
+
+    let courseName = plan.courseName;
+    if (!courseName && plan.courseId) {
+      const course = await Course.findById(plan.courseId).select("courseName").lean().catch(() => null);
+      if (course?.courseName) {
+        courseName = course.courseName;
+        plan.courseName = course.courseName;
+      }
+    }
+
+    const formConfig = await FormQuestions.findOne({ type: "ACTION_PLAN" }).lean().catch(() => null);
+    const pdfBuffer = buildActionPlanPdf({
+      plan,
+      studentName: studentName || "",
+      courseName,
+      questions: formConfig?.questions,
+    });
+    plan.pdf = pdfBuffer;
+
+    await ActionPlan.create(plan);
+
+    // Markera notification för eleven/kursen som klar
+    await Notification.updateOne(
+      {
+        studentId: plan.studentId ? String(plan.studentId) : undefined,
+        courseId: plan.courseId ? String(plan.courseId) : undefined,
+        type: "action_plan_required",
+        resolved: false,
+      },
+      { $set: { resolved: true } }
+    );
+    if (plan.studentId) {
+      await Notification.updateMany(
+        { studentId: plan.studentId, type: "action_plan_required", resolved: false },
+        { $set: { resolved: true } }
+      ).catch(() => null);
+    }
+
+    await evaluateActionPlanStatusAndNotify();
+
+    res.status(200).send("Handlingsplan sparad!");
+  } catch (error) {
+    logger.error({ err: error }, "Error saving action plan");
+    res.status(500).json({ message: "Serverfel vid sparning av handlingsplan", error: error.message });
   }
-  await ActionPlan.create(plan);
-  // Markera notification för eleven/kursen som klar
-  await Notification.updateOne(
-    { studentId: plan.studentId, courseId: plan.courseId, type: "action_plan_required", resolved: false },
-    { $set: { resolved: true } }
-  );
-  res.send("Handlingsplan sparad!");
 });
 
 
 
 
-router.post('/update-actionplan', isAuthenticated, async (req, res) => {
+router.post('/update-actionplan', isAuthenticated, hasRole(ALLOWED_STAFF_ROLES), async (req, res) => {
     const {
       teacherName,
       date,

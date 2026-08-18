@@ -325,6 +325,18 @@ router.post("/grade-catalogs/:id/refresh", authenticateUser, hasRole(ADMIN_ROLES
   }
 
   applyScriveDocument(catalog, doc);
+  if (doc?.status === "closed" && catalog.scriveDocumentId) {
+    try {
+      const signedBuffer = await scriveClient.getSignedDocumentFile({
+        documentId: catalog.scriveDocumentId,
+      });
+      if (signedBuffer && signedBuffer.length > 0) {
+        catalog.pdf = signedBuffer;
+      }
+    } catch (fetchErr) {
+      logger.warn({ err: fetchErr, catalogId: catalog._id }, "Failed to fetch signed PDF from Scrive");
+    }
+  }
   await catalog.save();
   return res.status(200).json(toResponseCatalog(catalog));
 });
@@ -357,6 +369,18 @@ router.post("/grade-catalogs/scrive-callback", async (req, res) => {
 
     if (doc?.status) {
       applyScriveDocument(catalog, doc);
+      if (doc.status === "closed" && catalog.scriveDocumentId && scriveClient.isScriveConfigured()) {
+        try {
+          const signedBuffer = await scriveClient.getSignedDocumentFile({
+            documentId: catalog.scriveDocumentId,
+          });
+          if (signedBuffer && signedBuffer.length > 0) {
+            catalog.pdf = signedBuffer;
+          }
+        } catch (fetchErr) {
+          logger.warn({ err: fetchErr, catalogId: catalog._id }, "Failed to fetch signed PDF from Scrive callback");
+        }
+      }
       await catalog.save();
     }
 

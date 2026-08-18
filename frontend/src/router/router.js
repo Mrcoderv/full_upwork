@@ -21,6 +21,8 @@ const GradeLookups = () => import('@/views/Admin/GradeLookups.vue')
 const AddUser = () => import('@/views/Admin/AddUser.vue')
 const EditStudent = () => import('@/views/Admin/EditStudent.vue')
 const SearchUser = () => import('@/views/Admin/SearchUser.vue')
+const EditUser = () => import('@/views/Admin/EditUser.vue')
+const PermissionsTab = () => import('@/views/Admin/PermissionsTab.vue')
 const SearchResultDetails = () => import('@/views/Admin/SearchResultDetails.vue')
 const EarningsOverview = () => import('@/views/Admin/EarningsOverview.vue')
 const CoursesStats = () => import('@/views/Admin/CoursesStats.vue')
@@ -36,6 +38,8 @@ const FullCalendar = () => import('@/views/Teacher/ExamCalendar.vue')
 const BetygSattning = () => import('@/views/Teacher/BetygSattning.vue')
 const Submissions = () => import('@/views/Teacher/Submissions.vue')
 const ProfilePage = () => import('@/views/Teacher/ProfilePage.vue')
+const StaffProfile = () => import('@/views/Teacher/StaffProfile.vue')
+const StaffStudentsPage = () => import('@/views/Teacher/StaffStudentsPage.vue')
 const RoleBasedAppointments = () => import('@/views/Appointments/RoleBasedAppointments.vue')
 
 // Student Views
@@ -92,6 +96,8 @@ const routes = [
   },
   { path: '/anvandare', component: SearchUser, meta: { title: 'Search Users', role: 'admin' } },
   { path: '/admin/users', component: SearchUser, meta: { title: 'Admin Users', role: 'admin' } },
+  { path: '/admin/edit-user/:id', component: EditUser, props: true, meta: { title: 'Redigera användare', role: ['admin', 'systemadmin'] } },
+  { path: '/admin/permissions', component: PermissionsTab, meta: { title: 'Behörigheter', role: ['admin', 'systemadmin'] } },
   {
     path: '/addstudent',
     name: 'AddStudent',
@@ -142,6 +148,12 @@ const routes = [
         next({
           path: `/education/${to.params.id}`,
           query: { ...to.query, type: 'instance' }
+        })
+      } else if (to.params.type === 'Lärare' || to.params.type === 'Teacher') {
+        // Redirect Lärare to staff profile view
+        next({
+          path: `/teacher/${to.params.id}`,
+          query: to.query
         })
       } else {
         next()
@@ -312,6 +324,26 @@ const routes = [
     name: 'profile',
     component: ProfilePage,
     meta: { title: 'My Profile', requiresAuth: true },
+  },
+  {
+    path: '/teacher/:id',
+    name: 'StaffProfile',
+    component: StaffProfile,
+    props: true,
+    meta: {
+      title: 'Personalprofil',
+      role: ['teacher', 'admin', 'systemadmin', 'coordinator', 'syv', 'specped'],
+    },
+  },
+  {
+    path: '/teacher/:id/courses/:courseInstanceId/students',
+    name: 'StaffStudentsPage',
+    component: StaffStudentsPage,
+    props: true,
+    meta: {
+      title: 'Kursansvarig Elever',
+      role: ['teacher', 'admin', 'systemadmin', 'coordinator', 'syv', 'specped'],
+    },
   },
 
   // Student Routes

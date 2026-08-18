@@ -40,6 +40,18 @@
                   {{ getStatusLabel(card.status || 'enrolled') }}
                 </span>
               </div>
+              <div class="course-action-bar">
+                <router-link
+                  :to="{ name: 'CourseCards', query: { selectedCourse: card.courseInstanceId } }"
+                  class="btn btn-sm btn-outline-primary me-2"
+                  >
+                  <v-icon left>mdi-eye</v-icon>
+                  Gå till kurs
+                </router-link>
+                <span v-if="card.isCurrentlyActive" class="chip chip-partial-exam float-end">
+                  Aktiv
+                </span>
+              </div>
               <div class="course-meta">
                 <span v-if="card.coursePoints" class="meta-item">
                   Poäng: {{ card.coursePoints }}
