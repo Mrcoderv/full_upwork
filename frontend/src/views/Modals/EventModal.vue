@@ -164,12 +164,10 @@
             <h6>🏫 Rum</h6>
             <select v-model="examRoom" class="form-select">
               <option value="">— Välj rum —</option>
-              <option v-for="(locations, municipality) in examMunicipalities" :key="municipality">
-                <optgroup :label="municipality">
-                  <option v-for="location in locations" :key="location" :value="location">
-                    {{ location }}
-                  </option>
-                </optgroup>
+              <optgroup v-for="(locations, municipality) in examMunicipalities" :key="municipality" :label="municipality">
+                <option v-for="location in locations" :key="location" :value="location">
+                  {{ location }}
+                </option>
               </optgroup>
             </select>
           </div>
@@ -184,11 +182,11 @@
               </div>
               <div class="col-md-4">
                 <label>Dator</label>
-                <v-checkbox v-model="examAccommodations.computer" :disabled="!canEdit" /></v-checkbox>
+                <v-checkbox v-model="examAccommodations.computer" :disabled="!canEdit" />
               </div>
               <div class="col-md-4">
                 <label>Separate rum</label>
-                <v-checkbox v-model="examAccommodations.separateRoom" :disabled="!canEdit" /></v-checkbox>
+                <v-checkbox v-model="examAccommodations.separateRoom" :disabled="!canEdit" />
               </div>
             </div>
           </div>

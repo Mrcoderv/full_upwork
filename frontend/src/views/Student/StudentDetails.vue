@@ -249,39 +249,13 @@ export default {
         }
       }
 
-      return allTabs;
-    });
-            dropout: student.value.dropout,
-            manualAplIdsCount: manualAplIds.value.size,
-            manualAplIdsList: Array.from(manualAplIds.value),
-            normalizedManualIdsList: Array.from(normalizedManualIds),
-            localStorageCheck: (() => {
-              try {
-                const raw = localStorage.getItem('manualAplIds');
-                if (raw) {
-                  const arr = JSON.parse(raw);
-                  return Array.isArray(arr) ? arr.map(String) : [];
-                }
-                return [];
-              } catch {
-                return [];
-              }
-            })(),
-            educationArray: JSON.stringify(student.value.education, null, 2),
-          });
-        }
-
-        // Show the Logbook tab for APL-managed students or when logbook entries already exist
-        const hasLogbookEntries =
-          Array.isArray(student.value.logbook) && student.value.logbook.length > 0;
-        if (shouldShowAplTab || hasLogbookEntries) {
-          allTabs.push({ name: 'Loggbok', component: LogbookTab });
-        }
+      // Show the Logbook tab for APL-managed students or when logbook entries already exist
+      if (student.value) {
+        const hasLogbookEntries = Array.isArray(student.value.logbook) && student.value.logbook.length > 0;
+        if (hasLogbookEntries) allTabs.push({ name: 'Loggbok', component: LogbookTab });
       }
 
-      if (isAdmin.value) {
-        allTabs.push({ name: 'Behörigheter', component: PermissionsTab });
-      }
+      if (isAdmin.value) allTabs.push({ name: 'Behörigheter', component: PermissionsTab });
 
       return allTabs;
     });
@@ -313,20 +287,12 @@ export default {
     };
 
     const handleStudentUpdate = async (updatedStudent) => {
-      console.log('🔄 Updating student data:', updatedStudent);
-      console.log('🔄 updatedStudent.dropout:', updatedStudent.dropout);
-      console.log('🔄 student.value.dropout before update:', student.value?.dropout);
-      
       // Ensure dropout is explicitly set
       student.value = { 
         ...student.value, 
         ...updatedStudent,
         dropout: updatedStudent.dropout === true || updatedStudent.dropout === 'true'
       };
-      
-      console.log('✅ Updated student.value.dropout:', student.value.dropout);
-      console.log('✅ student.value.dropout type:', typeof student.value.dropout);
-      console.log('✅ Will show banner?', student.value.dropout === true);
       
       if (isAdmin.value) {
         await loadChangeHistory();

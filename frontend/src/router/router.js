@@ -49,6 +49,7 @@ import GradeStudent from '../views/Admin/gradeStudent.vue'
 import ExamForm from '../views/Exams/ExamOverview.vue'
 import EducationDetails from '../views/Admin/EducationDetails.vue'
 import CourseCards from '@/views/Student/CourseCards.vue'
+const ChatbotView = () => import('@/views/Student/ChatbotView.vue')
 const MessagingView = () => import('@/views/MessagingView.vue')
 
 
@@ -370,6 +371,12 @@ const routes = [
     name: 'CourseCards',
     component: CourseCards,
     meta: { title: 'Mina kurser', role: 'student' },
+  },
+  {
+    path: '/chatbot',
+    name: 'Chatbot',
+    component: ChatbotView,
+    meta: { title: 'Studieassistent', role: 'student' },
   },
 
   {
