@@ -16,7 +16,8 @@ This document is the launch and QA guide for the Etapp 1 and Etapp 2 workflows i
 | Etapp 2 Scrive signing | UI implemented; deployment blocker | Requires Scrive credentials; without them the API correctly returns 503 and keeps the catalog uploaded |
 | Etapp 2 calendar planning | UI implemented; automated drag test available | Requires seeded calendar events and writable API access |
 | Etapp 2 APL | UI implemented; automated color/status coverage available | Requires course-package data; date-driven auto status depends on configured dates |
-| Browser preview in this environment | Blocked | Vite started on port 5173, but the browser sandbox routed to port 3000 and returned `SANDBOX_NOT_LISTENING` |
+| Browser preview in this environment | Blocked | The Vite process started on ports 5173/5174, but the browser sandbox routed to port 3000 and returned `SANDBOX_NOT_LISTENING`; repeat after preview routing is restored |
+| Commercial role dashboard | Implemented; browser verification required | `/dashboard` provides role-aware quick actions and preserves existing feature routes |
 
 ## Environment prerequisites
 
@@ -45,6 +46,7 @@ Passwords are defined by the seed/setup scripts and must not be copied into prod
 
 | Role | Main routes |
 |---|---|
+| All authenticated roles | `/dashboard` for role-aware overview and quick actions |
 | Student | `/course-cards`, `/chatbot`, `/messages`, `/kalender`, profile and documents |
 | Teacher | `/teacher-dashboard`, `/course-instances`, `/submissions`, `/grade`, `/kalender`, `/messages` |
 | Admin | `/admin`, `/course-matching`, `/course-instances`, `/course-templates`, `/course-templates`, `/apl`, `/admin/betygsrapporter`, `/reports`, `/users` |

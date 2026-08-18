@@ -821,6 +821,7 @@
         'Stats',
       ]
       const menuItems = [
+        { name: 'Översikt', link: '/dashboard', role: ['student', 'teacher', 'syv', 'specped', 'coordinator', 'admin', 'systemadmin'] },
         { name: 'Betygsrapporter', link: '/admin/betygsrapporter', role: ['admin', 'systemadmin'] },
         { name: 'Betygsskalor', link: '/admin/betygsskala', role: ['admin', 'systemadmin'] },
         { name: 'Rapporter & Analys', link: '/admin/analytics', role: ['admin', 'systemadmin'] },

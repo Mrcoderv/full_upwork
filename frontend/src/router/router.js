@@ -49,6 +49,7 @@ import GradeStudent from '../views/Admin/gradeStudent.vue'
 import ExamForm from '../views/Exams/ExamOverview.vue'
 import EducationDetails from '../views/Admin/EducationDetails.vue'
 import CourseCards from '@/views/Student/CourseCards.vue'
+import Dashboard from '@/views/Dashboard.vue'
 const ChatbotView = () => import('@/views/Student/ChatbotView.vue')
 const MessagingView = () => import('@/views/MessagingView.vue')
 
@@ -78,6 +79,12 @@ const routes = [
     name: 'ChangePassword',
     component: ChangePasswordPage,
     meta: { title: 'Byt lösenord - Mindful Learning', requiresAuth: true },
+  },
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: Dashboard,
+    meta: { title: 'Översikt - Mindful Learning', requiresAuth: true },
   },
 
   // Admin Dashboard: Move CoursesStats to top
