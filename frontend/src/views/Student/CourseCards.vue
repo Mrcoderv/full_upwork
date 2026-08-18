@@ -81,17 +81,47 @@
               </div>
             </div>
 
-            <div v-if="card.progress" class="progress-block">
-              <span class="progress-label">
-                Framsteg: {{ card.progress.completed }}/{{ card.progress.total }}
-                ({{ card.progress.percent }}%)
-              </span>
-              <div class="progress-track">
-                <div class="progress-fill" :style="{ width: card.progress.percent + '%' }"></div>
+              <div v-if="card.progress" class="progress-block">
+                <span class="progress-label">
+                  Framsteg: {{ card.progress.completed }}/{{ card.progress.total }}
+                  ({{ card.progress.percent }}%)
+                </span>
+                <div class="progress-track">
+                  <div class="progress-fill" :style="{ width: card.progress.percent + '%' }"></div>
+                </div>
               </div>
-            </div>
 
-            <div v-if="card.modules && card.modules.length > 0" class="course-card-modules">
+              <div v-if="getEnrollmentId(card)" class="document-actions" aria-label="Studiedokument">
+                <button
+                  v-if="card.status === 'completed'"
+                  type="button"
+                  class="document-btn"
+                  :disabled="downloading === getEnrollmentId(card) + '-certificate'"
+                  @click="downloadDocument(card, 'certificate')"
+                >
+                  {{ downloading === getEnrollmentId(card) + '-certificate' ? 'Förbereder...' : 'Ladda ner studieintyg' }}
+                </button>
+                <button
+                  type="button"
+                  class="document-btn document-btn-secondary"
+                  :disabled="downloading === getEnrollmentId(card) + '-diploma'"
+                  @click="downloadDocument(card, 'diploma')"
+                >
+                  {{ downloading === getEnrollmentId(card) + '-diploma' ? 'Förbereder...' : 'Ladda ner diplom' }}
+                </button>
+                <span v-if="card.status !== 'completed'" class="document-hint">Diplom blir tillgängligt när alla krav är godkända.</span>
+              </div>
+
+              <div class="activity-feed">
+                <div class="activity-heading"><h5>Aktuellt i kursen</h5><button type="button" class="refresh-btn" @click="loadActivity(card)">Uppdatera</button></div>
+                <p v-if="activityLoading[card.courseInstanceId]" class="activity-muted">Laddar meddelanden...</p>
+                <p v-else-if="!activities[card.courseInstanceId]?.length" class="activity-muted">Inga nya meddelanden.</p>
+                <article v-for="item in activities[card.courseInstanceId] || []" :key="item.id" class="activity-item">
+                  <strong>{{ item.text }}</strong><time>{{ formatDateTime(item.createdAt) }}</time>
+                </article>
+              </div>
+
+              <div v-if="card.modules && card.modules.length > 0" class="course-card-modules">
               <h5 class="modules-title">Kursupplägg</h5>
               <div class="module-chips">
                 <span
@@ -200,6 +230,9 @@ const learning = ref({})
 const drafts = reactive({})
 const submitting = reactive({})
 const submitError = reactive({})
+const activities = reactive({})
+const activityLoading = reactive({})
+const downloading = ref('')
 
 const activeCards = computed(() => cards.value.filter((c) => c.isCurrentlyActive).length)
 
@@ -213,6 +246,40 @@ const initDraft = (card, module) => {
 const getSubmission = (card, module) => {
   const entry = learning.value[card.courseInstanceId]
   return entry?.submissions?.[module.moduleNumber] || null
+}
+
+const getEnrollmentId = (card) => learning.value[card.courseInstanceId]?.enrollmentId || card.enrollmentId || null
+
+const loadActivity = async (card) => {
+  if (!card.courseInstanceId) return
+  activityLoading[card.courseInstanceId] = true
+  try {
+    const { data } = await client.get(`/course-instances/${card.courseInstanceId}/activity-feed`)
+    activities[card.courseInstanceId] = data.activityFeed || []
+  } catch {
+    activities[card.courseInstanceId] = []
+  } finally {
+    activityLoading[card.courseInstanceId] = false
+  }
+}
+
+const downloadDocument = async (card, type) => {
+  const enrollmentId = getEnrollmentId(card)
+  if (!enrollmentId) return
+  downloading.value = `${enrollmentId}-${type}`
+  try {
+    const response = await client.get(`/${type === 'certificate' ? 'study-certificate' : 'diploma'}/${enrollmentId}/pdf`, { responseType: 'blob' })
+    const blobUrl = URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = `${type === 'certificate' ? 'studieintyg' : 'diplom'}-${enrollmentId}.pdf`
+    link.click()
+    URL.revokeObjectURL(blobUrl)
+  } catch (requestError) {
+    error.value = requestError.message || `Kunde inte skapa ${type === 'certificate' ? 'studieintyget' : 'diplomet'}.`
+  } finally {
+    downloading.value = ''
+  }
 }
 
 const formatDate = (value) => {
@@ -315,7 +382,10 @@ const loadCourseCards = async () => {
           initDraft(card, module)
         }
       }
-      if (card.courseInstanceId) loadLearning(card)
+      if (card.courseInstanceId) {
+        loadLearning(card)
+        loadActivity(card)
+      }
     }
   } catch (e) {
     error.value = e?.response?.data?.error || 'Kunde inte hämta kurserna.'
@@ -575,6 +645,11 @@ onMounted(loadCourseCards)
   background: #16a34a;
   border-radius: 999px;
 }
+
+.document-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem; margin-top: .85rem; padding-top: .75rem; border-top: 1px dashed #e5e7eb; }
+.document-btn { border: 1px solid #1d4f43; background: #1d4f43; color: #fff; padding: .5rem .7rem; cursor: pointer; font-size: .78rem; font-weight: 700; }
+.document-btn:disabled { opacity: .55; cursor: wait; }.document-btn-secondary { background: #fff; color: #1d4f43; }.document-hint { color: #6b7280; font-size: .75rem; }
+.activity-feed { margin-top: 1rem; padding: .85rem; border: 1px solid #dbe4df; background: #fbfcfb; }.activity-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }.activity-heading h5 { margin: 0; color: #374151; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }.refresh-btn { border: 0; background: transparent; color: #1d4f43; cursor: pointer; font-size: .75rem; }.activity-muted { color: #6b7280; font-size: .8rem; }.activity-item { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem 0; border-top: 1px solid #e5ebe7; font-size: .82rem; }.activity-item time { color: #7b8881; white-space: nowrap; font-size: .72rem; }
 
 .assignment-block {
   margin: 0.6rem 0 0.2rem 1rem;

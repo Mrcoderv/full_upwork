@@ -509,18 +509,16 @@
         }
 
         try {
-          console.log('📬 Fetching notifications...')
           const res = await client.get('/notifications')
-          console.log('📬 Notifications received:', res.data)
           notifications.value = res.data
         } catch (error) {
           // Handle rate limiting gracefully
           if (error.response?.status === 429) {
-            console.warn('⚠️ Rate limited - will retry later')
+            // Keep the previous notification list during rate limiting.
             // Don't clear notifications on rate limit, just skip this fetch
             return
           }
-          console.error('❌ Error fetching notifications:', error)
+          // Notification polling failures should not interrupt navigation.
           // Only clear notifications on non-rate-limit errors
           if (error.response?.status !== 429) {
             notifications.value = []
@@ -851,8 +849,9 @@
         { name: 'Betygsuppföljning', link: '/grade-lookups', role: 'admin' },
         { name: 'Hantera Prövningar', link: '/provningar', role: 'admin' },
         { name: 'Prövningar', link: '/examform', role: 'student' },
-        { name: 'Mina kurser', link: '/course-cards', role: 'student' },
-        { name: 'Inlämningar', link: '/submissions', role: ['teacher', 'admin', 'systemadmin'] },
+  { name: 'Mina kurser', link: '/course-cards', role: 'student' },
+  { name: 'Studieassistent', link: '/chatbot', role: 'student' },
+  { name: 'Inlämningar', link: '/submissions', role: ['teacher', 'admin', 'systemadmin'] },
         { name: 'Meddelanden', link: '/messages', role: ['student', 'teacher', 'syv', 'specped', 'admin', 'systemadmin', 'coordinator'] },
       ]
 

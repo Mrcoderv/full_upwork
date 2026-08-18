@@ -23,6 +23,16 @@ export const APL_AUTO_RED_WEEKS = (() => {
     return Number.isFinite(raw) && raw > 0 ? raw : 3;
 })();
 
+/** Date-driven warning bands, evaluated from most urgent to least urgent. */
+export const APL_AUTO_ORANGE_WEEKS = (() => {
+    const raw = parseInt(process.env.APL_AUTO_ORANGE_WEEKS, 10);
+    return Number.isFinite(raw) && raw > APL_AUTO_RED_WEEKS ? raw : 4;
+})();
+export const APL_AUTO_YELLOW_WEEKS = (() => {
+    const raw = parseInt(process.env.APL_AUTO_YELLOW_WEEKS, 10);
+    return Number.isFinite(raw) && raw > APL_AUTO_ORANGE_WEEKS ? raw : 8;
+})();
+
 /** Minimum days since the APL period start that triggers "behind schedule" consideration. */
 export const APL_BEHIND_MIN_DAYS_SINCE_LOGIN = (() => {
     const raw = parseInt(process.env.APL_BEHIND_MIN_DAYS_SINCE_LOGIN || '14', 10);
@@ -67,8 +77,8 @@ export function computeAplPeriod(education = []) {
 
 /**
  * Compute the effective APL status from the stored status and the APL end date.
- * When the APL ends within APL_AUTO_RED_WEEKS weeks (and hasn't ended yet), the
- * effective status becomes RED.
+ * Near-term end dates receive date-driven warning colors: RED, then PURPLE,
+ * then YELLOW. The stored status remains unchanged.
  * @param {string} aplStatus - stored APL status.
  * @param {Date|string|null} aplEndDate - end of the APL period.
  * @param {Date} [today] - reference date (injectable for tests).
@@ -78,18 +88,25 @@ export function computeAplEffectiveStatus(aplStatus, aplEndDate, today = new Dat
     const end = toDate(aplEndDate);
     let aplWeeksRemaining = null;
     let aplAutoRed = false;
+    let aplAutoOrange = false;
+    let aplAutoYellow = false;
     if (end) {
         const now = startOfDay(today);
         const endDay = startOfDay(end);
         const daysRemaining = Math.round((endDay.getTime() - now.getTime()) / MS_PER_DAY);
         aplWeeksRemaining = Math.ceil(daysRemaining / 7);
         aplAutoRed = daysRemaining >= 0 && daysRemaining <= APL_AUTO_RED_WEEKS * 7;
+        aplAutoOrange = !aplAutoRed && daysRemaining >= 0 && daysRemaining <= APL_AUTO_ORANGE_WEEKS * 7;
+        aplAutoYellow = !aplAutoRed && !aplAutoOrange && daysRemaining >= 0 && daysRemaining <= APL_AUTO_YELLOW_WEEKS * 7;
     }
     const stored = aplStatus || "GRAY";
+    const computedStatus = aplAutoRed ? "RED" : aplAutoOrange ? "PURPLE" : aplAutoYellow ? "YELLOW" : stored;
     return {
-        aplStatus: aplAutoRed ? "RED" : stored,
+        aplStatus: computedStatus,
         aplStatusStored: stored,
         aplAutoRed,
+        aplAutoOrange,
+        aplAutoYellow,
         aplWeeksRemaining,
     };
 }
@@ -113,7 +130,6 @@ export function computeAplEffectiveStatus(aplStatus, aplEndDate, today = new Dat
 export function computeAplBehindSchedule(education = [], today = new Date()) {
     const todayNormalized = startOfDay(today);
     let periodStart = null;
-    let behindSchedule = false;
     
     // Find the APL period start date from CoursePackage education entries
     const periodStartEntry = education.find(e => e.type === 'CoursePackage' && e.startDate);
@@ -121,17 +137,8 @@ export function computeAplBehindSchedule(education = [], today = new Date()) {
         periodStart = toDate(periodStartEntry.startDate);
     }
     
-    // If we have a period start date, check how long it's been active
-    if (periodStart) {
-        const periodStartNormalized = startOfDay(periodStart);
-        const daysSincePeriodStart = Math.round((todayNormalized.getTime() - periodStartNormalized.getTime()) / MS_PER_DAY);
-        if (daysSincePeriodStart >= APL_BEHIND_MIN_DAYS_SINCE_LOGIN) {
-            behindSchedule = true;
-        }
-    }
-    
     return {
-        aplBehindSchedule,
+        aplBehindSchedule: Boolean(periodStart && Math.round((todayNormalized.getTime() - startOfDay(periodStart).getTime()) / MS_PER_DAY) >= APL_BEHIND_MIN_DAYS_SINCE_LOGIN),
         aplBehindSince: periodStart || null,
         aplPeriodStart: periodStart || null,
     };
