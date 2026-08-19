@@ -32,7 +32,7 @@ Detta dokument beskriver den kommersiella användarresan för Mindful Learning o
 
 ### Översikt
 - `/dashboard`: verifiera hälsning, roll, primär åtgärd, snabblänkar och notifieringsantal.
-- Uppdatera ska visa vänteläge och återanvända senaste fungerande vy om notifieringar inte kan hämtas.
+- Uppdatera ska visa vänteläge och återanvända senaste fungerande vy om notifieringar inte kan hämtas. Dashboardens felbanner ska inte dölja övriga arbetsytan.
 - Mobil 522 px: inga överlappande knappar, horisontell scroll och tydlig fokusmarkering.
 
 ### Elevprofil och studieplan

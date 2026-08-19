@@ -3,10 +3,10 @@
     <section v-if="loading" class="dashboard-loading" aria-live="polite">
       <div class="skeleton skeleton-wide"></div><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-copy"></div>
     </section>
-    <section v-else-if="loadError" class="dashboard-error" role="alert">
-      <strong>Kunde inte läsa översikten.</strong><span>{{ loadError }}</span><button type="button" @click="loadDashboard">Försök igen</button>
-    </section>
     <template v-else>
+    <section v-if="loadError" class="dashboard-error" role="alert">
+      <strong>Kunde inte uppdatera notifieringar.</strong><span>{{ loadError }}</span><button type="button" @click="loadDashboard">Försök igen</button>
+    </section>
     <section class="dashboard-hero">
       <div>
         <p class="eyebrow">Mindful Learning · Skolöversikt</p>
@@ -16,7 +16,7 @@
       <div class="hero-actions">
         <router-link class="primary-action" :to="primaryAction.to">{{ primaryAction.label }}</router-link>
         <router-link class="secondary-action" to="/messages">Öppna meddelanden</router-link>
-        <button class="hero-refresh" type="button" :disabled="refreshing" @click="loadDashboard">{{ refreshing ? 'Uppdaterar...' : 'Uppdatera' }}</button>
+        <button class="hero-refresh" type="button" :disabled="refreshing" aria-live="polite" @click="loadDashboard">{{ refreshing ? 'Uppdaterar...' : 'Uppdatera notifieringar' }}</button>
       </div>
     </section>
 
