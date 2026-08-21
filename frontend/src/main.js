@@ -37,9 +37,9 @@ const theme = {
     light: {
       dark: false,
       colors: {
-        primary: '#175083',   // stålblå
-        secondary: '#0E6BA8', // hav
-        info: '#0E6BA8',      // hav
+        primary: '#0284C7',   // himmel
+        secondary: '#0369A1', // djup himmel
+        info: '#0284C7',      // himmel
         success: '#2E7D57',   // gran
         warning: '#B77A0A',   // bärnsten
         error: '#B3261E',     // signalröd
@@ -48,7 +48,7 @@ const theme = {
         red: '#B3261E',
         green: '#2E7D57',
         yellow: '#B77A0A',
-        blue: '#175083',
+        blue: '#0284C7',
         purple: '#6D4FA8',
         orange: '#B77A0A',
         grey: '#6B7480',

@@ -65,7 +65,7 @@ const MAX_CONTEXT_MODULES = 5;
  * @param {string} [prefix] - Optional prefix for the session ID
  * @returns {string} Unique session ID
  */
-function generateSessionId(prefix = "") {
+export function generateSessionId(prefix = "") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 

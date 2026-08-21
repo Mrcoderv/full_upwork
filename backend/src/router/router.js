@@ -28,10 +28,12 @@ import inactivityRoutes from "./inactivityRoutes.js";
 import messagingRoutes from "./messagingRoutes.js";
 import learningRoutes from "./learningRoutes.js";
 import chatbotRoutes from "./chatbotRoutes.js";
+import faqRoutes from "./faqRoutes.js";
 import studyCertificateRoutes from "./studyCertificateRoutes.js";
 import auditRoutes from "./auditRoutes.js";
 import placementRoutes from "./placementRoutes.js";
 import aplRoutes from "./aplRoutes.js";
+import courseBankRoutes from "./courseBankRoutes.js";
 
 const router = Router();
 
@@ -66,6 +68,8 @@ router.use("/api/inactivity", inactivityRoutes);
 router.use("/api", messagingRoutes);
 router.use("/api", learningRoutes);
 router.use("/api/chatbot", chatbotRoutes);
+router.use("/api", faqRoutes);
+router.use("/api/course-bank", courseBankRoutes);
 router.use("/api", studyCertificateRoutes);
 router.use("/api/auditlogs", auditRoutes);
 router.use("/api", placementRoutes);

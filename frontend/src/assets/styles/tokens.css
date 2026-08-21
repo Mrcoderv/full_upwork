@@ -4,27 +4,27 @@
    elevation, motion, focus. Loaded before all other styles.
    ------------------------------------------------------------
    Palette (approved):
-     Primary   #175083  deep steel blue
+     Primary   #0284C7  himmel (sky)
      Success   #2E7D57  gran (pine)
      Warning   #B77A0A  bärnsten (amber)
      Danger    #B3261E  signal red
-     Info      #0E6BA8  hav (ocean)
+     Info      #0EA5E9  ljus himmel (light sky)
      Violet    #6D4FA8  uppföljning (only human-action states)
    ============================================================ */
 
 :root {
   /* ---------- Brand / action hues ---------- */
-  --color-primary: #175083;
-  --color-primary-hover: #0E3D63;
-  --color-primary-active: #0B3050;
-  --color-primary-light: #E7EFF5;
+  --color-primary: #0284C7;
+  --color-primary-hover: #0369A1;
+  --color-primary-active: #075985;
+  --color-primary-light: #E0F2FE;
   --color-primary-contrast: #FFFFFF;
 
-  /* Secondary accent (gradients, decorative) — Hav family.
+  /* Secondary accent (gradients, decorative) — Ljus himmel family.
      The semantic success/status hue stays pine (--color-success). */
-  --color-secondary: #0E6BA8;
-  --color-secondary-hover: #0B5686;
-  --color-secondary-light: #E4F1F9;
+  --color-secondary: #0EA5E9;
+  --color-secondary-hover: #0284C7;
+  --color-secondary-light: #F0F9FF;
   --color-secondary-contrast: #FFFFFF;
 
   /* ---------- Status hue families (shared language) ---------- */
@@ -32,9 +32,9 @@
   --status-neutral-tint: #EEF0F2;
   --status-neutral-ink: #3F454D;
 
-  --status-info: #0E6BA8;      /* Hav — Antagen, Kontaktad, pågående */
-  --status-info-tint: #E4F1F9;
-  --status-info-ink: #0B5686;
+  --status-info: #0284C7;      /* Himmel — Antagen, Kontaktad, pågående */
+  --status-info-tint: #E0F2FE;
+  --status-info-ink: #075985;
 
   --status-warning: #B77A0A;   /* Bärnsten — Reviderad, APL på gång, varnad, E–D */
   --status-warning-tint: #FBF1DE;

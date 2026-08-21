@@ -1,13 +1,16 @@
 import BaseChatbotService from "./chatbotService.js";
+import { generateSessionId } from "./chatbotService.js";
 import mongoose from "mongoose";
 import Student from "../models/Student.js";
 import CourseInstance from "../models/CourseInstance.js";
 import AssignmentSubmission from "../models/AssignmentSubmission.js";
 import logger from "../utils/logger.js";
+import { findMatchingFaq } from "./faqService.js";
 
 const CONFIDENCE_HIGH = 0.8;
 const CONFIDENCE_MEDIUM = 0.5;
 const CONFIDENCE_LOW = 0.2;
+const CONFIDENCE_VERIFIED = 1.0;
 
 /**
  * Concrete chatbot implementation that searches course content
@@ -45,6 +48,25 @@ class ConcreteChatbotService extends BaseChatbotService {
     }
 
     try {
+      // Priority 1: verified FAQ / knowledge base lookup. The FAQ database is
+      // the source of truth for school/system information; only fall back to
+      // course-content search when no verified answer matches.
+      const faqMatch = await findMatchingFaq(question);
+      if (faqMatch) {
+        const { faq, matchType } = faqMatch;
+        return {
+          answer: faq.answer,
+          sources: [
+            `Vanliga frågor${faq.categoryId?.name ? ` · ${faq.categoryId.name}` : ""}${
+              matchType === "keyword" ? " (nyckelord)" : ""
+            }`,
+          ],
+          confidence: CONFIDENCE_VERIFIED,
+          approved: true,
+          sessionId: generateSessionId(),
+        };
+      }
+
       // Determine which courses to search
       const targetCourseIds = courseInstanceId
         ? [courseInstanceId]

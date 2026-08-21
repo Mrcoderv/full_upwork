@@ -32,6 +32,14 @@ const CourseMatching = () => import('@/views/Admin/CourseMatching.vue')
 const StudentEnrollments = () => import('@/views/Admin/StudentEnrollments.vue')
 const TeacherManagement = () => import('@/views/Admin/TeacherManagement.vue')
 const TEST = () => import('@/views/Admin/TEST.vue')
+const ActivityFeedManager = () => import('@/views/Admin/ActivityFeedManager.vue')
+const CourseContentEditor = () => import('@/views/Admin/CourseContentEditor.vue')
+const CourseStatisticsAdmin = () => import('@/views/Admin/CourseStatisticsAdmin.vue')
+const StudentCourseCardsAdmin = () => import('@/views/Admin/StudentCourseCardsAdmin.vue')
+const ActionPlanManager = () => import('@/views/Admin/ActionPlanManager.vue')
+const LearningManagement = () => import('@/views/Admin/LearningManagement.vue')
+const NotificationManager = () => import('@/views/Admin/NotificationManager.vue')
+const CalendarHousekeeping = () => import('@/views/Admin/CalendarHousekeeping.vue')
 
 // Lazy-loaded Teacher Views
 const FullCalendar = () => import('@/views/Teacher/ExamCalendar.vue')
@@ -302,6 +310,21 @@ const routes = [
     meta: { title: 'Hantera Prövningar', role: ['admin', 'systemadmin'], requiresAuth: true }
   },
 
+  // Chatbot FAQ / Knowledge Base management (same view for admin & teacher;
+  // category management is only rendered and authorized for admins)
+  {
+    path: '/admin/chatbot-faq',
+    name: 'AdminChatbotFaq',
+    component: () => import('@/views/Admin/FaqManagement.vue'),
+    meta: { title: 'Vanliga frågor (Chatbot)', role: ['admin', 'systemadmin'] },
+  },
+  {
+    path: '/larare/chatbot-faq',
+    name: 'TeacherChatbotFaq',
+    component: () => import('@/views/Admin/FaqManagement.vue'),
+    meta: { title: 'Vanliga frågor (Chatbot)', role: ['teacher', 'admin', 'systemadmin'] },
+  },
+
   // Teacher Routes (Requires "teacher" or higher)
   {
     path: '/larare/kurser',
@@ -413,6 +436,63 @@ const routes = [
 
   // Remove duplicate /betyg route
   // { path: '/betyg', name: 'Betyg', component: GradeStudent, meta: { title: 'Grade Student', role: 'teacher' } },
+
+  // Admin Category A – Activity Feed
+  {
+    path: '/admin/activity-feed',
+    name: 'ActivityFeedManager',
+    component: ActivityFeedManager,
+    meta: { title: 'Aktivitetsflöde', role: 'admin' },
+  },
+  // Admin Category A – Course Content
+  {
+    path: '/admin/course-content',
+    name: 'CourseContentEditor',
+    component: CourseContentEditor,
+    meta: { title: 'Kursinnehåll', role: 'admin' },
+  },
+  // Admin Category A – Extended Course Statistics
+  {
+    path: '/admin/course-statistics',
+    name: 'CourseStatisticsAdmin',
+    component: CourseStatisticsAdmin,
+    meta: { title: 'Kursstatistik (detalj)', role: 'admin' },
+  },
+  // Admin Category A – Student Course Cards
+  {
+    path: '/admin/student-course-cards',
+    name: 'StudentCourseCardsAdmin',
+    component: StudentCourseCardsAdmin,
+    meta: { title: 'Elevens kurskort', role: 'admin' },
+  },
+  // Admin Category A – Action Plans
+  {
+    path: '/admin/action-plans',
+    name: 'ActionPlanManager',
+    component: ActionPlanManager,
+    meta: { title: 'Handlingsplaner', role: 'admin' },
+  },
+  // Admin Category A – Learning Submissions & Participants
+  {
+    path: '/admin/learning-management',
+    name: 'LearningManagement',
+    component: LearningManagement,
+    meta: { title: 'Inlämningar & Deltagare', role: 'admin' },
+  },
+  // Admin Category A – Notifications
+  {
+    path: '/admin/notifications',
+    name: 'NotificationManager',
+    component: NotificationManager,
+    meta: { title: 'Notifikationer', role: 'admin' },
+  },
+  // Admin Category A – Calendar & Exam Housekeeping
+  {
+    path: '/admin/calendar-housekeeping',
+    name: 'CalendarHousekeeping',
+    component: CalendarHousekeeping,
+    meta: { title: 'Kalender & Prövning Underhåll', role: 'admin' },
+  },
 
   // 404 catch-all — must be last
   {

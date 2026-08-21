@@ -390,6 +390,13 @@
           <div class="notis-header">
             <h3>Notifikationer</h3>
             <span class="notis-count">({{ totalNotifications }})</span>
+            <button
+              v-if="isAdmin && notifications.length"
+              class="reset-all-btn"
+              @click="resetAllNotifications"
+            >
+              Återställ alla
+            </button>
           </div>
 
           <div class="notis-list">
@@ -581,6 +588,16 @@
           await fetchNotifications()
         } catch {
           toast.error('Kunde inte avsluta notisen.')
+        }
+      }
+
+      const resetAllNotifications = async () => {
+        try {
+          await client.put('/notifications/reset-all')
+          toast.success('Alla notifikationer återställda')
+          await fetchNotifications()
+        } catch {
+          toast.error('Kunde inte återställa notifikationer.')
         }
       }
 
@@ -853,7 +870,17 @@
   { name: 'Mina kurser', link: '/course-cards', role: 'student' },
   { name: 'Studieassistent', link: '/chatbot', role: 'student' },
   { name: 'Inlämningar', link: '/submissions', role: ['teacher', 'admin', 'systemadmin'] },
+        { name: 'Vanliga frågor (Chatbot)', link: '/admin/chatbot-faq', role: ['admin', 'systemadmin'] },
+        { name: 'Vanliga frågor (Lärare)', link: '/larare/chatbot-faq', role: ['teacher'] },
         { name: 'Meddelanden', link: '/messages', role: ['student', 'teacher', 'syv', 'specped', 'admin', 'systemadmin', 'coordinator'] },
+        { name: 'Aktivitetsflöde', link: '/admin/activity-feed', role: 'admin' },
+        { name: 'Kursinnehåll', link: '/admin/course-content', role: 'admin' },
+        { name: 'Kursstatistik (detalj)', link: '/admin/course-statistics', role: 'admin' },
+        { name: 'Elevens kurskort', link: '/admin/student-course-cards', role: 'admin' },
+        { name: 'Handlingsplaner', link: '/admin/action-plans', role: 'admin' },
+        { name: 'Inlämningar & Deltagare', link: '/admin/learning-management', role: 'admin' },
+        { name: 'Notifikationer', link: '/admin/notifications', role: 'admin' },
+        { name: 'Kalender & Prövning Underhåll', link: '/admin/calendar-housekeeping', role: 'admin' },
       ]
 
       const filteredMenuItems = computed(() => {
@@ -1018,6 +1045,7 @@
         showNotification,
         totalNotifications,
         resolveNote,
+        resetAllNotifications,
         notifications,
         showNotisPanel,
         showProfileMenu,
@@ -1033,6 +1061,7 @@
         secretMenuStyle,
         canSeeSearch,
         userRole,
+        isAdmin: store.getters.isAdmin,
         isLoginPage,
         isMobileMenuOpen,
         toggleMobileMenu,
@@ -1463,6 +1492,23 @@
 
   .reset-btn:hover {
     background: #e5e7eb;
+  }
+
+  .reset-all-btn {
+    padding: 0.25rem 0.625rem;
+    font-size: 0.7rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #a5b4fc;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .reset-all-btn:hover {
+    background: #c7d2fe;
   }
 
   .no-notis {
