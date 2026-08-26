@@ -6,9 +6,9 @@
         <h3>Personalinformation</h3>
         <button
           v-if="isAdmin"
-          @click="toggleEditMode"
           class="btn btn-sm"
           :class="editMode ? 'btn-secondary' : 'btn-primary'"
+          @click="toggleEditMode"
         >
           {{ editMode ? 'Avbryt' : 'Redigera' }}
         </button>
@@ -48,16 +48,16 @@
                   class="form-control"
                   placeholder="070-123 45 67"
                 />
-                <button @click="removePhone(idx)" class="btn btn-sm btn-outline-danger">X</button>
+                <button class="btn btn-sm btn-outline-danger" @click="removePhone(idx)">X</button>
               </div>
-              <button @click="addPhone" class="btn btn-sm btn-outline-primary">+ Lägg till telefon</button>
+              <button class="btn btn-sm btn-outline-primary" @click="addPhone">+ Lägg till telefon</button>
             </div>
             <span v-else>{{ (teacher.phoneNumbers && teacher.phoneNumbers.length > 0) ? teacher.phoneNumbers.join(', ') : 'Ej angivet' }}</span>
           </div>
         </div>
 
         <div v-if="editMode && isAdmin" class="mt-3">
-          <button @click="saveProfile" class="btn btn-primary" :disabled="saving">
+          <button class="btn btn-primary" :disabled="saving" @click="saveProfile">
             {{ saving ? 'Sparar...' : 'Spara ändringar' }}
           </button>
         </div>
@@ -106,12 +106,12 @@
               <label>Anteckning (valfritt)</label>
               <input v-model="vacationData.vacationNote" type="text" class="form-control" placeholder="T.ex. sommarledighet" />
             </div>
-            <button @click="setVacation" class="btn btn-warning mt-2" :disabled="!vacationData.vacationStart || !vacationData.vacationEnd || savingVacation">
+            <button class="btn btn-warning mt-2" :disabled="!vacationData.vacationStart || !vacationData.vacationEnd || savingVacation" @click="setVacation">
               {{ savingVacation ? 'Sparar...' : 'Sätt ledighet' }}
             </button>
           </div>
           <div v-else>
-            <button @click="clearVacation" class="btn btn-outline-danger" :disabled="savingVacation">
+            <button class="btn btn-outline-danger" :disabled="savingVacation" @click="clearVacation">
               {{ savingVacation ? 'Rensar...' : 'Ta bort ledighet' }}
             </button>
           </div>

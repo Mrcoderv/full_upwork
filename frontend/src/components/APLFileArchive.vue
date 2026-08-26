@@ -7,15 +7,15 @@
         v-if="isAdmin" 
         color="error" 
         small 
-        @click="cleanupOrphanedFiles" 
-        :loading="cleaningUp"
+        :loading="cleaningUp" 
         title="Ta bort filer för borttagna elever (Admin endast)"
         class="mr-2"
+        @click="cleanupOrphanedFiles"
       >
         <v-icon left>mdi-delete-sweep</v-icon>
         Rensa borttagna
       </v-btn>
-      <v-btn icon @click="fetchAllFiles" title="Uppdatera lista">
+      <v-btn icon title="Uppdatera lista" @click="fetchAllFiles">
         <v-icon>mdi-refresh</v-icon>
       </v-btn>
       <v-text-field
@@ -30,7 +30,7 @@
     </v-card-title>
     <v-list>
       <v-list-group v-for="student in filteredStudents" :key="student.studentId">
-        <template v-slot:activator="{ props }">
+        <template #activator="{ props }">
           <v-list-item v-bind="props" :title="student.studentName"></v-list-item>
         </template>
         <v-list-item v-for="file in student.files" :key="file._id">
@@ -38,7 +38,7 @@
             <v-list-item-subtitle>
               Uppladdad: {{ formatDate(file.uploadDate) }}
             </v-list-item-subtitle>
-            <template v-slot:append>
+            <template #append>
                 <v-btn icon flat @click="downloadFile(file._id, file.filename)">
                     <v-icon>mdi-download</v-icon>
                 </v-btn>

@@ -12,14 +12,14 @@
 
       <!-- Login Form -->
       <div class="login-card">
-        <form @submit.prevent="handleLogin" class="login-form">
+        <form class="login-form" @submit.prevent="handleLogin">
           <div class="form-group">
             <label for="email">E-postadress</label>
             <input
               id="email"
+              v-model="email"
               type="email"
               placeholder="din@email.com"
-              v-model="email"
               required
               autocomplete="username"
               class="form-input"
@@ -31,9 +31,9 @@
             <label for="password">Lösenord</label>
             <input
               id="password"
+              v-model="password"
               type="password"
               placeholder="Ange ditt lösenord"
-              v-model="password"
               required
               autocomplete="current-password"
               class="form-input"
@@ -54,9 +54,9 @@
         <!-- Error Message -->
         <div v-if="message" class="error-alert">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="15" y1="9" x2="9" y2="15"/>
-            <line x1="9" y1="9" x2="15" y2="15"/>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
           </svg>
           {{ message }}
         </div>

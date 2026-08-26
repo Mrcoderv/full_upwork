@@ -8,7 +8,7 @@
       </div>
 
       <div class="form-container">
-        <form @submit.prevent="submitTeacherForm" class="teacher-form">
+        <form class="teacher-form" @submit.prevent="submitTeacherForm">
           <div class="form-header">
             <h4>Skapa nytt lärarkonto</h4>
             <p class="form-description">
@@ -27,10 +27,10 @@
                   <span class="required">*</span>
                 </label>
                 <input
-                  type="text"
                   id="username"
-                  class="form-control"
                   v-model="teacherForm.username"
+                  type="text"
+                  class="form-control"
                   placeholder="Ex. Anna Andersson"
                   required
                 />
@@ -43,10 +43,10 @@
                   <span class="required">*</span>
                 </label>
                 <input
-                  type="email"
                   id="email"
-                  class="form-control"
                   v-model="teacherForm.email"
+                  type="email"
+                  class="form-control"
                   placeholder="anna.andersson@example.com"
                   required
                 />
@@ -86,15 +86,15 @@
                 <label for="colorCode" class="form-label">Färgkod</label>
                 <div class="color-input-group">
                   <input
-                    type="color"
                     id="colorCode"
-                    class="form-control color-picker"
                     v-model="teacherForm.colorCode"
+                    type="color"
+                    class="form-control color-picker"
                   />
                   <input
+                    v-model="teacherForm.colorCode"
                     type="text"
                     class="form-control color-text"
-                    v-model="teacherForm.colorCode"
                     placeholder="#FF0000"
                     pattern="^#[0-9A-Fa-f]{6}$"
                   />
@@ -182,21 +182,21 @@
               <div class="form-group">
                 <label class="form-label">Telefonnummer</label>
                 <div
-                  class="phone-input-group"
                   v-for="(phone, index) in teacherForm.phoneNumbers"
                   :key="index"
+                  class="phone-input-group"
                 >
                   <input
+                    v-model="phone.number"
                     type="text"
                     class="form-control"
-                    v-model="phone.number"
                     :placeholder="`Telefon ${index + 1}`"
                   />
                   <button
                     type="button"
                     class="btn btn-outline-secondary"
-                    @click="removePhoneNumber(index)"
                     :disabled="teacherForm.phoneNumbers.length === 1"
+                    @click="removePhoneNumber(index)"
                   >
                     Ta bort
                   </button>
@@ -227,7 +227,7 @@
       </div>
 
       <!-- Success Modal -->
-      <div class="modal fade" id="successModal" tabindex="-1" ref="successModal">
+      <div id="successModal" ref="successModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -293,8 +293,8 @@
                         <button
                           type="button"
                           class="btn btn-sm btn-outline-primary"
-                          @click="copyPassword"
                           title="Kopiera lösenord"
+                          @click="copyPassword"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"

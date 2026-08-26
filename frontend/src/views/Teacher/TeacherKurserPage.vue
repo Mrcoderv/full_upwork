@@ -25,13 +25,11 @@
 
 <script>
 import CourseOverview from '@/components/Teacher/CourseOverview.vue';
-import EnrollSingleCourse from './Tabs/EnrollSingleCourse.vue';
 
 export default {
   name: 'TeacherKurserPage',
   components: {
     CourseOverview,
-    EnrollSingleCourse,
   },
   data() {
     return {

@@ -36,8 +36,8 @@
         :custom-filter="filterStudents"
         @update:model-value="addStudent"
       >
-        <template #item="{ props, item }">
-          <v-list-item v-bind="props" :title="item.raw.displayName || `${item.raw.name} (${item.raw.personalNumber || ''})`" />
+        <template #item="{ props: itemProps, item }">
+          <v-list-item v-bind="itemProps" :title="item.raw.displayName || `${item.raw.name} (${item.raw.personalNumber || ''})`" />
         </template>
         <template #selection="{ item }">
           {{ item.raw.displayName || `${item.raw.name} (${item.raw.personalNumber || ''})` }}
@@ -79,13 +79,13 @@
               auto-grow
             />
           </div>
-          <button @click="removeStudent(index)" class="remove-btn" title="Ta bort elev">✕</button>
+          <button class="remove-btn" title="Ta bort elev" @click="removeStudent(index)">✕</button>
         </div>
       </div>
 
       <div class="buttons">
         <button type="button" @click="emit('close')">Avbryt</button>
-        <button type="button" @click="submitEvent" :disabled="selectedStudents.length === 0 || !selectedTeacher">Spara</button>
+        <button type="button" :disabled="selectedStudents.length === 0 || !selectedTeacher" @click="submitEvent">Spara</button>
       </div>
     </div>
   </div>
@@ -100,7 +100,7 @@ import { useToast } from '@/composables/useToast.js'
 const emit = defineEmits(['event-added', 'close'])
 const toast = useToast()
 
-const props = defineProps(["teachers"])
+const props = defineProps({ teachers: { type: Array, default: () => [] } })
 
 const date = ref(new Date())
 const selectedTeacher = ref(null)

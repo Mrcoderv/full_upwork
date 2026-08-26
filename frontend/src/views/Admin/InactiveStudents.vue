@@ -135,9 +135,9 @@
                 class="re-enroll-option"
               >
                 <input
+                  v-model="selectedReEnrollCourseIds"
                   type="checkbox"
                   :value="enrollment.mainCourseId?._id"
-                  v-model="selectedReEnrollCourseIds"
                 />
                 <span class="re-enroll-course-info">
                   <span class="re-enroll-course-name">

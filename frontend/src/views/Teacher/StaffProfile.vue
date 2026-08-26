@@ -16,12 +16,12 @@
 
       <div v-else-if="teacher">
         <ul class="nav nav-tabs">
-          <li class="nav-item" v-for="tab in tabs" :key="tab.name">
+          <li v-for="tab in tabs" :key="tab.name" class="nav-item">
             <a
               class="nav-link"
               :class="{ active: activeTab === tab.component }"
-              @click.prevent="activeTab = tab.component"
               href="#"
+              @click.prevent="activeTab = tab.component"
             >
               {{ tab.name }}
             </a>
@@ -33,9 +33,9 @@
             <component
               :is="activeTab"
               :teacher="teacher"
-              :activeCourses="activeCourses"
-              :completedCourses="completedCourses"
-              :totalStudents="totalStudents"
+              :active-courses="activeCourses"
+              :completed-courses="completedCourses"
+              :total-students="totalStudents"
               @teacher-updated="fetchProfile"
             />
           </keep-alive>

@@ -43,7 +43,7 @@
           </v-col>
 
           <v-col cols="12" sm="6" md="4">
-            <v-btn color="primary" @click="loadReport" :disabled="!selectedInstance || !selectedStudent">Ladda rapport</v-btn>
+            <v-btn color="primary" :disabled="!selectedInstance || !selectedStudent" @click="loadReport">Ladda rapport</v-btn>
           </v-col>
         </v-row>
       </div>
@@ -113,14 +113,14 @@
                 loading-text="Laddar..."
                 no-data-text="Inga moduler hittades"
               >
-                <template v-slot:headers>
+                <template #headers>
                   <tr>
                     <th>Modul</th>
                     <th>Status</th>
                     <th>Senast uppdaterad</th>
                   </tr>
                 </template>
-                <template v-slot:item="{ item }">
+                <template #item="{ item }">
                   <tr>
                     <td>{{ item.moduleNumber }}</td>
                     <td>
@@ -148,8 +148,8 @@
             </v-btn>
             <v-spacer></v-spacer>
             <v-btn
-              @click="resetFilters"
               variant="text"
+              @click="resetFilters"
             >
               Återställ filter
             </v-btn>

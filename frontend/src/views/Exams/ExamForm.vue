@@ -2,7 +2,7 @@
   <div class="scrollable-view">
     <v-container class="my-5">
       <h2 class="mb-4">Anmälan till prövning</h2>
-      <v-form @submit.prevent="submitForm" class="pa-4" elevation="1">
+      <v-form class="pa-4" elevation="1" @submit.prevent="submitForm">
         <v-row dense>
           <!-- Elev -->
           <v-col cols="12">
@@ -74,7 +74,7 @@
           </v-col>
 
           <!-- Material checkbox -->
-          <v-col cols="12" v-if="showMaterialCheckbox">
+          <v-col v-if="showMaterialCheckbox" cols="12">
             <v-checkbox
               v-model="form.materialReceived.status"
               label="Material hämtat (SVE 1 eller 3)"

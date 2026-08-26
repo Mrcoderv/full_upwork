@@ -2,13 +2,13 @@
   <div>
     <v-card class="pa-4" outlined>
       <h3>Upload File for {{ studentName }}</h3>
-      <v-file-input label="Choose file" v-model="selectedFile" :show-size="true" dense clearable />
+      <v-file-input v-model="selectedFile" label="Choose file" :show-size="true" dense clearable />
 
       <v-btn
         :disabled="!selectedFile || uploading"
         color="primary"
-        @click="uploadFile"
         class="mt-2"
+        @click="uploadFile"
       >
         <v-icon left>mdi-upload</v-icon>
         Upload
@@ -32,7 +32,7 @@
           </v-list-item-subtitle>
 
           <v-list-item-action>
-            <v-btn icon @click="downloadFile(file._id)" :title="'Download ' + file.filename">
+            <v-btn icon :title="'Download ' + file.filename" @click="downloadFile(file._id)">
               <v-icon>mdi-download</v-icon>
             </v-btn>
           </v-list-item-action>
@@ -41,8 +41,8 @@
             <v-btn
               icon
               color="error"
-              @click="deleteFile(file._id)"
               :title="'Delete ' + file.filename"
+              @click="deleteFile(file._id)"
             >
               <v-icon>mdi-delete</v-icon>
             </v-btn>

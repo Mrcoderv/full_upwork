@@ -46,10 +46,12 @@
           <li v-if="aplStatus.period"><span class="check-dot">✓</span><span><strong>Period</strong><small>{{ aplStatus.period }}</small></span></li>
           <li v-if="aplStatus.workplace"><span class="check-dot">✓</span><span><strong>Arbetsplats</strong><small>{{ aplStatus.workplace }}</small></span></li>
           <li v-if="aplStatus.supervisor"><span class="check-dot">✓</span><span><strong>Handledare</strong><small>{{ aplStatus.supervisor }}</small></span></li>
-          <li v-if="aplStatusKitLinks.length > 0" v-for="link in aplStatusKitLinks" :key="link.to">
-            <span class="check-dot">→</span>
-            <span><router-link :to="link.to"><strong>{{ link.label }}</strong></router-link><small>{{ link.description }}</small></span>
-          </li>
+          <template v-if="aplStatusKitLinks.length > 0">
+            <li v-for="link in aplStatusKitLinks" :key="link.to">
+              <span class="check-dot">→</span>
+              <span><router-link :to="link.to"><strong>{{ link.label }}</strong></router-link><small>{{ link.description }}</small></span>
+            </li>
+          </template>
         </ul>
       </article>
 

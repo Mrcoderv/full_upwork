@@ -222,7 +222,10 @@ import { ref, onMounted, computed, watch } from 'vue'
 import client from '@/api/client.js'
 import { useToast } from '@/composables/useToast.js'
 
-const props = defineProps(['userData', 'student'])
+const props = defineProps({
+  userData: { type: Object, default: null },
+  student: { type: Object, default: null },
+})
 
 const toast = useToast()
 

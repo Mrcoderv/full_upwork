@@ -19,7 +19,7 @@
             item-title="title"
             item-value="value"
             clearable
-            @update:modelValue="loadAll"
+            @update:model-value="loadAll"
           />
         </v-card-text>
       </v-card>

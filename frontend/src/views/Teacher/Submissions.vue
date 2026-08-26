@@ -76,7 +76,7 @@
         </div>
 
         <!-- Comment thread -->
-        <div class="comment-thread" v-if="submissionComments[submission._id]?.length > 0">
+        <div v-if="submissionComments[submission._id]?.length > 0" class="comment-thread">
           <h4 class="thread-title">Kommentarer</h4>
           <div v-for="comment in submissionComments[submission._id]" :key="comment.id" class="thread-comment">
             <span class="thread-meta">{{ formatDateTime(comment.at) }}</span>

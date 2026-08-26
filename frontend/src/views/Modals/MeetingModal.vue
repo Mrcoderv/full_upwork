@@ -5,9 +5,9 @@
         <h3>Mötesdetaljer</h3>
         <button 
           v-if="canDelete" 
-          @click="deleteMeeting" 
-          class="delete-btn"
+          class="delete-btn" 
           title="Radera möte"
+          @click="deleteMeeting"
         >
           🗑️
         </button>
@@ -44,11 +44,12 @@ import { useToast } from '@/composables/useToast.js'
 
 let toast;
 export default {
-  setup() {
-    toast = useToast();
-  },
   props: {
     event: Object // från kalendern, ex: event.extendedProps
+  },
+  emits: ['close', 'deleted'],
+  setup() {
+    toast = useToast();
   },
   computed: {
     userRole() {

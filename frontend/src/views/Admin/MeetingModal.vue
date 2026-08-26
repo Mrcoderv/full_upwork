@@ -1,8 +1,7 @@
 <template>
   <div class="modal-overlay">
     <div class="modal-content">
-
-      <h3>{{ event.title || 'Mötesinformation' }}</h3>
+<h3>{{ event.title || 'Mötesinformation' }}</h3>
       
 
       <p><strong>Elev:</strong> {{ event.extendedProps?.studentName }}</p>
@@ -23,6 +22,7 @@ export default {
   props: {
     event: Object
   },
+  emits: ['close'],
   methods: {
     formatTime(date) {
       return new Date(date).toLocaleString('sv-SE', {

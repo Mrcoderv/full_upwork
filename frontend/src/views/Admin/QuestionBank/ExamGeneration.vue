@@ -104,7 +104,7 @@
               type="number"
               min="1"
               dense
-             Outlined
+             outlined
             />
           </v-col>
         </v-row>
@@ -116,8 +116,8 @@
             <v-btn
               color="primary"
               size="large"
-              @click="generateExam"
               :disabled="selectedQuestions.length === 0 || !examTitle"
+              @click="generateExam"
             >
               <v-icon left>mdi-format-list-numbers</v-icon>
               Generera exam med {{ selectedQuestions.length }} frågor

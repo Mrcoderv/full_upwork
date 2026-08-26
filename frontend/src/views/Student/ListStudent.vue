@@ -14,10 +14,10 @@
 
         <v-row v-if="selectedStudent">
           <v-col cols="12" md="6">
-            <v-text-field label="Full Name" v-model="selectedStudent.namn" readonly />
+            <v-text-field v-model="selectedStudent.namn" label="Full Name" readonly />
           </v-col>
           <v-col cols="12" md="6">
-            <v-text-field label="Personal Number" v-model="selectedStudent.personnummer" readonly />
+            <v-text-field v-model="selectedStudent.personnummer" label="Personal Number" readonly />
           </v-col>
         </v-row>
       </v-form>

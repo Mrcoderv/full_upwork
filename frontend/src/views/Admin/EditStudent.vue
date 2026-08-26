@@ -10,9 +10,9 @@
     <div class="mb-3 position-relative">
       <label class="form-label">Välj elev</label>
       <input
+        v-model="searchQuery"
         type="text"
         class="form-control"
-        v-model="searchQuery"
         placeholder="Sök namn eller personnummer"
         @input="onSearch"
         @focus="onSearch"
@@ -36,16 +36,16 @@
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label">Namn</label>
-          <input class="form-control" v-model="form.name" />
+          <input v-model="form.name" class="form-control" />
         </div>
         <div class="col-md-6">
           <label class="form-label">Personnummer</label>
-          <input class="form-control" v-model="form.personalNumber" />
+          <input v-model="form.personalNumber" class="form-control" />
         </div>
 
         <div class="col-md-6">
           <label class="form-label">Lärare</label>
-          <select class="form-select" v-model="form.teacherId">
+          <select v-model="form.teacherId" class="form-select">
             <option :value="null">— Ingen —</option>
             <option v-for="t in teachers" :key="t._id || t.id" :value="t._id || t.id">
               {{ (t.userId && t.userId.username) || t.name || t.subject || 'Teacher' }}
@@ -55,7 +55,7 @@
 
         <div class="col-md-6">
           <label class="form-label">APL status</label>
-          <select class="form-select" v-model="form.aplStatus">
+          <select v-model="form.aplStatus" class="form-select">
             <option value="GRAY">GRAY - Ny Elev</option>
             <option value="BLUE">BLUE - Kontaktad</option>
             <option value="YELLOW">YELLOW - APL på gång</option>
@@ -67,35 +67,35 @@
 
         <div class="col-md-4">
           <label class="form-label">Startdatum</label>
-          <input class="form-control" type="date" v-model="dateFields.startDate" />
+          <input v-model="dateFields.startDate" class="form-control" type="date" />
         </div>
         <div class="col-md-4">
           <label class="form-label">Slutdatum</label>
-          <input class="form-control" type="date" v-model="dateFields.endDate" />
+          <input v-model="dateFields.endDate" class="form-control" type="date" />
         </div>
         <div class="col-md-4">
           <label class="form-label">Slutprov (datum)</label>
-          <input class="form-control" type="date" v-model="dateFields.finalExamDate" />
+          <input v-model="dateFields.finalExamDate" class="form-control" type="date" />
         </div>
 
         <div class="col-md-4">
           <label class="form-label">Provtid (24h)</label>
-          <select class="form-select" v-model="form.examTime">
+          <select v-model="form.examTime" class="form-select">
             <option v-for="h in hours" :key="h" :value="h + ':00'">{{ h }}:00</option>
             <option v-for="h in hours" :key="h + '-30'" :value="h + ':30'">{{ h }}:30</option>
           </select>
         </div>
         <div class="col-md-4">
           <label class="form-label">Prov kommun</label>
-          <input class="form-control" v-model="form.examMunicipality" />
+          <input v-model="form.examMunicipality" class="form-control" />
         </div>
         <div class="col-md-4">
           <label class="form-label">Provlokal</label>
-          <input class="form-control" v-model="form.examLocation" />
+          <input v-model="form.examLocation" class="form-control" />
         </div>
 
         <div class="col-md-4 form-check mt-4">
-          <input id="dropout" class="form-check-input" type="checkbox" v-model="form.dropout" />
+          <input id="dropout" v-model="form.dropout" class="form-check-input" type="checkbox" />
           <label class="form-check-label" for="dropout">Avbrott</label>
         </div>
       </div>

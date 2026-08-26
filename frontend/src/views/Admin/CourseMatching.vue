@@ -20,12 +20,12 @@
               </label>
               <div class="file-upload-controls">
                 <input
-                  type="file"
                   id="studentFile"
                   ref="studentFileInput"
-                  @change="handleFileChange"
+                  type="file"
                   accept=".xlsx,.xls"
                   class="file-input-hidden"
+                  @change="handleFileChange"
                 />
                 <button
                   type="button"
@@ -38,7 +38,7 @@
                 <div v-if="selectedFile" class="selected-file-display">
                   <span class="file-icon">📄</span>
                   <span class="file-name">{{ selectedFile.name }}</span>
-                  <span class="file-size" v-if="selectedFile.size">
+                  <span v-if="selectedFile.size" class="file-size">
                     ({{ formatFileSize(selectedFile.size) }})
                   </span>
                 </div>
@@ -47,8 +47,8 @@
 
             <button
               class="btn btn-success process-btn"
-              @click="processStudents"
               :disabled="isProcessing || !selectedFile"
+              @click="processStudents"
             >
               {{ isProcessing ? 'Bearbetar...' : 'Bearbeta studenter' }}
             </button>

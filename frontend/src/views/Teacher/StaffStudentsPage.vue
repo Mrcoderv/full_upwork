@@ -2,7 +2,7 @@
   <div class="scrollable-view">
     <div class="container mt-4">
       <div class="header-section">
-        <button @click="goBack" class="btn btn-sm btn-outline-secondary mb-3">
+        <button class="btn btn-sm btn-outline-secondary mb-3" @click="goBack">
           &larr; Tillbaka till profil
         </button>
         <h1 class="page-title">

@@ -12,10 +12,10 @@
 
         <AddMeetingModal
           v-if="showAddEventModal && eventType === 'meeting'"
-          @close="closeModal"
-          @event-added="addEventToCalendar"
           :booked-by-role="userRole"
           :title="'Boka nytt möte'"
+          @close="closeModal"
+          @event-added="addEventToCalendar"
         />
 
         <EventModal
@@ -111,6 +111,21 @@
       canBookEvent() {
         return this.isAdminOrTeacher || this.isSYVOrSpecped
       },
+    },
+    async mounted() {
+      // Get current teacher ID if user is a teacher (for filtering editable events)
+      if (this.userRole === 'teacher') {
+        try {
+          const { default: client } = await import('@/api/client.js')
+          const res = await client.get('/me/teacher')
+          if (res.data && res.data._id) {
+            this.currentTeacherId = res.data._id.toString()
+          }
+        } catch (err) {
+          console.error('❌ Kunde inte hämta lärare:', err)
+        }
+      }
+      await this.fetchEvents()
     },
     methods: {
       openAddEventModal(type) {
@@ -436,21 +451,6 @@
         await this.fetchEvents()
         this.selectedEvent = null
       },
-    },
-    async mounted() {
-      // Get current teacher ID if user is a teacher (for filtering editable events)
-      if (this.userRole === 'teacher') {
-        try {
-          const { default: client } = await import('@/api/client.js')
-          const res = await client.get('/me/teacher')
-          if (res.data && res.data._id) {
-            this.currentTeacherId = res.data._id.toString()
-          }
-        } catch (err) {
-          console.error('❌ Kunde inte hämta lärare:', err)
-        }
-      }
-      await this.fetchEvents()
     },
   }
 </script>

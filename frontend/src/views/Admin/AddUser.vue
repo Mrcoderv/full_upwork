@@ -13,20 +13,20 @@
       <li class="nav-item">
         <a
           href="#"
-          @click="toggleForm('student')"
           :class="formType === 'student' ? 'active-link' : ''"
           class="nav-link"
           style="color: black !important; border: none !important"
+          @click="toggleForm('student')"
         >
           Elev
         </a>
       </li>
       <a
         href="#"
-        @click="toggleForm('teacher')"
         :class="formType === 'teacher' ? 'active-link' : ''"
         class="nav-link"
         style="color: black !important"
+        @click="toggleForm('teacher')"
       >
         Lärare
       </a>
@@ -39,17 +39,17 @@
         <div class="row g-3">
           <div class="col-md-6 text-start">
             <label for="name" class="form-label">Namn</label>
-            <input type="text" id="name" class="form-control" v-model="studentForm.namn" placeholder="Ex. Doe, Jane" />
+            <input id="name" v-model="studentForm.namn" type="text" class="form-control" placeholder="Ex. Doe, Jane" />
           </div>
         </div>
         <div class="row g-3">
           <div class="col-md-6 text-start">
             <label for="personnummer" class="form-label">Personnummer</label>
             <input
-              type="text"
               id="personnummer"
-              class="form-control"
               v-model="studentForm.personnummer"
+              type="text"
+              class="form-control"
               placeholdeR="Ex. ååååmmdd"
             />
           </div>
@@ -58,10 +58,10 @@
           <div class="col-md-6">
             <label for="kurspaket" class="form-label">Kurspaket:</label>
             <input
-              type="text"
               id="kurspaket"
-              class="form-control"
               v-model="studentForm.kurspaket"
+              type="text"
+              class="form-control"
               placeholder="Ex. Svenska 1"
             />
           </div>
@@ -70,10 +70,10 @@
           <div class="col-md-6">
             <label class="form-label" for="startDatum">Start datum:</label>
             <input
-              type="text"
               id="startDatum"
-              class="form-control"
               v-model="studentForm.startDatum"
+              type="text"
+              class="form-control"
               placeholder="yyyy-mm-dd"
               @input="calculateEndDate"
             />
@@ -159,8 +159,8 @@
           <div class="col-md-6">
             <div class="mt-3">
               <input
-                type="text"
                 id="endDate"
+                type="text"
                 class="form-control"
                 :value="studentForm.slutDatum || 'Auto-beräknat slutdatum'"
                 readonly
@@ -179,10 +179,10 @@
           <div class="col-md-6">
             <label for="teacherName" class="form-label">Namn</label>
             <input
-              type="text"
               id="teacherName"
-              class="form-control"
               v-model="teacherForm.name"
+              type="text"
+              class="form-control"
               placeholder="Ex. Doe, Jane"
             />
           </div>
@@ -191,10 +191,10 @@
           <div class="col-md-6">
             <label for="email" class="form-label">E-post</label>
             <input
-              type="email"
               id="email"
-              class="form-control"
               v-model="teacherForm.email"
+              type="email"
+              class="form-control"
               placeholder="example@gmail.com"
             />
           </div>

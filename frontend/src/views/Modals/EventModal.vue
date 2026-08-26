@@ -76,8 +76,8 @@
                 </td>
                 <td>
                   <input
-                    type="checkbox"
                     v-model="student.attended"
+                    type="checkbox"
                     :disabled="!canEdit"
                     class="form-check-input"
                     @change="saveAttendance(student)"
@@ -91,8 +91,8 @@
         <!-- Form för admin/lärare -->
         <form
           v-if="canEdit"
-          @submit.prevent="submitExam"
           class="d-flex flex-wrap align-items-center gap-3"
+          @submit.prevent="submitExam"
         >
           <div class="d-flex align-items-center gap-2">
             <label class="mb-0 fw-semibold">Provtid:</label>
@@ -178,7 +178,7 @@
             <div class="row g-2">
               <div class="col-md-4">
                 <label>Extra skrivtid (minuter)</label>
-                <input type="number" v-model="examAccommodations.extraTime" class="form-control form-control-sm" min="0" />
+                <input v-model="examAccommodations.extraTime" type="number" class="form-control form-control-sm" min="0" />
               </div>
               <div class="col-md-4">
                 <label>Dator</label>
@@ -475,6 +475,7 @@
           });
 
           // Update local event
+          // eslint-disable-next-line vue/no-mutating-props
           this.event.extendedProps.students = formattedStudents;
         } catch (error) {
           console.error("Kunde inte spara studenter:", error);
@@ -721,8 +722,11 @@
               examLocation: this.examLocation,
             }
           )
+          // eslint-disable-next-line vue/no-mutating-props
           this.event.extendedProps.examTime = this.examTime
+          // eslint-disable-next-line vue/no-mutating-props
           this.event.extendedProps.examMunicipality = this.examMunicipality
+          // eslint-disable-next-line vue/no-mutating-props
           this.event.extendedProps.examLocation = this.examLocation
 
           this.showSuccessMessage = true

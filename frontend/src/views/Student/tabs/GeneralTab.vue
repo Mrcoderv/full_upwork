@@ -6,9 +6,9 @@
         <h3>Grundläggande Information</h3>
         <button
           v-if="isAdmin"
-          @click="toggleEditMode"
           class="btn btn-sm"
           :class="editMode ? 'btn-secondary' : 'btn-primary'"
+          @click="toggleEditMode"
         >
           {{ editMode ? 'Avbryt' : 'Redigera' }}
         </button>
@@ -81,9 +81,9 @@
               <code v-if="studentPassword" style="background: #f8f9fa; padding: 4px 8px; border-radius: 4px; font-family: monospace;">{{ studentPassword }}</code>
               <span v-else class="password-placeholder" style="color: #6c757d;">••••••••</span>
               <button
-                @click="resetPassword"
                 class="btn btn-sm btn-outline-primary"
                 :disabled="resettingPassword"
+                @click="resetPassword"
               >
                 {{ resettingPassword ? 'Återställer...' : studentPassword ? 'Återställ lösenord' : 'Visa/Återställ lösenord' }}
               </button>
@@ -111,10 +111,10 @@
         </div>
 
         <div v-if="editMode && isAdmin" class="edit-actions">
-          <button @click="saveChanges" class="btn btn-success" :disabled="saving">
+          <button class="btn btn-success" :disabled="saving" @click="saveChanges">
             {{ saving ? 'Sparar...' : 'Spara ändringar' }}
           </button>
-          <button @click="cancelEdit" class="btn btn-secondary">Avbryt</button>
+          <button class="btn btn-secondary" @click="cancelEdit">Avbryt</button>
         </div>
       </div>
     </div>
@@ -186,21 +186,21 @@
             <label>Provlokal-anpassningar:
               <button
                 v-if="isSpecped && !editMode && !specpedAccommodationMode"
-                @click="enterSpecpedAccommodationMode"
                 class="btn btn-sm btn-outline-primary ms-2"
+                @click="enterSpecpedAccommodationMode"
               >Redigera</button>
             </label>
             <div v-if="(editMode && isAdmin) || specpedAccommodationMode" class="checkbox-group">
               <label class="checkbox-label">
-                <input type="checkbox" v-model="editData.examAccommodations.extraTime" />
+                <input v-model="editData.examAccommodations.extraTime" type="checkbox" />
                 Extra skrivtid
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" v-model="editData.examAccommodations.computer" />
+                <input v-model="editData.examAccommodations.computer" type="checkbox" />
                 Dator
               </label>
               <label class="checkbox-label">
-                <input type="checkbox" v-model="editData.examAccommodations.separateRoom" />
+                <input v-model="editData.examAccommodations.separateRoom" type="checkbox" />
                 Sitter ensam
               </label>
               <input
@@ -210,10 +210,10 @@
                 placeholder="Anteckningar om anpassningar"
               />
               <div v-if="specpedAccommodationMode" class="mt-2 d-flex gap-2">
-                <button @click="saveAccommodations" class="btn btn-sm btn-success" :disabled="saving">
+                <button class="btn btn-sm btn-success" :disabled="saving" @click="saveAccommodations">
                   {{ saving ? 'Sparar...' : 'Spara' }}
                 </button>
-                <button @click="cancelSpecpedAccommodationMode" class="btn btn-sm btn-secondary">Avbryt</button>
+                <button class="btn btn-sm btn-secondary" @click="cancelSpecpedAccommodationMode">Avbryt</button>
               </div>
             </div>
             <div v-else>
@@ -225,15 +225,15 @@
             </div>
           </div>
 
-          <div class="info-item" v-if="isAdmin">
+          <div v-if="isAdmin" class="info-item">
             <label>Avbrott (Inaktiv):</label>
             <div style="display: flex; align-items: center; gap: 10px;">
               <input
+                id="dropout-checkbox"
                 type="checkbox"
                 :checked="localStudent.dropout"
-                @change="handleDropoutChange"
                 :disabled="processingDropout"
-                id="dropout-checkbox"
+                @change="handleDropoutChange"
               />
               <label for="dropout-checkbox" style="margin: 0; font-weight: normal;">
                 {{ localStudent.dropout ? 'Ta bort avbrott-status' : 'Markera som avbrott' }}
@@ -254,8 +254,8 @@
         <h3>Stödkontakter</h3>
         <button
           v-if="isAdmin"
-          @click="showSupportModal = true"
           class="btn btn-primary btn-sm"
+          @click="showSupportModal = true"
         >
           {{ supportInfo.length > 0 ? 'Redigera' : 'Lägg till' }}
         </button>
@@ -285,8 +285,8 @@
         <h3>Avvikelser & Undantag</h3>
         <button
           v-if="canCreateDeviation"
-          @click="showDeviationModal = true"
           class="btn btn-primary btn-sm"
+          @click="showDeviationModal = true"
         >
           + Ny avvikelse
         </button>
@@ -324,8 +324,8 @@
         <h3>Kommentarer</h3>
         <button
           v-if="canComment"
-          @click="showCommentModal = true"
           class="btn btn-primary btn-sm"
+          @click="showCommentModal = true"
         >
           Lägg till kommentar
         </button>
@@ -359,15 +359,15 @@
             <div class="comment-actions">
               <button
                 v-if="canEditComment(comment)"
-                @click="editComment(comment)"
                 class="btn btn-sm btn-outline-primary"
+                @click="editComment(comment)"
               >
                 Redigera
               </button>
               <button
                 v-if="canDeleteComment(comment)"
-                @click="deleteComment(comment._id)"
                 class="btn btn-sm btn-outline-danger"
+                @click="deleteComment(comment._id)"
               >
                 Radera
               </button>
@@ -419,7 +419,7 @@
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>Lägg till kommentar</h3>
-          <button @click="showCommentModal = false" class="close-btn">&times;</button>
+          <button class="close-btn" @click="showCommentModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <textarea
@@ -430,10 +430,10 @@
           ></textarea>
         </div>
         <div class="modal-footer">
-          <button @click="addComment" class="btn btn-primary" :disabled="!newComment.trim()">
+          <button class="btn btn-primary" :disabled="!newComment.trim()" @click="addComment">
             Lägg till
           </button>
-          <button @click="showCommentModal = false" class="btn btn-secondary">Avbryt</button>
+          <button class="btn btn-secondary" @click="showCommentModal = false">Avbryt</button>
         </div>
       </div>
     </div>
@@ -443,14 +443,14 @@
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>Redigera kommentar</h3>
-          <button @click="showEditModal = false" class="close-btn">&times;</button>
+          <button class="close-btn" @click="showEditModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <textarea v-model="editingComment.comment" class="form-control" rows="4"></textarea>
         </div>
         <div class="modal-footer">
-          <button @click="saveEditedComment" class="btn btn-primary">Spara</button>
-          <button @click="showEditModal = false" class="btn btn-secondary">Avbryt</button>
+          <button class="btn btn-primary" @click="saveEditedComment">Spara</button>
+          <button class="btn btn-secondary" @click="showEditModal = false">Avbryt</button>
         </div>
       </div>
     </div>
@@ -460,7 +460,7 @@
       <div class="modal-content modal-wide" @click.stop>
         <div class="modal-header">
           <h3>Stödkontakter</h3>
-          <button @click="showSupportModal = false" class="close-btn">&times;</button>
+          <button class="close-btn" @click="showSupportModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <div v-for="(contact, idx) in supportEditData" :key="idx" class="support-edit-item">
@@ -473,16 +473,16 @@
             <div class="support-edit-row">
               <input v-model="contact.supportType" class="form-control" placeholder="Stödtyp (t.ex. kurator, Biståndshandläggare)" />
               <input v-model="contact.notes" class="form-control" placeholder="Anteckningar" />
-              <button @click="removeSupportContact(idx)" class="btn btn-sm btn-outline-danger">Ta bort</button>
+              <button class="btn btn-sm btn-outline-danger" @click="removeSupportContact(idx)">Ta bort</button>
             </div>
           </div>
-          <button @click="addSupportContact" class="btn btn-sm btn-outline-primary mt-2">+ Lägg till kontakt</button>
+          <button class="btn btn-sm btn-outline-primary mt-2" @click="addSupportContact">+ Lägg till kontakt</button>
         </div>
         <div class="modal-footer">
-          <button @click="saveSupportInfo" class="btn btn-primary" :disabled="savingSupport">
+          <button class="btn btn-primary" :disabled="savingSupport" @click="saveSupportInfo">
             {{ savingSupport ? 'Sparar...' : 'Spara' }}
           </button>
-          <button @click="showSupportModal = false" class="btn btn-secondary">Avbryt</button>
+          <button class="btn btn-secondary" @click="showSupportModal = false">Avbryt</button>
         </div>
       </div>
     </div>
@@ -492,7 +492,7 @@
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>Ny avvikelse</h3>
-          <button @click="showDeviationModal = false" class="close-btn">&times;</button>
+          <button class="close-btn" @click="showDeviationModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -530,10 +530,10 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button @click="saveDeviation" class="btn btn-primary" :disabled="!deviationForm.title || savingDeviation">
+          <button class="btn btn-primary" :disabled="!deviationForm.title || savingDeviation" @click="saveDeviation">
             {{ savingDeviation ? 'Sparar...' : 'Skapa' }}
           </button>
-          <button @click="showDeviationModal = false" class="btn btn-secondary">Avbryt</button>
+          <button class="btn btn-secondary" @click="showDeviationModal = false">Avbryt</button>
         </div>
       </div>
     </div>

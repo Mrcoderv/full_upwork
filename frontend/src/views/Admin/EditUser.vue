@@ -15,15 +15,15 @@
         <div class="field-grid">
           <div class="field">
             <label>Namn</label>
-            <input type="text" v-model="user.name" class="form-control" />
+            <input v-model="user.name" type="text" class="form-control" />
           </div>
           <div class="field">
             <label>E-post</label>
-            <input type="email" v-model="user.email" class="form-control" />
+            <input v-model="user.email" type="email" class="form-control" />
           </div>
           <div class="field">
             <label>Användarnamn</label>
-            <input type="text" v-model="user.username" class="form-control" />
+            <input v-model="user.username" type="text" class="form-control" />
           </div>
         </div>
       </div>
@@ -38,9 +38,9 @@
             class="role-checkbox"
           >
             <input
+              v-model="selectedRoles"
               type="checkbox"
               :value="role.value"
-              v-model="selectedRoles"
             />
             <span class="role-label">{{ role.label }}</span>
           </label>
@@ -48,8 +48,8 @@
         <div class="actions">
           <button
             class="btn btn-primary"
-            @click="saveRoles"
             :disabled="savingRoles || !hasRoleChanges"
+            @click="saveRoles"
           >
             {{ savingRoles ? 'Sparar...' : 'Spara roller' }}
           </button>
@@ -82,8 +82,8 @@
               <button
                 v-if="hasPermissionOverride(feature.key)"
                 class="btn-reset"
-                @click="clearPermissionOverride(feature.key)"
                 title="Återställ till roll-standard"
+                @click="clearPermissionOverride(feature.key)"
               >
                 Återställ
               </button>
@@ -93,8 +93,8 @@
         <div class="actions">
           <button
             class="btn btn-primary"
-            @click="savePermissions"
             :disabled="savingPermissions"
+            @click="savePermissions"
           >
             {{ savingPermissions ? 'Sparar...' : 'Spara behörigheter' }}
           </button>
@@ -105,7 +105,7 @@
       <div class="card">
         <h4>Åtgärder</h4>
         <div class="actions">
-          <button class="btn btn-warning" @click="resetPassword" :disabled="resettingPassword">
+          <button class="btn btn-warning" :disabled="resettingPassword" @click="resetPassword">
             {{ resettingPassword ? 'Återställer...' : 'Återställ lösenord' }}
           </button>
         </div>

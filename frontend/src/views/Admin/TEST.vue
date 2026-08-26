@@ -8,9 +8,9 @@
         <div class="form-group">
           <label for="courseName">Kursnamn att matcha:</label>
           <input
-            type="text"
             id="courseName"
             v-model="searchCourseName"
+            type="text"
             class="form-control"
             placeholder="Ex. Svenska 1, Matematik A, etc."
             @input="searchCourse"
@@ -19,9 +19,9 @@
         <div class="form-group">
           <label for="threshold">Matchningströskel:</label>
           <input
-            type="range"
             id="threshold"
             v-model="threshold"
+            type="range"
             min="0.1"
             max="1.0"
             step="0.1"
@@ -31,8 +31,8 @@
         </div>
         <button
           class="btn btn-primary"
-          @click="searchCourse"
           :disabled="!searchCourseName.trim()"
+          @click="searchCourse"
         >
           Sök matchning
         </button>

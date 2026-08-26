@@ -72,13 +72,13 @@
         </div>
 
         <ul class="nav nav-tabs">
-          <li class="nav-item" v-for="tab in tabs" :key="tab.name">
+          <li v-for="tab in tabs" :key="tab.name" class="nav-item">
             <a
               class="nav-link"
               :class="{ active: activeTab === tab.component }"
-              @click.prevent="activeTab = tab.component"
               href="#"
               :title="tab.description || tab.name"
+              @click.prevent="activeTab = tab.component"
             >
               {{ tab.name }}
             </a>
@@ -90,8 +90,8 @@
             <component
               :is="activeTab"
               :student="student"
-              :userData="student"
-              :changeHistory="changeHistory"
+              :user-data="student"
+              :change-history="changeHistory"
               @student-updated="handleStudentUpdate"
             />
           </keep-alive>

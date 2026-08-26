@@ -29,8 +29,8 @@
       <div class="search-section">
         <div class="search-box">
           <input
-            type="text"
             v-model="searchQuery"
+            type="text"
             placeholder="Sök efter lärare..."
             class="form-control"
           />
@@ -75,7 +75,7 @@
       </div>
 
       <!-- Teachers List -->
-      <div class="teachers-grid" v-if="!isLoading">
+      <div v-if="!isLoading" class="teachers-grid">
         <div
           v-for="teacher in filteredTeachers"
           :key="teacher._id"
@@ -94,8 +94,8 @@
             <div class="teacher-actions">
               <button
                 class="btn btn-sm btn-outline-primary"
-                @click="editTeacher(teacher)"
                 title="Redigera lärare"
+                @click="editTeacher(teacher)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -114,8 +114,8 @@
               </button>
               <button
                 class="btn btn-sm btn-outline-warning"
-                @click="changePassword(teacher)"
                 title="Ändra lösenord"
+                @click="changePassword(teacher)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -135,8 +135,8 @@
               </button>
               <button
                 class="btn btn-sm btn-outline-secondary"
-                @click="unassignAllStudents(teacher)"
                 title="Ta bort alla kopplingar till elever"
+                @click="unassignAllStudents(teacher)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -155,8 +155,8 @@
               </button>
               <button
                 class="btn btn-sm btn-outline-danger"
-                @click="deleteTeacher(teacher)"
                 title="Ta bort lärare"
+                @click="deleteTeacher(teacher)"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -225,7 +225,7 @@
       </div>
 
       <!-- Edit Teacher Modal -->
-      <div class="modal fade" id="editTeacherModal" tabindex="-1" ref="editTeacherModal">
+      <div id="editTeacherModal" ref="editTeacherModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header">
@@ -239,8 +239,8 @@
                     <div class="form-group">
                       <label class="form-label">Namn</label>
                       <input
-                        type="text"
                         v-model="editingTeacher.username"
+                        type="text"
                         class="form-control"
                         required
                       />
@@ -250,8 +250,8 @@
                     <div class="form-group">
                       <label class="form-label">E-post</label>
                       <input
-                        type="email"
                         v-model="editingTeacher.email"
+                        type="email"
                         class="form-control"
                         required
                       />
@@ -282,13 +282,13 @@
                       <label class="form-label">Färgkod</label>
                       <div class="color-input-group">
                         <input
-                          type="color"
                           v-model="editingTeacher.colorCode"
+                          type="color"
                           class="form-control color-picker"
                         />
                         <input
-                          type="text"
                           v-model="editingTeacher.colorCode"
+                          type="text"
                           class="form-control color-text"
                           placeholder="#FF0000"
                         />
@@ -309,21 +309,21 @@
                     <div class="form-group">
                       <label class="form-label">Telefonnummer</label>
                       <div
-                        class="phone-input-group"
                         v-for="(phone, index) in editingTeacher.phoneNumbers"
                         :key="index"
+                        class="phone-input-group"
                       >
                         <input
-                          type="text"
                           v-model="phone.number"
+                          type="text"
                           class="form-control"
                           :placeholder="`Telefon ${index + 1}`"
                         />
                         <button
                           type="button"
                           class="btn btn-outline-secondary"
-                          @click="removeEditingPhone(index)"
                           :disabled="editingTeacher.phoneNumbers.length === 1"
+                          @click="removeEditingPhone(index)"
                         >
                           Ta bort
                         </button>
@@ -347,8 +347,8 @@
               <button
                 type="button"
                 class="btn btn-primary"
-                @click="saveTeacherChanges"
                 :disabled="isSaving"
+                @click="saveTeacherChanges"
               >
                 <span v-if="isSaving" class="spinner-border spinner-border-sm me-2"></span>
                 {{ isSaving ? 'Sparar...' : 'Spara ändringar' }}
@@ -359,7 +359,7 @@
       </div>
 
       <!-- Change Password Modal -->
-      <div class="modal fade" id="changePasswordModal" tabindex="-1" ref="changePasswordModal">
+      <div id="changePasswordModal" ref="changePasswordModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog">
           <div class="modal-content">
             <div class="modal-header">
@@ -375,7 +375,7 @@
               <div class="form-group">
                 <label class="form-label">Nytt lösenord</label>
                 <div class="input-group">
-                  <input type="text" v-model="newPassword" class="form-control" readonly />
+                  <input v-model="newPassword" type="text" class="form-control" readonly />
                   <button
                     type="button"
                     class="btn btn-outline-secondary"
@@ -401,8 +401,8 @@
               <button
                 type="button"
                 class="btn btn-primary"
-                @click="saveNewPassword"
                 :disabled="isChangingPassword"
+                @click="saveNewPassword"
               >
                 <span
                   v-if="isChangingPassword"
@@ -416,7 +416,7 @@
       </div>
 
       <!-- Add Teacher Modal -->
-      <div class="modal fade" id="addTeacherModal" tabindex="-1" ref="addTeacherModal">
+      <div id="addTeacherModal" ref="addTeacherModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header">
@@ -430,8 +430,8 @@
                     <div class="form-group">
                       <label class="form-label">Namn *</label>
                       <input
-                        type="text"
                         v-model="newTeacher.username"
+                        type="text"
                         class="form-control"
                         required
                       />
@@ -441,8 +441,8 @@
                     <div class="form-group">
                       <label class="form-label">E-post *</label>
                       <input
-                        type="email"
                         v-model="newTeacher.email"
+                        type="email"
                         class="form-control"
                         required
                       />
@@ -480,13 +480,13 @@
                       <label class="form-label">Färgkod</label>
                       <div class="color-input-group">
                         <input
-                          type="color"
                           v-model="newTeacher.colorCode"
+                          type="color"
                           class="form-control color-picker"
                         />
                         <input
-                          type="text"
                           v-model="newTeacher.colorCode"
+                          type="text"
                           class="form-control color-text"
                           placeholder="#FF0000"
                         />
@@ -510,8 +510,8 @@
               <button
                 type="button"
                 class="btn btn-primary"
-                @click="createNewTeacher"
                 :disabled="isCreatingTeacher"
+                @click="createNewTeacher"
               >
                 <span v-if="isCreatingTeacher" class="spinner-border spinner-border-sm me-2"></span>
                 {{ isCreatingTeacher ? 'Skapar...' : 'Skapa lärare' }}

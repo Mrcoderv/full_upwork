@@ -10,9 +10,9 @@
           <p>Ingen användare hittades för denna elev. En användare måste skapas innan behörigheter kan tilldelas.</p>
         </div>
         <button 
-          @click="createUserForStudent" 
-          class="btn btn-primary"
+          class="btn btn-primary" 
           :disabled="isCreatingUser"
+          @click="createUserForStudent"
         >
           {{ isCreatingUser ? 'Skapar...' : 'Skapa användare för elev' }}
         </button>
@@ -58,9 +58,9 @@
         </div>
         <div class="form-actions mt-3">
           <button 
-            @click="savePermissions" 
             class="btn btn-primary" 
-            :disabled="isSavingPermissions || !hasPermissionChanges"
+            :disabled="isSavingPermissions || !hasPermissionChanges" 
+            @click="savePermissions"
           >
             {{ isSavingPermissions ? 'Sparar...' : 'Spara behörigheter' }}
           </button>

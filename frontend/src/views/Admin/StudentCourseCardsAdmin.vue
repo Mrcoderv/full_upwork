@@ -19,7 +19,7 @@
             item-value="value"
             class="flex-grow-1"
             clearable
-            @update:modelValue="loadCards"
+            @update:model-value="loadCards"
           />
         </v-card-text>
       </v-card>

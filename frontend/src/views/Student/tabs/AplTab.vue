@@ -11,7 +11,7 @@
           clearable
           class="search-field"
         />
-        <v-btn v-if="isCoordinator" color="primary" size="small" @click="runAutoTransition" :loading="autoTransitioning">
+        <v-btn v-if="isCoordinator" color="primary" size="small" :loading="autoTransitioning" @click="runAutoTransition">
           <v-icon left size="small">mdi-autorenew</v-icon>
           Kör auto-status
         </v-btn>
@@ -38,7 +38,7 @@
           <!-- Status Control -->
           <div v-if="isCoordinator" class="apl-status-control">
             <label>APL-status:</label>
-            <select v-model="aplRecord.status" @change="handleStatusChange" :disabled="updatingStatus" class="status-select">
+            <select v-model="aplRecord.status" :disabled="updatingStatus" class="status-select" @change="handleStatusChange">
               <option v-for="s in statusOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
             </select>
             <span v-if="updatingStatus" class="updating-text">Uppdaterar...</span>
@@ -91,7 +91,7 @@
             <h4>Krav</h4>
             <textarea v-model="editForm.requirements" class="form-control" rows="2" placeholder="Särskilda krav..."></textarea>
 
-            <v-btn color="primary" size="small" @click="saveRecordDetails" :loading="savingDetails" class="mt-3">
+            <v-btn color="primary" size="small" :loading="savingDetails" class="mt-3" @click="saveRecordDetails">
               Spara detaljer
             </v-btn>
           </div>
@@ -119,8 +119,8 @@
               <span class="doc-date">({{ formatDate(aplRecord.cvDocId.uploadDate) }})</span>
             </div>
             <div v-if="isCoordinator" class="upload-section">
-              <input type="file" ref="cvFileInput" @change="handleCvUpload" accept=".pdf,.doc,.docx" style="display: none" />
-              <v-btn size="small" variant="outlined" @click="$refs.cvFileInput.click()" :loading="uploadingCv">
+              <input ref="cvFileInput" type="file" accept=".pdf,.doc,.docx" style="display: none" @change="handleCvUpload" />
+              <v-btn size="small" variant="outlined" :loading="uploadingCv" @click="$refs.cvFileInput.click()">
                 <v-icon left size="small">mdi-upload</v-icon>
                 {{ aplRecord.cvDocId ? 'Byt CV' : 'Ladda upp CV' }}
               </v-btn>
@@ -136,8 +136,8 @@
               <span class="doc-date">({{ formatDate(aplRecord.contractDocId.uploadDate) }})</span>
             </div>
             <div v-if="isCoordinator" class="upload-section">
-              <input type="file" ref="contractFileInput" @change="handleContractUpload" accept=".pdf" style="display: none" />
-              <v-btn size="small" variant="outlined" @click="$refs.contractFileInput.click()" :loading="uploadingContract">
+              <input ref="contractFileInput" type="file" accept=".pdf" style="display: none" @change="handleContractUpload" />
+              <v-btn size="small" variant="outlined" :loading="uploadingContract" @click="$refs.contractFileInput.click()">
                 <v-icon left size="small">mdi-upload</v-icon>
                 {{ aplRecord.contractDocId ? 'Byt kontrakt' : 'Ladda upp kontrakt' }}
               </v-btn>
@@ -174,8 +174,8 @@
               class="status-summary-card"
               :class="s.value.toLowerCase()"
               :style="activeFilter === s.value ? 'outline: 2px solid #1976d2' : ''"
-              @click="toggleFilter(s.value)"
               style="cursor: pointer"
+              @click="toggleFilter(s.value)"
             >
               <v-card-title>{{ s.label }}</v-card-title>
               <v-card-text>{{ statusCounts[s.value] || 0 }} elever</v-card-text>
@@ -194,7 +194,7 @@
           :search="search"
           no-data-text="Inga APL-insättningar"
         >
-          <template v-slot:headers>
+          <template #headers>
             <tr>
               <th>Elev</th>
               <th>Status</th>
@@ -205,7 +205,7 @@
               <th>Aktion</th>
             </tr>
           </template>
-          <template v-slot:item="{ item }">
+          <template #item="{ item }">
             <tr>
               <td>{{ item.studentId?.name || '—' }}</td>
               <td>

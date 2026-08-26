@@ -6,13 +6,13 @@
           <div class="card shadow-sm">
             <div class="card-body">
               <h3 class="card-title text-center mb-4">Information</h3>
-              <br/>
+              <br />
               <p class="card-text text-center">
                 <strong>Välkommen till Mindfullearning</strong>
                 <br />
-                <br>Viktig information kommer visas här</br>
-                <br>Just nu har ni tillgång till:</br>
-                <br>APL, Slutprov i kalendern och Elever</br>
+                <br />Viktig information kommer visas här
+                <br />Just nu har ni tillgång till:
+                <br />APL, Slutprov i kalendern och Elever
               </p>
             </div>
           </div>
@@ -24,9 +24,9 @@
               <h2 class="card-title mb-4">Att göra</h2>
               <ul class="list-group">
                 <li
-                  class="list-group-item d-flex justify-content-between align-items-center"
                   v-for="task in tasks"
                   :key="task._id"
+                  class="list-group-item d-flex justify-content-between align-items-center"
                   :class="{ 'list-group-item-success': task.isDone }"
                 >
                   <div class="d-flex align-items-center">
@@ -46,10 +46,10 @@
               <div class="mt-3">
                 <div class="input-group">
                   <input
+                    v-model="newTask"
                     type="text"
                     class="form-control"
                     placeholder="Lägg till en uppgift..."
-                    v-model="newTask"
                     @keyup.enter="addTask"
                   />
                   <button class="btn btn-primary" @click="addTask">Lägg till</button>

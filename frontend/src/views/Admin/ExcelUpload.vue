@@ -30,8 +30,8 @@
         <button
           type="button"
           class="btn-close"
-          @click="hideFlashMessage"
           aria-label="Close"
+          @click="hideFlashMessage"
         ></button>
       </div>
 
@@ -53,7 +53,7 @@
       <div class="controls">
         <h2>Elever</h2>
         <div class="d-flex gap-3 mb-3 align-center flex-wrap">
-          <input type="text" v-model="searchQuery" placeholder="Sök" class="search-input" style="flex:1; min-width:200px" />
+          <input v-model="searchQuery" type="text" placeholder="Sök" class="search-input" style="flex:1; min-width:200px" />
           <select v-model="selectedTeacher" class="search-input" style="flex:0 0 240px">
             <option value="">Alla lärare</option>
             <option v-for="t in teachers" :key="t._id" :value="t._id">{{ t.name }}</option>
@@ -117,7 +117,7 @@
                       <div class="course-header">
                         <strong>{{ getSortedEducation(student.education)[0].type }}:</strong>
                         {{ getEducationLabel(getSortedEducation(student.education)[0]) }}
-                        <span class="expand-indicator" v-if="student.education.length > 1">
+                        <span v-if="student.education.length > 1" class="expand-indicator">
                           +{{ student.education.length - 1 }} mer
                         </span>
                       </div>
@@ -236,7 +236,7 @@
       <!-- ✅ Fixed: Dialog moved OUTSIDE v-for loop -->
       <v-dialog v-model="editingStudentDialog" max-width="800px">
         <template #default>
-          <v-card class="pa-4" v-if="editingStudent">
+          <v-card v-if="editingStudent" class="pa-4">
             <form @submit.prevent="saveEditedStudent">
               <div class="student-info-box">
                 <h3>Redigera Student: {{ editingStudent.name }}</h3>
@@ -340,12 +340,12 @@
                   <div class="form-group">
                     <label class="form-label">
                       <input
+                        id="edit-dropout-checkbox"
                         type="checkbox"
                         :checked="editingStudent.dropout"
-                        @change="handleDropoutChangeInEdit"
                         :disabled="processingDropout"
                         class="form-checkbox"
-                        id="edit-dropout-checkbox"
+                        @change="handleDropoutChangeInEdit"
                       />
                       Avhopp (Dropout)
                     </label>
@@ -365,8 +365,8 @@
                   <div class="form-group">
                     <label class="form-label">
                       <input
-                        type="checkbox"
                         v-model="editingStudent.attendedExam"
+                        type="checkbox"
                         class="form-checkbox"
                       />
                       Deltog i slutprov
@@ -375,8 +375,8 @@
                   <div class="form-group">
                     <label class="form-label">
                       <input
-                        type="checkbox"
                         v-model="editingStudent.paidExamFee"
+                        type="checkbox"
                         class="form-checkbox"
                       />
                       Betalat provavgift
@@ -477,7 +477,7 @@
                     </div>
                     <div class="form-group">
                       <label class="form-label">
-                        <input type="checkbox" v-model="edu.locked" class="form-checkbox" />
+                        <input v-model="edu.locked" type="checkbox" class="form-checkbox" />
                         Låst
                       </label>
                     </div>
@@ -510,8 +510,8 @@
                 v-if="!showEducationSelector"
                 class="btn betyg-btn"
                 style="width: 100%; background-color: #007dc3ff; color: white"
-                @click.prevent="addEducation"
                 type="button"
+                @click.prevent="addEducation"
               >
                 + Lägg till utbildning
               </button>
@@ -528,8 +528,8 @@
 
                 <button
                   class="btn btn-success btn-xs"
-                  @click.prevent="confirmAddEducation"
                   type="button"
+                  @click.prevent="confirmAddEducation"
                 >
                   Lägg till
                 </button>
@@ -598,7 +598,7 @@
               </div>
 
               <div class="modal-actions">
-                <button @click="cancelEdit" class="btn btn-secondary" type="button">Avbryt</button>
+                <button class="btn btn-secondary" type="button" @click="cancelEdit">Avbryt</button>
                 <button type="submit" class="btn btn-success">Spara ändringar</button>
               </div>
             </form>
@@ -672,6 +672,11 @@
             )
           })
       },
+    },
+    mounted() {
+      this.fetchStudents()
+      this.fetchEducationOptions()
+      this.fetchTeachers()
     },
 
     methods: {
@@ -765,10 +770,6 @@
           return 'CoursePackage: ' + (edu.refId.coursePackageName || '(no name)')
         if (edu.type === 'Program') return edu.refId.programName || '(no name)'
         return '(invalid type)'
-      },
-      formatComment(text) {
-        if (!text) return ''
-        return text.replace(/\n/g, '<br />')
       },
       toggleComment(studentId) {
         if (this.expandedComments.includes(studentId)) {
@@ -1313,11 +1314,6 @@
           edu.removedAt = new Date().toISOString() // 🕒 Soft delete marker
         }
       },
-    },
-    mounted() {
-      this.fetchStudents()
-      this.fetchEducationOptions()
-      this.fetchTeachers()
     },
   }
 </script>

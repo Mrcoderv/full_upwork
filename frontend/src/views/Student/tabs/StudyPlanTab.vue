@@ -48,9 +48,9 @@
             v-model="sortedEducation"
             :animation="200"
             handle=".drag-handle"
-            @end="handleEducationReorder"
             item-key="_id"
             class="education-list"
+            @end="handleEducationReorder"
           >
             <template #item="{ element }">
               <div
@@ -115,10 +115,10 @@
                     <select
                       v-if="element.enrollmentId && canEditStatus"
                       v-model="element.status"
-                      @change="updateStatus(element)"
                       class="status-select"
                       :class="'status-' + (element.status || 'enrolled')"
                       :disabled="updatingStatus[element.enrollmentId]"
+                      @change="updateStatus(element)"
                     >
                       <option value="enrolled">Antagen</option>
                       <option value="completed">Betygsatt</option>
@@ -275,6 +275,7 @@ export default {
       required: true,
     },
   },
+  emits: ['student-updated'],
   setup(props, { emit }) {
     const store = useStore();
     const toast = useToast();

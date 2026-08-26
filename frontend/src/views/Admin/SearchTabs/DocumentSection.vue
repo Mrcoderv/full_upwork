@@ -21,7 +21,7 @@
             <span v-if="doc.uploadedBy && doc.uploadedBy !== entityId" class="uploaded-by">
               (uppladdad av admin)
             </span>
-            <button v-if="canDelete(doc)" @click="deleteFile(doc._id)" class="delete-btn">🗑️</button>
+            <button v-if="canDelete(doc)" class="delete-btn" @click="deleteFile(doc._id)">🗑️</button>
           </li>
         </ul>
       </div>

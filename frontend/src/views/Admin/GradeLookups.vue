@@ -60,7 +60,7 @@
               item-value="value"
               class="flex-grow-1"
               clearable
-              @update:modelValue="loadStudentGrades"
+              @update:model-value="loadStudentGrades"
             />
           </div>
 
@@ -113,7 +113,7 @@
               item-value="value"
               class="flex-grow-1"
               clearable
-              @update:modelValue="loadInstanceGrades"
+              @update:model-value="loadInstanceGrades"
             />
           </div>
 

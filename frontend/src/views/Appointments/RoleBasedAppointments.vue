@@ -30,18 +30,18 @@
 
     <!-- Pagination -->
     <div v-if="pagination.totalPages > 1">
-      <button @click="changePage(pagination.page - 1)" :disabled="pagination.page <= 1">Föregående</button>
+      <button :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">Föregående</button>
       <span>Sida {{ pagination.page }} av {{ pagination.totalPages }}</span>
-      <button @click="changePage(pagination.page + 1)" :disabled="pagination.page >= pagination.totalPages">Nästa</button>
+      <button :disabled="pagination.page >= pagination.totalPages" @click="changePage(pagination.page + 1)">Nästa</button>
     </div>
 
     <!-- Modal -->
     <AddMeetingModal
       v-if="isModalOpen"
-      @close="isModalOpen = false"
-      @event-added="fetchMeetings"
       :title="'Boka nytt ' + activeRole + '-samtal'"
       :booked-by-role="activeRole"
+      @close="isModalOpen = false"
+      @event-added="fetchMeetings"
     />
   </div>
 </template>
@@ -104,9 +104,6 @@ export default {
       return this.$route.meta.title || 'Samtal';
     }
   },
-  created() {
-    this.fetchMeetings();
-  },
   watch: {
     // Refetch when route changes (e.g., navigating between syv and specped)
     '$route'(to, from) {
@@ -156,6 +153,9 @@ export default {
         notes: ''
       };
     }
+  },
+  created() {
+    this.fetchMeetings();
   },
   methods: {
     formatMeetingTime(meeting) {

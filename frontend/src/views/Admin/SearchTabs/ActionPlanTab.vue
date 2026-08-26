@@ -15,10 +15,10 @@
     <!-- Content with top padding and border -->
     <v-window v-model="activeSubTab" class="pa-4 border-t">
       <v-window-item value="student">
-        <ActionPlanQuestions :userData="effectiveUserData" />
+        <ActionPlanQuestions :user-data="effectiveUserData" />
       </v-window-item>
-      <v-window-item value="admin" v-if="isSystemAdmin">
-        <AdminQuestionTab :userData="effectiveUserData" />
+      <v-window-item v-if="isSystemAdmin" value="admin">
+        <AdminQuestionTab :user-data="effectiveUserData" />
       </v-window-item>
     </v-window>
   </v-card>
@@ -30,7 +30,10 @@
   import ActionPlanQuestions from './ActionPlanQuestions.vue'
   import AdminQuestionTab from './ChangeActionPlan.vue'
 
-  const props = defineProps(['userData', 'student'])
+  const props = defineProps({
+    userData: { type: Object, default: null },
+    student: { type: Object, default: null },
+  })
 
   const effectiveUserData = computed(() => props.userData || props.student || {})
 

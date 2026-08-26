@@ -1,8 +1,7 @@
 <template>
   <div class="scrollable-view">
     <div v-if="userRole === 'student' || userRole === 'systemadmin' || userRole === 'admin'">
-
-        <StudentExamForm />
+<StudentExamForm />
       </div>
 
 

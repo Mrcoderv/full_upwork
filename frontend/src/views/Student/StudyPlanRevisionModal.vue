@@ -54,9 +54,9 @@
                 class="revision-course-option"
               >
                 <input
+                  v-model="form.removeEnrollmentIds"
                   type="checkbox"
                   :value="enrollment.enrollmentId"
-                  v-model="form.removeEnrollmentIds"
                 />
                 <span class="revision-course-info">
                   <span class="revision-course-name">{{ enrollment.name }}</span>
@@ -83,15 +83,15 @@
                   <input
                     type="date"
                     :value="getAdjustmentDate(enrollment.enrollmentId, 'startDate')"
-                    @input="setAdjustmentDate(enrollment.enrollmentId, 'startDate', $event.target.value)"
                     class="revision-date-input"
+                    @input="setAdjustmentDate(enrollment.enrollmentId, 'startDate', $event.target.value)"
                   />
                   <label>Ny slut:</label>
                   <input
                     type="date"
                     :value="getAdjustmentDate(enrollment.enrollmentId, 'endDate')"
-                    @input="setAdjustmentDate(enrollment.enrollmentId, 'endDate', $event.target.value)"
                     class="revision-date-input"
+                    @input="setAdjustmentDate(enrollment.enrollmentId, 'endDate', $event.target.value)"
                   />
                 </div>
               </div>

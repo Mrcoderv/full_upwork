@@ -3,10 +3,10 @@
     <div class="summary-header">
       <h2>APL Statusöversikt</h2>
       <div class="header-actions">
-        <button @click="summaryExpanded = !summaryExpanded" class="toggle-btn" title="Visa/dölj statusöversikt">
+        <button class="toggle-btn" title="Visa/dölj statusöversikt" @click="summaryExpanded = !summaryExpanded">
           <v-icon size="20">{{ summaryExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
         </button>
-        <button @click="fetchStudents" class="refresh-btn" title="Uppdatera data">
+        <button class="refresh-btn" title="Uppdatera data" @click="fetchStudents">
           <v-icon size="20">mdi-refresh</v-icon>
         </button>
       </div>
@@ -35,7 +35,7 @@
       </table>
       <div class="comment-order-toggle">
         <label>
-          <input type="checkbox" v-model="commentAscOrder" />
+          <input v-model="commentAscOrder" type="checkbox" />
           Visa senaste kommentar längst ner
         </label>
       </div>
@@ -93,7 +93,9 @@
           color="green"
           class="ml-1"
           title="Filer uppladdade"
-        >mdi-paperclip</v-icon>
+        >
+mdi-paperclip
+</v-icon>
         <v-icon
           v-if="commentStatus(student)"
           :class="['comment-icon', { pulse: commentStatus(student) === 'unseen' }]"
@@ -166,11 +168,11 @@
 
         <FileUploaderDownloader
           v-if="selectedStudent"
-          :studentId="selectedStudent._id"
-          :studentName="selectedStudent.name"
+          :student-id="selectedStudent._id"
+          :student-name="selectedStudent.name"
         />
 
-        <div class="comment-history-scroll" ref="commentContainerRef">
+        <div ref="commentContainerRef" class="comment-history-scroll">
           <template v-for="(entry, index) in getSortedComments" :key="index">
             <div class="comment-entry">
               <div class="comment-header">
@@ -181,7 +183,7 @@
                   <span>{{ formatDate(entry.date) }}</span>
                 </div>
               </div>
-              <div class="comment-box" v-if="editingIndex !== index">
+              <div v-if="editingIndex !== index" class="comment-box">
                 {{ entry.comment }}
               </div>
               <v-textarea
@@ -217,12 +219,12 @@
                   <v-icon size="12">mdi-comment-edit</v-icon>
                 </v-btn>
                 <v-btn
+                  v-if="canDelete(entry)"
                   color="red"
                   class="mr-1 mb-2"
                   size="22"
                   icon
                   @click="confirmDelete(index)"
-                  v-if="canDelete(entry)"
                 >
                   <v-icon size="16">mdi-delete</v-icon>
                 </v-btn>

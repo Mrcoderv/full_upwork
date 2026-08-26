@@ -27,8 +27,8 @@
         <div v-else class="cards-list">
           <article
             v-for="card in cards"
-            :key="card.courseInstanceId || card.enrollmentId"
             :id="'course-' + card.courseInstanceId"
+            :key="card.courseInstanceId || card.enrollmentId"
             class="course-card"
             :class="{ 'card-active': card.isCurrentlyActive }"
           >

@@ -1,5 +1,5 @@
 <template>
-  <nav class="navbar" v-show="!isLoginPage">
+  <nav v-show="!isLoginPage" class="navbar">
     <div class="nav-container">
       <!-- Logo -->
       <div class="nav-brand">
@@ -20,12 +20,12 @@
 
           <input
             v-if="selectedSearchType !== 'Datum'"
+            v-model="searchQuery"
             class="search-input"
             type="text"
-            v-model="searchQuery"
+            :placeholder="`Sök efter ${selectedSearchType.toLowerCase()}...`"
             @input="handleSearch"
             @focus="handleInputFocus"
-            :placeholder="`Sök efter ${selectedSearchType.toLowerCase()}...`"
           />
 
           <DatePicker
@@ -75,8 +75,8 @@
             <li
               v-for="result in filteredResults"
               :key="result.id"
-              @click="navigateToDetails(result)"
               class="result-item"
+              @click="navigateToDetails(result)"
             >
               <div class="result-content">
                 <div class="result-title">{{ result.name }}</div>
@@ -119,7 +119,7 @@
           </button>
 
           <!-- Profile dropdown -->
-          <div v-if="showProfileMenu" class="profile-dropdown" ref="profileDropdown">
+          <div v-if="showProfileMenu" ref="profileDropdown" class="profile-dropdown">
             <router-link to="/profile" class="dropdown-item">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -135,7 +135,7 @@
               </svg>
               Min profil
             </router-link>
-            <button @click="logout" class="dropdown-item logout-item">
+            <button class="dropdown-item logout-item" @click="logout">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="16"
@@ -205,8 +205,8 @@
         <button
           v-if="isLoggedIn"
           class="burger-btn"
-          @click.stop.prevent="toggleMobileMenu"
           aria-label="Öppna meny"
+          @click.stop.prevent="toggleMobileMenu"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -390,7 +390,7 @@
         </div>
 
         <!-- Notification panel -->
-        <div v-if="showNotisPanel" class="notification-panel" ref="notisPanel">
+        <div v-if="showNotisPanel" ref="notisPanel" class="notification-panel">
           <div class="notis-header">
             <h3>Notifikationer</h3>
             <span class="notis-count">({{ totalNotifications }})</span>
@@ -426,7 +426,7 @@
                     Avsluta
                   </button>
                 </template>
-                <button @click="resolveNote(notification._id)" class="resolve-btn">
+                <button class="resolve-btn" @click="resolveNote(notification._id)">
                   Markera som löst
                 </button>
               </div>
@@ -448,10 +448,9 @@
   import { useToast } from '@/composables/useToast.js'
   import { VueDatePicker as DatePicker } from '@vuepic/vue-datepicker'
   import '@vuepic/vue-datepicker/dist/main.css'
-  import NotificationBox from './notificationBox.vue'
 
   export default {
-    components: { DatePicker, NotificationBox },
+    components: { DatePicker },
     setup() {
       const store = useStore()
       const router = useRouter()
@@ -1019,14 +1018,9 @@
       }
 
       return {
-        totalNotifications,
-        isMobileMenuOpen,
-        toggleMobileMenu,
         toggleSearchTypeDropdown,
         endDateNotifications,
         missingGradeNotifications,
-        notifications,
-        showNotisPanel,
         toggleNotificationPanel,
         canSeeNotifications,
         buildVersion,

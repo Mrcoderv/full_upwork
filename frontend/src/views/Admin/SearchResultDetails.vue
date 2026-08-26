@@ -5,20 +5,19 @@
     </div>
     <section class="tab-container">
       <div class="tab-menu">
-
-        <ul>
+<ul>
           <li 
             v-for="tab in tabs" 
             :key="tab" 
-            @click="activeTab = tab" 
-            :class="{ active: activeTab === tab }"
+            :class="{ active: activeTab === tab }" 
+            @click="activeTab = tab"
           >
             {{ tab }}
           </li>
         </ul>
       </div>
       <div class="content">
-        <component :is="currentComponent" :userData="data" :userType="type"></component>
+        <component :is="currentComponent" :user-data="data" :user-type="type"></component>
       </div>
     </section>
   </div>

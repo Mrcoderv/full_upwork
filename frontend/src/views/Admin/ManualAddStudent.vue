@@ -39,9 +39,9 @@
             <span class="text-danger">*</span>
           </label>
           <input
-            type="text"
             id="name"
             v-model="studentForm.name"
+            type="text"
             class="form-control"
             required
             placeholder="Förnamn Efternamn"
@@ -55,9 +55,9 @@
             <span class="text-danger">*</span>
           </label>
           <input
-            type="text"
             id="personalNumber"
             v-model="studentForm.personalNumber"
+            type="text"
             class="form-control"
             required
             placeholder="YYYYMMDD-XXXX"
@@ -73,9 +73,9 @@
             <span class="text-danger">*</span>
           </label>
           <input
-            type="email"
             id="email"
             v-model="studentForm.email"
+            type="email"
             class="form-control"
             required
             placeholder="exempel@email.com"
@@ -92,16 +92,16 @@
           >
             <div class="input-group">
               <input
-                type="tel"
                 v-model="phone.number"
+                type="tel"
                 class="form-control"
                 :placeholder="`Telefon ${index + 1}`"
               />
               <button
                 type="button"
                 class="btn btn-outline-danger"
-                @click="removePhoneNumber(index)"
                 :disabled="studentForm.phoneNumbers.length === 1"
+                @click="removePhoneNumber(index)"
               >
                 <v-icon size="16">mdi-delete</v-icon>
               </button>
@@ -139,14 +139,14 @@
             item-title="programName"
             item-value="_id"
             placeholder="Välj program"
-            @update:modelValue="onProgramChange"
             class="styled-select"
             :loading="isLoadingPrograms"
+            @update:model-value="onProgramChange"
           />
         </div>
 
         <!-- Course Package Selection -->
-        <div class="mb-3" v-if="selectedProgram">
+        <div v-if="selectedProgram" class="mb-3">
           <label for="coursePackage" class="form-label">Kurspaket:</label>
           <v-select
             v-model="selectedCoursePackage"
@@ -154,9 +154,9 @@
             item-title="coursePackageName"
             item-value="_id"
             placeholder="Välj kurspaket"
-            @update:modelValue="onCoursePackageChange"
             class="styled-select"
             :loading="isLoadingCoursePackages"
+            @update:model-value="onCoursePackageChange"
           />
         </div>
 
@@ -180,8 +180,8 @@
             <button
               type="button"
               class="btn btn-primary ms-2"
-              @click="addIndividualCourse"
               :disabled="!selectedIndividualCourse"
+              @click="addIndividualCourse"
             >
               Lägg till
             </button>
@@ -189,7 +189,7 @@
         </div>
 
         <!-- Added Courses Display -->
-        <div class="mb-3" v-if="addedCourses.length > 0">
+        <div v-if="addedCourses.length > 0" class="mb-3">
           <label class="form-label">Tillagda kurser:</label>
           <div class="added-courses-list">
             <!-- Use a composite key to avoid duplicate-key render errors when the same course appears multiple times (e.g., from packages) -->
@@ -240,8 +240,8 @@
             >
               <label class="checkbox-option package-course-check">
                 <input
-                  type="checkbox"
                   v-model="course.included"
+                  type="checkbox"
                   class="form-check-input"
                 />
                 <span
@@ -269,9 +269,9 @@
           </label>
           <div class="datepicker-container">
             <input
+              v-model="studentForm.startDate"
               type="date"
               class="form-control"
-              v-model="studentForm.startDate"
               @change="() => { handleStartDateChange(studentForm.startDate); calculateEndDate() }"
             />
           </div>
@@ -286,34 +286,34 @@
           <div class="radio-group">
             <label class="radio-option">
               <input
+                v-model="studentForm.studyPace"
                 type="radio"
                 value="5"
-                v-model="studentForm.studyPace"
                 class="form-check-input"
-                @change="calculateEndDate"
                 required
+                @change="calculateEndDate"
               />
               5 v (100%)
             </label>
             <label class="radio-option">
               <input
+                v-model="studentForm.studyPace"
                 type="radio"
                 value="10"
-                v-model="studentForm.studyPace"
                 class="form-check-input"
-                @change="calculateEndDate"
                 required
+                @change="calculateEndDate"
               />
               10 v (50%)
             </label>
             <label class="radio-option">
               <input
+                v-model="studentForm.studyPace"
                 type="radio"
                 value="20"
-                v-model="studentForm.studyPace"
                 class="form-check-input"
-                @change="calculateEndDate"
                 required
+                @change="calculateEndDate"
               />
               20 v (25%)
             </label>
@@ -331,8 +331,7 @@
             }}
           </div>
         </div>
-
-      </div>
+</div>
 
       <!-- Location and Additional Info Section -->
       <div class="form-section">
@@ -357,8 +356,8 @@
           <div class="radio-group">
             <label class="radio-option">
               <input
-                type="radio"
                 v-model="studentForm.examMode"
+                type="radio"
                 value="on-site"
                 class="form-check-input"
               />
@@ -366,8 +365,8 @@
             </label>
             <label class="radio-option">
               <input
-                type="radio"
                 v-model="studentForm.examMode"
+                type="radio"
                 value="remote"
                 class="form-check-input"
               />
@@ -410,15 +409,15 @@
           <label class="form-label">Status:</label>
           <div class="checkbox-group">
             <label class="checkbox-option">
-              <input type="checkbox" v-model="studentForm.dropout" class="form-check-input" />
+              <input v-model="studentForm.dropout" type="checkbox" class="form-check-input" />
               Har hoppat av
             </label>
             <label class="checkbox-option">
-              <input type="checkbox" v-model="studentForm.attendedExam" class="form-check-input" />
+              <input v-model="studentForm.attendedExam" type="checkbox" class="form-check-input" />
               Har deltagit i prov
             </label>
             <label class="checkbox-option">
-              <input type="checkbox" v-model="studentForm.paidExamFee" class="form-check-input" />
+              <input v-model="studentForm.paidExamFee" type="checkbox" class="form-check-input" />
               Har betalat provavgift
             </label>
           </div>
@@ -431,8 +430,8 @@
         <div class="checkbox-group">
           <label class="checkbox-option">
             <input
-              type="checkbox"
               v-model="studentForm.priorAplCompleted"
+              type="checkbox"
               class="form-check-input"
             />
             Eleven har redan utfört praktik via annan skola

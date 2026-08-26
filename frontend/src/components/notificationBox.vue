@@ -18,6 +18,13 @@
   import { useToast } from '@/composables/useToast.js'
 
   export default {
+    props: {
+      notifications: {
+        type: Array,
+        required: true,
+      },
+    },
+    emits: ['notification-dismissed'],
     setup() {
       const toast = useToast()
       return { toast }
@@ -26,12 +33,6 @@
       return {
         error: null,
       }
-    },
-    props: {
-      notifications: {
-        type: Array,
-        required: true,
-      },
     },
     methods: {
       async dismissNotification(id) {

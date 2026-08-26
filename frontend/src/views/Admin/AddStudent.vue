@@ -20,16 +20,16 @@
       <!-- Name -->
       <div class="mb-3">
         <label for="name" class="form-label">Namn:</label>
-        <input type="text" id="name" v-model="studentForm.namn" class="form-control" required />
+        <input id="name" v-model="studentForm.namn" type="text" class="form-control" required />
       </div>
 
       <!-- Personnummer -->
       <div class="mb-3">
         <label for="personnummer" class="form-label">Personnummer:</label>
         <input
-          type="text"
           id="personnummer"
           v-model="studentForm.personnummer"
+          type="text"
           class="form-control"
           required
         />
@@ -46,8 +46,8 @@
             item-title="programName"
             item-value="_id"
             placeholder="Select program"
-            @update:modelValue="fetchAllCourses"
             class="styled-select"
+            @update:model-value="fetchAllCourses"
           />
 
           <!-- Add Individual Course to Student -->
@@ -88,6 +88,7 @@
         <label for="startDatum" class="form-label">Startdatum:</label>
         <div class="datepicker-container">
           <Datepicker
+            ref="startDatepickerRef"
             v-model="studentForm.startDatum"
             :text-input="textInputOptions"
             :format="'yyyy-MM-dd'"
@@ -96,7 +97,6 @@
             :teleport="false"
             :position="'bottom-start'"
             :enable-time-picker="false"
-            ref="startDatepickerRef"
             @keydown.enter.prevent="handleDatepickerEnter"
             @input="calculateEndDate"
           />
@@ -109,36 +109,36 @@
       <div class="mb-3">
         <label>
           <input
+            v-model="studentForm.duration"
             type="radio"
             value="5"
-            v-model="studentForm.duration"
             class="form-check-input"
-            @change="calculateEndDate"
             required
+            @change="calculateEndDate"
           />
           5 v (100%)
         </label>
         <br />
         <label>
           <input
+            v-model="studentForm.duration"
             type="radio"
             value="10"
-            v-model="studentForm.duration"
             class="form-check-input"
-            @change="calculateEndDate"
             required
+            @change="calculateEndDate"
           />
           10 v (50%)
         </label>
         <br />
         <label>
           <input
+            v-model="studentForm.duration"
             type="radio"
             value="20"
-            v-model="studentForm.duration"
             class="form-check-input"
-            @change="calculateEndDate"
             required
+            @change="calculateEndDate"
           />
           20 v (25%)
         </label>
@@ -165,9 +165,9 @@
       <div class="mb-3">
         <label for="telefon" class="form-label">Tel:</label>
         <input
-          type="text"
           id="telefon"
           v-model="studentForm.telefon"
+          type="text"
           class="form-control"
           required
         />
@@ -176,13 +176,13 @@
       <!-- Email -->
       <div class="mb-3">
         <label for="mail" class="form-label">Email:</label>
-        <input type="email" id="mail" v-model="studentForm.mail" class="form-control" required />
+        <input id="mail" v-model="studentForm.mail" type="email" class="form-control" required />
       </div>
 
       <!-- Exam -->
       <div class="mb-3">
         <label for="prov" class="form-label">Prov:</label>
-        <input type="text" id="prov" v-model="studentForm.prov" class="form-control" />
+        <input id="prov" v-model="studentForm.prov" type="text" class="form-control" />
       </div>
 
       <!-- Other Details -->
@@ -194,7 +194,7 @@
       <!-- Teacher -->
       <div class="mb-3">
         <label for="teacher" class="form-label">Lärare:</label>
-        <input type="text" id="teacher" v-model="studentForm.teacher" class="form-control" />
+        <input id="teacher" v-model="studentForm.teacher" type="text" class="form-control" />
       </div>
 
       <!-- Submit Button -->

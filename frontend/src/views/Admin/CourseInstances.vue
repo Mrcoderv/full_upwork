@@ -31,9 +31,9 @@
 
         <div class="filter-group">
           <label for="dateFilter">Period:</label>
-          <input type="date" id="startDate" v-model="filters.startDate" @change="loadInstances" />
+          <input id="startDate" v-model="filters.startDate" type="date" @change="loadInstances" />
           <span>till</span>
-          <input type="date" id="endDate" v-model="filters.endDate" @change="loadInstances" />
+          <input id="endDate" v-model="filters.endDate" type="date" @change="loadInstances" />
         </div>
 
         <div class="filter-group">
@@ -54,7 +54,7 @@
       </div>
 
       <!-- Statistics -->
-      <div class="stats-section" v-if="statistics">
+      <div v-if="statistics" class="stats-section">
         <div class="stat-card">
           <h4>Totalt antal instanser</h4>
           <p class="stat-number">{{ statistics.totalInstances }}</p>
@@ -90,11 +90,11 @@
                 Startdatum
                 <span v-if="sortKey === 'startDate'">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
               </th>
-              <th @click="setSort('endDate')" class="end-date-header">
+              <th class="end-date-header" @click="setSort('endDate')">
                 Slutdatum
                 <span v-if="sortKey === 'endDate'">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
               </th>
-              <th @click="setSort('slutprovDate')" class="end-date-header">
+              <th class="end-date-header" @click="setSort('slutprovDate')">
                 Slutprov
                 <span v-if="sortKey === 'slutprovDate'">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
               </th>
@@ -132,8 +132,8 @@
                 <span class="enrollment-count">{{ instance.enrollmentCount }}</span>
                 <button
                   class="btn btn-sm btn-outline-primary ms-2"
-                  @click="viewEnrollments(instance._id)"
                   title="Visa inskrivningar"
+                  @click="viewEnrollments(instance._id)"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -159,8 +159,8 @@
                 <div class="actions-buttons">
                   <button
                     class="btn btn-sm btn-outline-secondary"
-                    @click="editInstance(instance)"
                     title="Redigera"
+                    @click="editInstance(instance)"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -176,8 +176,8 @@
                   </button>
                   <button
                     class="btn btn-sm btn-add-student"
-                    @click="openAddStudentModal(instance)"
                     title="Lägg till student"
+                    @click="openAddStudentModal(instance)"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -190,8 +190,8 @@
                   </button>
                   <button
                     class="btn btn-sm btn-outline-danger"
-                    @click="deleteInstance(instance._id)"
                     title="Ta bort"
+                    @click="deleteInstance(instance._id)"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -213,7 +213,7 @@
       </div>
 
       <!-- Create/Edit Modal -->
-      <div class="modal fade" id="instanceModal" tabindex="-1" ref="instanceModal">
+      <div id="instanceModal" ref="instanceModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header">
@@ -271,9 +271,9 @@
                     <div class="form-group">
                       <label for="startDate">Startdatum *</label>
                       <input
-                        type="date"
                         id="startDate"
                         v-model="instanceForm.startDate"
+                        type="date"
                         class="form-control"
                         required
                         @change="handleStartDateChange"
@@ -301,9 +301,9 @@
                     <div class="form-group">
                       <label for="endDate">Slutdatum *</label>
                       <input
-                        type="date"
                         id="endDate"
                         v-model="instanceForm.endDate"
+                        type="date"
                         class="form-control"
                         required
                       />
@@ -316,9 +316,9 @@
                     <div class="form-group">
                       <label for="slutprovDate">Slutprov</label>
                       <input
-                        type="date"
                         id="slutprovDate"
                         v-model="instanceForm.slutprovDate"
+                        type="date"
                         class="form-control"
                       />
                     </div>
@@ -331,8 +331,8 @@
                           type="button"
                           class="btn btn-sm btn-outline-primary"
                           title="Lägg till assisterande lärare"
-                          @click="addAssistantTeacher"
                           :disabled="showAssistantTeacher"
+                          @click="addAssistantTeacher"
                         >
                           +
                         </button>
@@ -369,9 +369,9 @@
                     <div class="form-group">
                       <label for="courseName">Kursnamn</label>
                       <input
-                        type="text"
                         id="courseName"
                         v-model="instanceForm.courseName"
+                        type="text"
                         class="form-control"
                         placeholder="Lämna tomt för att använda huvudkursens namn"
                       />
@@ -381,9 +381,9 @@
                     <div class="form-group">
                       <label for="courseCode">Kurskod</label>
                       <input
-                        type="text"
                         id="courseCode"
                         v-model="instanceForm.courseCode"
+                        type="text"
                         class="form-control"
                         placeholder="Lämna tomt för att auto-generera (baserat på startdatum)"
                       />
@@ -398,9 +398,9 @@
                         Poäng (valfritt - ärvs från huvudkurs om tomt)
                       </label>
                       <input
-                        type="text"
                         id="coursePoints"
                         v-model="instanceForm.coursePoints"
+                        type="text"
                         class="form-control"
                         placeholder="Lämna tomt för att ärva från huvudkurs"
                       />
@@ -412,9 +412,9 @@
                         Omfattning (valfritt - ärvs från huvudkurs om tomt)
                       </label>
                       <input
-                        type="text"
                         id="courseExtent"
                         v-model="instanceForm.courseExtent"
+                        type="text"
                         class="form-control"
                         placeholder="Lämna tomt för att ärva från huvudkurs"
                       />
@@ -434,9 +434,9 @@
 
                 <div class="form-check">
                   <input
-                    type="checkbox"
                     id="isActive"
                     v-model="instanceForm.isActive"
+                    type="checkbox"
                     class="form-check-input"
                   />
                   <label class="form-check-label" for="isActive">Aktiv</label>
@@ -450,8 +450,8 @@
               <button
                 type="button"
                 class="btn btn-primary"
-                @click="saveInstance"
                 :disabled="isSaving"
+                @click="saveInstance"
               >
                 {{ isSaving ? 'Sparar...' : editingInstance ? 'Uppdatera' : 'Skapa' }}
               </button>
@@ -461,7 +461,7 @@
       </div>
 
       <!-- Add Student Modal -->
-      <div class="modal fade" id="addStudentModal" tabindex="-1" ref="addStudentModal">
+      <div id="addStudentModal" ref="addStudentModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog">
           <div class="modal-content">
             <div class="modal-header">
@@ -486,8 +486,6 @@
                   label="Sök och välj elev"
                   :loading="isSearchingStudents"
                   :search="studentSearchQuery"
-                  @update:search="searchStudents"
-                  @update:model-value="handleStudentSelect"
                   return-object
                   clearable
                   :no-data-text="
@@ -497,6 +495,8 @@
                   "
                   :menu-props="{ maxHeight: '300px', zIndex: 10000 }"
                   density="compact"
+                  @update:search="searchStudents"
+                  @update:model-value="handleStudentSelect"
                 >
                   <template #item="{ props, item }">
                     <v-list-item
@@ -540,8 +540,8 @@
               <button
                 type="button"
                 class="btn btn-primary"
-                @click="saveStudentsToInstance"
                 :disabled="selectedStudentsToAdd.length === 0 || isAddingStudents"
+                @click="saveStudentsToInstance"
               >
                 {{ isAddingStudents ? 'Sparar...' : 'Spara' }}
               </button>
@@ -551,7 +551,7 @@
       </div>
 
       <!-- Enrollments Modal -->
-      <div class="modal fade" id="enrollmentsModal" tabindex="-1" ref="enrollmentsModal">
+      <div id="enrollmentsModal" ref="enrollmentsModal" class="modal fade" tabindex="-1">
         <div class="modal-dialog modal-xl">
           <div class="modal-content">
             <div class="modal-header">
@@ -614,8 +614,8 @@
                         <button
                           v-if="enrollment.studentId && enrollment.studentId._id"
                           class="btn btn-sm btn-outline-danger ms-2"
-                          @click="deleteEnrollment(enrollment._id)"
                           title="Ta bort inskrivning"
+                          @click="deleteEnrollment(enrollment._id)"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"

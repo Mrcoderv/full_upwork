@@ -91,10 +91,10 @@
               <v-text-field
                 v-for="i in 5"
                 :key="i"
+                v-model.number="form.sectionOffsets[i - 1]"
                 :label="`Modul ${i}`"
                 type="number"
                 min="0"
-                v-model.number="form.sectionOffsets[i - 1]"
                 :error-messages="validationErrors[`offset-${i - 1}`]"
               />
             </div>

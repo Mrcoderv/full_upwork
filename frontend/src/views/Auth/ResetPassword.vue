@@ -3,7 +3,7 @@
     <h2>Återställ Lösenord</h2>
     <form @submit.prevent="handleResetPassword">
       <label for="password">Nytt lösenord:</label>
-      <input type="password" id="password" v-model="newPassword" required />
+      <input id="password" v-model="newPassword" type="password" required />
       <button type="submit">Återställ lösenord</button>
     </form>
     <p v-if="message">{{ message }}</p>

@@ -12,15 +12,15 @@
         <div class="form-grid">
           <div class="form-group">
             <label for="fornamn">Namn</label>
-            <input type="text" id="fornamn" v-model="filters.name" class="form-control" placeholder="Namn">
+            <input id="fornamn" v-model="filters.name" type="text" class="form-control" placeholder="Namn">
           </div>
           <div class="form-group">
             <label for="email">E-post</label>
-            <input type="text" id="email" v-model="filters.email" class="form-control" placeholder="E-post">
+            <input id="email" v-model="filters.email" type="text" class="form-control" placeholder="E-post">
           </div>
           <div class="form-group">
             <label for="anvandarnamn">Användarnamn</label>
-            <input type="text" id="anvandarnamn" v-model="filters.username" class="form-control" placeholder="Användarnamn">
+            <input id="anvandarnamn" v-model="filters.username" type="text" class="form-control" placeholder="Användarnamn">
           </div>
           <div class="form-group">
             <label for="hierarki">Roll</label>

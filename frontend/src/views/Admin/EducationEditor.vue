@@ -23,7 +23,7 @@
             item-value="_id"
             placeholder="Select program"
             class="styled-select"
-            @update:modelValue="fetchAllCourses"
+            @update:model-value="fetchAllCourses"
           />
         </div>
 
@@ -51,8 +51,8 @@
             :menu-props="{ closeOnContentClick: false }"
             attach
             :no-data-text="'Please write student name'"
-            @update:search="searchQuery = $event"
             class="styled-select"
+            @update:search="searchQuery = $event"
           />
         </div>
 

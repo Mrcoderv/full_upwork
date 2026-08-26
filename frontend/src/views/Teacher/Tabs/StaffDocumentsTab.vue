@@ -8,7 +8,7 @@
         <div class="document-category">
           <h4>Allmänna dokument</h4>
           <DocumentSection
-            :userData="teacher.user"
+            :user-data="teacher.user"
             user-type="teacher"
             type="GENERAL"
           />
@@ -17,7 +17,7 @@
         <div class="document-category">
           <h4>Lärardokument</h4>
           <DocumentSection
-            :userData="teacher.user"
+            :user-data="teacher.user"
             user-type="teacher"
             type="TEACHER_DOC"
           />
@@ -26,7 +26,7 @@
         <div class="document-category">
           <h4>Rapporter</h4>
           <DocumentSection
-            :userData="teacher.user"
+            :user-data="teacher.user"
             user-type="teacher"
             type="REPORT"
           />

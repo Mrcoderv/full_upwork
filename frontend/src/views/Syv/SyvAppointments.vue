@@ -30,13 +30,13 @@
 
     <!-- Pagination -->
     <div v-if="pagination.totalPages > 1">
-      <button @click="changePage(pagination.page - 1)" :disabled="pagination.page <= 1">Föregående</button>
+      <button :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">Föregående</button>
       <span>Sida {{ pagination.page }} av {{ pagination.totalPages }}</span>
-      <button @click="changePage(pagination.page + 1)" :disabled="pagination.page >= pagination.totalPages">Nästa</button>
+      <button :disabled="pagination.page >= pagination.totalPages" @click="changePage(pagination.page + 1)">Nästa</button>
     </div>
 
     <!-- Student Profile Section -->
-    <v-card class="mt-4" v-if="selectedStudent">
+    <v-card v-if="selectedStudent" class="mt-4">
       <v-card-title>
         <v-card-text>Studentprofil: {{ selectedStudent.name }}</v-card-text>
       </v-card-title>
@@ -109,7 +109,7 @@
     </v-card>
 
     <!-- Study Plan Revision Section -->
-    <v-card class="mt-4" v-if="selectedStudent">
+    <v-card v-if="selectedStudent" class="mt-4">
       <v-card-title>
         <v-card-text>Studieplanjustering</v-card-text>
       </v-card-title>
@@ -144,10 +144,10 @@
     <!-- Modal -->
     <AddMeetingModal
       v-if="isModalOpen"
-      @close="isModalOpen = false"
-      @event-added="fetchMeetings"
       :title="'Boka nytt ' + activeRole + '-samtal'"
       :booked-by-role="activeRole"
+      @close="isModalOpen = false"
+      @event-added="fetchMeetings"
     />
   </div>
 </template>
@@ -202,9 +202,6 @@ export default {
       return this.$route.meta.title || 'Samtal';
     }
   },
-  created() {
-    this.fetchMeetings();
-  },
   watch: {
     '$route'(to, from) {
       if (to.path !== from.path) {
@@ -240,6 +237,9 @@ export default {
         notes: ''
       };
     }
+  },
+  created() {
+    this.fetchMeetings();
   },
   methods: {
     formatMeetingTime(meeting) {

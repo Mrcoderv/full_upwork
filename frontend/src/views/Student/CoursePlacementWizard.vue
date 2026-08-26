@@ -106,9 +106,9 @@
             >
               <label>
                 <input
+                  v-model="excludeCourseIds"
                   type="checkbox"
                   :value="course._id"
-                  v-model="excludeCourseIds"
                 />
                 {{ course.courseName }} ({{ course.courseCode }})
               </label>
@@ -121,7 +121,7 @@
           <h4>Studietakt & period</h4>
           <div class="form-group">
             <label>Startdatum</label>
-            <input type="date" v-model="startDate" class="form-control" />
+            <input v-model="startDate" type="date" class="form-control" />
           </div>
           <div v-if="placementType === 'course'" class="form-group">
             <label>Kurslängd</label>

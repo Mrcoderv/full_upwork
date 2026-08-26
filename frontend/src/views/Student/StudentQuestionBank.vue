@@ -79,23 +79,23 @@
                   >
                     <td class="px-4 py-2">
                       <v-icon
-                        left
                         v-if="question.questionType === 'multipleChoice'"
+                        left
                       >
                         mdi-checkbox-multiple-blank
                       </v-icon>
                       <v-icon
-                        left
                         v-if="question.questionType === 'trueFalse'"
+                        left
                       >
                         mdi-checkbox-blank-circle-outline
                       </v-icon>
-                      <v-icon left v-if="question.questionType === 'essay'">
+                      <v-icon v-if="question.questionType === 'essay'" left>
                         mdi-file-document-edit
                       </v-icon>
                       <v-icon
-                        left
                         v-if="question.questionType === 'shortAnswer'"
+                        left
                       >
                         mdi-format-align-left
                       </v-icon>

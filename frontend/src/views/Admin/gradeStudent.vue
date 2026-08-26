@@ -34,8 +34,8 @@
               v-if="!item.grade"
               color="primary"
               size="small"
-              @click="setGrade(item)"
               class="me-2"
+              @click="setGrade(item)"
             >
               Sätt betyg
             </v-btn>
@@ -43,8 +43,8 @@
               v-if="item.grade && !item.locked"
               color="success"
               size="small"
-              @click="lockGrade(item)"
               class="me-2"
+              @click="lockGrade(item)"
             >
               Lås betyg
             </v-btn>
@@ -81,16 +81,16 @@
               variant="outlined"
             />
             <v-textarea
+              v-model="gradeData.reason"
               color="primary"
               variant="outlined"
-              v-model="gradeData.reason"
               label="Motivering *"
               required
             />
             <v-textarea
+              v-model="gradeData.comments"
               color="primary"
               variant="outlined"
-              v-model="gradeData.comments"
               label="Kommentar"
             />
 

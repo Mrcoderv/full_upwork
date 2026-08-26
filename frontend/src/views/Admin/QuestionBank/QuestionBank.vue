@@ -67,7 +67,7 @@
               label="Kurs *"
               dense
               outlined
-              @update:modelValue="loadPdfMeta"
+              @update:model-value="loadPdfMeta"
             />
           </v-col>
           <v-col cols="12" sm="4">
@@ -156,10 +156,10 @@
           <tbody>
             <tr v-for="question in filteredQuestions" :key="question._id">
               <td class="px-4 py-2">
-                <v-icon left v-if="question.questionType === 'multipleChoice'">mdi-checkbox-multiple-blank</v-icon>
-                <v-icon left v-if="question.questionType === 'trueFalse'">mdi-checkbox-blank-circle-outline</v-icon>
-                <v-icon left v-if="question.questionType === 'essay'">mdi-file-document-edit</v-icon>
-                <v-icon left v-if="question.questionType === 'shortAnswer'">mdi-format-align-left</v-icon>
+                <v-icon v-if="question.questionType === 'multipleChoice'" left>mdi-checkbox-multiple-blank</v-icon>
+                <v-icon v-if="question.questionType === 'trueFalse'" left>mdi-checkbox-blank-circle-outline</v-icon>
+                <v-icon v-if="question.questionType === 'essay'" left>mdi-file-document-edit</v-icon>
+                <v-icon v-if="question.questionType === 'shortAnswer'" left>mdi-format-align-left</v-icon>
                 <strong>{{ question.questionText.substring(0, 50) }}{{
                   question.questionText.length > 50 ? "..." : ""
                 }}</strong>
@@ -186,14 +186,14 @@
               </td>
               <td class="px-4 py-2">{{ formatDate(question.createdAt) }}</td>
               <td class="px-4 py-2 text-right">
-                <v-icon small @click="editQuestion(question)" title="Redigera">
+                <v-icon small title="Redigera" @click="editQuestion(question)">
                   mdi-pencil
                 </v-icon>
                 <v-icon
                   small
-                  @click="deleteQuestion(question)"
                   title="Ta bort"
                   color="red"
+                  @click="deleteQuestion(question)"
                 >
                   mdi-delete
                 </v-icon>
@@ -209,7 +209,7 @@
       </div>
     </div>
 
-    <div class="card mt-4" v-if="allCoursePdfs.length > 0">
+    <div v-if="allCoursePdfs.length > 0" class="card mt-4">
       <div class="card-header">
         <h4>PDF-filer per kurs</h4>
       </div>
@@ -243,8 +243,8 @@
                   icon
                   small
                   text
-                  @click="downloadCoursePdf(item.course._id, 'question')"
                   title="Hämta fråge-PDF"
+                  @click="downloadCoursePdf(item.course._id, 'question')"
                 >
                   <v-icon small>mdi-download</v-icon>
                 </v-btn>
@@ -253,8 +253,8 @@
                   icon
                   small
                   text
-                  @click="downloadCoursePdf(item.course._id, 'answer')"
                   title="Hämta svars-PDF"
+                  @click="downloadCoursePdf(item.course._id, 'answer')"
                 >
                   <v-icon small>mdi-download</v-icon>
                 </v-btn>
@@ -265,7 +265,7 @@
       </div>
     </div>
 
-    <div class="modal-overlay" v-if="showCreateModal">
+    <div v-if="showCreateModal" class="modal-overlay">
       <div class="modal-card">
         <v-card>
           <v-card-title>
@@ -626,20 +626,20 @@ export default {
 
     const createQuestion = async () => {
       try {
-        const optionsArray = newQuestion.options
-          ? newQuestion.options.split(",").map((o) => o.trim())
+        const optionsArray = newQuestion.value.options
+          ? newQuestion.value.options.split(",").map((o) => o.trim())
           : [];
 
         await client.post("/question-bank", {
-          questionText: newQuestion.questionText,
+          questionText: newQuestion.value.questionText,
           course: "", // Course will be set by admin
-          subject: newQuestion.subject,
-          questionType: newQuestion.questionType,
+          subject: newQuestion.value.subject,
+          questionType: newQuestion.value.questionType,
           options: optionsArray.length > 0 ? optionsArray : undefined,
-          correctAnswer: newQuestion.correctAnswer || undefined,
+          correctAnswer: newQuestion.value.correctAnswer || undefined,
           answerGuidelines: "",
-          moduleNumber: newQuestion.moduleNumber,
-          difficulty: newQuestion.difficulty,
+          moduleNumber: newQuestion.value.moduleNumber,
+          difficulty: newQuestion.value.difficulty,
         });
 
         loadQuestions();
