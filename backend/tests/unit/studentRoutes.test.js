@@ -243,8 +243,8 @@ beforeEach(() => {
     TeacherMock.findOne.mockReset();
     StudentEnrollmentQuery = {
         populate: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockReturnThis(),
         lean: vi.fn().mockResolvedValue([]),
-        sort: vi.fn().mockResolvedValue([]),
     };
     StudentEnrollmentMock.find.mockReset();
     StudentEnrollmentMock.find.mockImplementation(() => StudentEnrollmentQuery);
@@ -336,6 +336,9 @@ describe("studentRoutes router", () => {
                 name: "Avbruten Elev",
                 dropout: true,
                 teacherId: { _id: "teacher-1", name: "Läraren", email: "t@x.se" },
+                previousEnrollments: [],
+                dropoutReason: null,
+                dropoutDate: undefined,
             },
         ]);
     });

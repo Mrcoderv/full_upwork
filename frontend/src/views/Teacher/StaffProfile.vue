@@ -82,7 +82,7 @@ export default {
       { name: 'Allmänt', component: StaffGeneralTab },
       { name: 'Kurser', component: StaffCoursesTab },
       { name: 'Elever', component: StaffStudentsTab },
-      { name: 'Dokument', component: StaffDocumentsTab },
+      { name: 'Filarkiv', component: StaffDocumentsTab },
     ];
 
     const fetchProfile = async () => {

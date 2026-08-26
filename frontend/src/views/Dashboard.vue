@@ -40,7 +40,20 @@
         </div>
       </article>
 
-      <article class="panel today-panel">
+      <article v-if="role === 'student' && aplStatus" class="panel today-panel">
+        <div class="panel-heading"><div><p class="eyebrow">Arbetspraktik</p><h2>APL-status</h2></div><span class="status-pill" :style="{ background: aplColor, color: '#fff' }">{{ aplStatusLabel }}</span></div>
+        <ul class="check-list">
+          <li v-if="aplStatus.period"><span class="check-dot">✓</span><span><strong>Period</strong><small>{{ aplStatus.period }}</small></span></li>
+          <li v-if="aplStatus.workplace"><span class="check-dot">✓</span><span><strong>Arbetsplats</strong><small>{{ aplStatus.workplace }}</small></span></li>
+          <li v-if="aplStatus.supervisor"><span class="check-dot">✓</span><span><strong>Handledare</strong><small>{{ aplStatus.supervisor }}</small></span></li>
+          <li v-if="aplStatusKitLinks.length > 0" v-for="link in aplStatusKitLinks" :key="link.to">
+            <span class="check-dot">→</span>
+            <span><router-link :to="link.to"><strong>{{ link.label }}</strong></router-link><small>{{ link.description }}</small></span>
+          </li>
+        </ul>
+      </article>
+
+      <article v-else class="panel today-panel">
         <div class="panel-heading"><div><p class="eyebrow">Idag</p><h2>Din arbetsyta</h2></div><span class="status-pill">{{ roleLabel }}</span></div>
         <ul class="check-list">
           <li><span class="check-dot">1</span><span><strong>Kontrollera nya meddelanden</strong><small>Håll kommunikationen samlad i inkorgen.</small></span></li>
@@ -73,6 +86,22 @@ export default {
     const refreshing = ref(false)
     const loadError = ref('')
     const unreadCount = ref(null)
+    const aplStatus = ref(null)
+    const aplColor = computed(() => {
+      const colors = { GRAY: '#9e9e9e', BLUE: '#2196f3', YELLOW: '#ffc107', PURPLE: '#9c27b0', RED: '#f44336', GREEN: '#4caf50' }
+      return colors[aplStatus.value?.color] || '#9e9e9e'
+    })
+    const aplStatusLabel = computed(() => {
+      const labels = { GRAY: 'Inte påbörjad', BLUE: 'Pågående', YELLOW: 'Försenad', PURPLE: 'Avslutande', RED: 'Ej godkänd', GREEN: 'Godkänd' }
+      return labels[aplStatus.value?.color] || 'Okänd'
+    })
+    const aplStatusKitLinks = computed(() => {
+      if (!aplStatus.value) return []
+      const links = []
+      if (aplStatus.value.hasLogbook) links.push({ to: '/student/apl', label: 'Loggbok', description: 'Dokumentera din praktik' })
+      if (aplStatus.value.hasCv) links.push({ to: '/student/apl', label: 'CV', description: 'Visa ditt uppdaterade CV' })
+      return links
+    })
     const displayName = computed(() => user.value.name || user.value.username || user.value.email?.split('@')[0] || 'där')
     const roleLabel = computed(() => ({ student: 'Elev', teacher: 'Lärare', admin: 'Administratör', systemadmin: 'Systemadministratör', syv: 'SYV', specped: 'Specialpedagog', coordinator: 'Koordinator' }[role.value] || 'Medarbetare'))
     const greeting = computed(() => new Date().getHours() < 12 ? 'God morgon' : new Date().getHours() < 18 ? 'God eftermiddag' : 'God kväll')
@@ -89,6 +118,12 @@ export default {
         const { data } = await client.get('/notifications')
         const notifications = Array.isArray(data) ? data : data?.notifications || []
         unreadCount.value = notifications.filter((item) => !item.read && !item.isRead).length
+        if (role.value === 'student') {
+          try {
+            const { data: apl } = await client.get('/apl/my')
+            aplStatus.value = apl
+          } catch { aplStatus.value = null }
+        }
       } catch (error) {
         loadError.value = error.message || 'Försök igen eller kontakta skoladministrationen.'
       } finally {
@@ -104,7 +139,7 @@ export default {
     ])
     onMounted(loadDashboard)
 
-    return { displayName, roleLabel, greeting, primaryAction, stats, quickLinks, loading, refreshing, loadError, loadDashboard }
+    return { displayName, roleLabel, greeting, primaryAction, stats, quickLinks, loading, refreshing, loadError, loadDashboard, aplStatus, aplColor, aplStatusLabel, aplStatusKitLinks }
   },
 }
 </script>

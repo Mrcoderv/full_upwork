@@ -154,25 +154,29 @@
           </div>
         </div>
 
-        <!-- Notification icon -->
+        <!-- Notification icon + panel wrapper -->
         <div
           v-if="isLoggedIn && canSeeNotifications"
-          class="notification-icon"
-          @click="toggleNotificationPanel"
+          class="notification-wrapper"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
+          <div
+            class="notification-icon"
+            @click="toggleNotificationPanel"
           >
-            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-          <span v-if="totalNotifications > 0" class="notis-badge">{{ totalNotifications }}</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span v-if="totalNotifications > 0" class="notis-badge">{{ totalNotifications }}</span>
+          </div>
         </div>
 
         <!-- Messages icon -->
@@ -632,6 +636,7 @@
         action_plan_required: 'Åtgärdsplan krävs',
         global_action_plan_required: 'Handlingsplan krävs',
         signing_required: 'Signering krävs',
+        diploma_ready: 'Diplom klart',
         grade_locked: 'Betyg låst',
         grade_unlocked: 'Betyg upplåst',
       }
@@ -644,7 +649,9 @@
         } else if (notification.type === 'action_plan_required' && notification.meta?.studentId) {
           router.push(`/student/${notification.meta.studentId}?showActionPlan=true`)
         } else if (notification.type === 'signing_required') {
-          router.push('/admin/betygsrapporter')
+          const roles = store.getters.userRoles || []
+          const isTeacherOnly = roles.includes('teacher') && !roles.includes('admin') && !roles.includes('systemadmin')
+          router.push(isTeacherOnly ? '/signering' : '/admin/betygsrapporter')
         }
       }
 
@@ -840,6 +847,7 @@
       const menuItems = [
         { name: 'Översikt', link: '/dashboard', role: ['student', 'teacher', 'syv', 'specped', 'coordinator', 'admin', 'systemadmin'] },
         { name: 'Betygsrapporter', link: '/admin/betygsrapporter', role: ['admin', 'systemadmin'] },
+        { name: 'Betygssignering', link: '/signering', role: ['teacher', 'admin', 'systemadmin'] },
         { name: 'Betygsskalor', link: '/admin/betygsskala', role: ['admin', 'systemadmin'] },
         { name: 'Rapporter & Analys', link: '/admin/analytics', role: ['admin', 'systemadmin'] },
         { name: 'APL', link: '/apl', role: ['admin', 'teacher', 'coordinator'] },
@@ -852,7 +860,7 @@
         { name: 'Specped Samtal', link: '/specped/appointments', role: ['specped', 'admin', 'systemadmin'] },
         { name: 'Kurspaket', link: '/programsandpackages', role: 'admin' },
         { name: 'Kurser', link: '/programsandcourses', role: 'admin' },
-        { name: 'Schemaparametrar', link: '/schedule-parameters', role: 'admin' },
+        { name: 'Schemaparametrar', link: '/schedule-parameters', role: ['admin', 'systemadmin', 'teacher'] },
         { name: 'Kursmallar', link: '/course-templates', role: ['admin', 'teacher'] },
         { name: 'Kursinstanser', link: '/course-instances', role: 'admin' },
         { name: 'Kursmatchning', link: '/course-matching', role: 'admin' },
@@ -866,6 +874,8 @@
         { name: 'Betyg', link: '/betyg', role: 'teacher' },
         { name: 'Betygsuppföljning', link: '/grade-lookups', role: 'admin' },
         { name: 'Hantera Prövningar', link: '/provningar', role: 'admin' },
+        { name: 'Frågebank (Redigera)', link: '/larare/fragebank', role: ['admin', 'systemadmin', 'teacher'] },
+        { name: 'Frågebank', link: '/student/fragebank', role: 'student' },
         { name: 'Prövningar', link: '/examform', role: 'student' },
   { name: 'Mina kurser', link: '/course-cards', role: 'student' },
   { name: 'Studieassistent', link: '/chatbot', role: 'student' },
@@ -874,7 +884,7 @@
         { name: 'Vanliga frågor (Lärare)', link: '/larare/chatbot-faq', role: ['teacher'] },
         { name: 'Meddelanden', link: '/messages', role: ['student', 'teacher', 'syv', 'specped', 'admin', 'systemadmin', 'coordinator'] },
         { name: 'Aktivitetsflöde', link: '/admin/activity-feed', role: 'admin' },
-        { name: 'Kursinnehåll', link: '/admin/course-content', role: 'admin' },
+        { name: 'Kursinnehåll', link: '/admin/course-content', role: ['admin', 'systemadmin', 'teacher'] },
         { name: 'Kursstatistik (detalj)', link: '/admin/course-statistics', role: 'admin' },
         { name: 'Elevens kurskort', link: '/admin/student-course-cards', role: 'admin' },
         { name: 'Handlingsplaner', link: '/admin/action-plans', role: 'admin' },
@@ -944,7 +954,7 @@
           if (
             notisPanel.value &&
             !notisPanel.value.contains(event.target) &&
-            !event.target.closest('.notification-icon')
+            !event.target.closest('.notification-wrapper')
           ) {
             showNotisPanel.value = false
           }
@@ -1350,10 +1360,14 @@
     border: 2px solid white;
   }
 
+  .notification-wrapper {
+    position: relative;
+  }
+
   /* Notification panel */
   .notification-panel {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 0.5rem);
     right: 0;
     width: 350px;
     max-height: 400px;
@@ -1361,8 +1375,8 @@
     border: 1px solid #e5e7eb;
     border-radius: 0.5rem;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
-    overflow: hidden;
+    z-index: 100;
+    overflow: visible;
   }
 
   .notis-header {
@@ -1628,51 +1642,7 @@
     color: white;
   }
 
-  .notification-panel {
-    position: absolute;
-    top: 3.5rem;
-    right: 0;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    width: 20rem;
-    max-width: 90vw;
-    padding: 1rem;
-    box-shadow: var(--shadow-lg);
-    z-index: 1200;
-    font-family: inherit;
-  }
 
-  .notis-header {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: #333;
-  }
-
-  .notis-empty {
-    color: #999;
-    font-style: italic;
-    font-size: 14px;
-    text-align: center;
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    padding: 10px 0;
-  }
-
-  .notis-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: #f44336;
-    color: white;
-    font-size: 12px;
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 999px;
-    line-height: 1;
-  }
 
   /* Sök */
   .search-wrapper {

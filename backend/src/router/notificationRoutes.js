@@ -300,6 +300,27 @@ router.put("/notifications/:id/reset", authenticateUser, async (req, res) => {
   
   
   
+  router.put("/notifications/reset-all", authenticateUser, async (req, res) => {
+    try {
+      const mongoose = (await import("mongoose")).default;
+      const userId = mongoose.Types.ObjectId.isValid(req.user.userId)
+        ? new mongoose.Types.ObjectId(req.user.userId)
+        : req.user.userId;
+      const userIdString = userId.toString();
+
+      const result = await Notification.updateMany(
+        { resolvedByUsers: userId },
+        { $pull: { resolvedByUsers: userId } }
+      );
+
+      logger.info({ userId: userIdString, count: result.modifiedCount }, "User reset all notifications");
+      res.json({ message: "Alla notifikationer återställda", count: result.modifiedCount });
+    } catch (err) {
+      logger.error({ err }, "Error resetting all notifications");
+      res.status(500).send("Serverfel");
+    }
+  });
+
   export default router;
   
 

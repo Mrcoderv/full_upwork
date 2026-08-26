@@ -51,12 +51,12 @@ export default {
       
       // For teachers: Användare, Kurser, Dokument, Elever
       if (isTeacher) {
-        const teacherTabs = ["Användare", "Kurser", "Dokument", "Elever"];
+        const teacherTabs = ["Användare", "Kurser", "Filarkiv", "Elever"];
         return teacherTabs;
       }
       
       // For students: Användare, Studieplan, Dokument, Handlingsplan (if needed)
-      const baseTabs = ["Användare", "Studieplan", "Dokument"];
+      const baseTabs = ["Användare", "Studieplan", "Filarkiv"];
       const hasLockedF = data.value?.education?.some(
         edu => edu.grade === 'F' && edu.locked === true
       );

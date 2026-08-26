@@ -8,6 +8,7 @@ import {
 } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import app from "../../index.js";
 import Student from "../../src/models/Student.js";
@@ -17,10 +18,11 @@ import StudentEnrollment from "../../src/models/StudentEnrollment.js";
 import User from "../../src/models/User.js";
 import { connectTestDatabase, disconnectTestDatabase } from "../helpers/mongoTest.js";
 
-const buildAuthHeader = (role = "admin") => {
+const buildAuthHeader = (role = "admin", extra = {}) => {
     const token = jwt.sign(
         {
-            userId: new mongoose.Types.ObjectId().toString(),
+            userId: extra.userId || new mongoose.Types.ObjectId().toString(),
+            email: extra.email,
             role,
             roles: [role],
         },
@@ -53,6 +55,7 @@ describe("Learning Route Permission Tests", () => {
             CourseInstance.deleteMany({}),
             StudentEnrollment.deleteMany({}),
             User.deleteMany({}),
+            mongoose.model("Teacher").deleteMany({}),
         ]);
 
         // Create a student
@@ -63,20 +66,46 @@ describe("Learning Route Permission Tests", () => {
             municipality: { type: "Sollentuna" },
         });
 
+        // Create an instructor (teacher) user + profile
+        instructor = await User.create({
+            name: "Instructor",
+            email: "teacher@example.com",
+            password: await bcrypt.hash("password123", 10),
+            role: "teacher",
+        });
+
+        const teacherProfile = await mongoose.model("Teacher").create({
+            userId: instructor._id,
+            subject: "Svenska",
+        });
+
+        instructorToken = buildAuthHeader("teacher", { userId: instructor._id.toString() });
+
         // Create a course
         course = await Course.create({
             courseName: "Svenska 1",
             courseCode: "SVE101",
         });
 
-        // Create a course instance
+        // Create a course instance with responsible teacher
         courseInstance = await CourseInstance.create({
             mainCourseId: course._id,
             startDate: new Date("2026-01-01"),
             endDate: new Date("2026-06-30"),
             courseName: course.courseName,
             courseCode: course.courseCode,
-            responsibleTeacher: null,
+            responsibleTeacher: teacherProfile._id,
+            modules: [
+                {
+                    moduleNumber: 1,
+                    title: "Modul 1",
+                    instructions: "Test instructions",
+                    assignment: {
+                        title: "Uppgift 1",
+                        description: "Skriv en text",
+                    },
+                },
+            ],
         });
 
         // Enroll the student
@@ -90,29 +119,13 @@ describe("Learning Route Permission Tests", () => {
             endDate: new Date("2026-06-30"),
             status: "active",
         });
-
-        // Create an instructor (teacher)
-        instructor = await User.create({
-            name: "Instructor",
-            email: "teacher@example.com",
-            password: await bcrypt.hash("password123", 10),
-            role: "teacher",
-        });
-
-        instructorToken = buildAuthHeader("teacher");
-
-        // Add teacher profile
-        await mongoose.model("Teacher").create({
-            userId: instructor._id,
-            subject: "Svenska",
-        });
     });
 
     describe("Student permissions on learning endpoints", () => {
         it("student can access their enrolled course modules", async () => {
             const res = await request(app)
-                .get(`/learning/instances/${courseInstance._id}/modules`)
-                .set(buildAuthHeader("student"));
+                .get(`/api/learning/instances/${courseInstance._id}/modules`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }));
 
             expect(res.status).toBe(200);
             expect(res.body).toHaveProperty("success", true);
@@ -122,8 +135,8 @@ describe("Learning Route Permission Tests", () => {
 
         it("student can submit assignment", async () => {
             const res = await request(app)
-                .post(`/learning/instances/${courseInstance._id}/modules/1/submissions`)
-                .set(buildAuthHeader("student"))
+                .post(`/api/learning/instances/${courseInstance._id}/modules/1/submissions`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }))
                 .send({ submittedText: "Min inlämning för modulen" });
 
             expect(res.status).toBe(201);
@@ -132,8 +145,8 @@ describe("Learning Route Permission Tests", () => {
 
         it("student cannot submit assignment without text", async () => {
             const res = await request(app)
-                .post(`/learning/instances/${courseInstance._id}/modules/1/submissions`)
-                .set(buildAuthHeader("student"))
+                .post(`/api/learning/instances/${courseInstance._id}/modules/1/submissions`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }))
                 .send({});
 
             expect(res.status).toBe(400);
@@ -142,14 +155,14 @@ describe("Learning Route Permission Tests", () => {
         it("student can view their submission feedback", async () => {
             // First submit an assignment
             await request(app)
-                .post(`/learning/instances/${courseInstance._id}/modules/1/submissions`)
-                .set(buildAuthHeader("student"))
+                .post(`/api/learning/instances/${courseInstance._id}/modules/1/submissions`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }))
                 .send({ submittedText: "Test inlämning" });
 
             // Then check feedback (should be empty initially)
             const res = await request(app)
-                .get(`/learning/instances/${courseInstance._id}/modules`)
-                .set(buildAuthHeader("student"));
+                .get(`/api/learning/instances/${courseInstance._id}/modules`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }));
 
             expect(res.status).toBe(200);
             expect(res.body).toHaveProperty("success", true);
@@ -159,7 +172,7 @@ describe("Learning Route Permission Tests", () => {
     describe("Teacher permissions on learning endpoints", () => {
         it("teacher can view all submissions for their instance", async () => {
             const res = await request(app)
-                .get(`/learning/instances/${courseInstance._id}/submissions`)
+                .get(`/api/learning/instances/${courseInstance._id}/submissions`)
                 .set(instructorToken);
 
             expect(res.status).toBe(200);
@@ -170,15 +183,15 @@ describe("Learning Route Permission Tests", () => {
         it("teacher can set submission feedback", async () => {
             // First create a submission as student
             const submissionResp = await request(app)
-                .post(`/learning/instances/${courseInstance._id}/modules/1/submissions`)
-                .set(buildAuthHeader("student"))
+                .post(`/api/learning/instances/${courseInstance._id}/modules/1/submissions`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }))
                 .send({ submittedText: "Test inlämning för feedback" });
 
             const submissionId = submissionResp.body.submission._id;
 
             // Then set feedback as teacher
             const res = await request(app)
-                .put(`/learning/submissions/${submissionId}/feedback`)
+                .put(`/api/learning/submissions/${submissionId}/feedback`)
                 .set(instructorToken)
                 .send({ status: "godkänd", comment: "Godkänt, bra innehåll" });
 
@@ -209,7 +222,7 @@ describe("Learning Route Permission Tests", () => {
 
             // Try to set feedback - should fail since teacher doesn't own this instance
             const res = await request(app)
-                .put(`/learning/submissions/12345678-1234-5678-1234-567812345678/feedback`)
+                .put(`/api/learning/submissions/12345678-1234-5678-1234-567812345678/feedback`)
                 .set(instructorToken)
                 .send({ status: "godkänd" });
 
@@ -219,7 +232,7 @@ describe("Learning Route Permission Tests", () => {
 
         it("teacher can view pending submissions", async () => {
             const res = await request(app)
-                .get(`/learning/submissions/pending`)
+                .get(`/api/learning/submissions/pending`)
                 .set(instructorToken);
 
             expect(res.status).toBe(200);
@@ -251,8 +264,8 @@ describe("Learning Route Permission Tests", () => {
 
             // Try to get report for other student - should fail or return own data
             const res = await request(app)
-                .get(`/learning/instances/${courseInstance._id}/report/${otherStudent._id}`)
-                .set(buildAuthHeader("student"));
+                .get(`/api/learning/instances/${courseInstance._id}/report/${otherStudent._id}`)
+                .set(buildAuthHeader("student", { email: "student@example.com" }));
 
             // Student can only access their own report
             expect(res.status).toBeGreaterThanOrEqual(400);
@@ -280,7 +293,7 @@ describe("Learning Route Permission Tests", () => {
 
             // Teacher can view report for any student in their course
             const res = await request(app)
-                .get(`/learning/instances/${courseInstance._id}/report/${otherStudent._id}`)
+                .get(`/api/learning/instances/${courseInstance._id}/report/${otherStudent._id}`)
                 .set(instructorToken);
 
             expect(res.status).toBe(200);

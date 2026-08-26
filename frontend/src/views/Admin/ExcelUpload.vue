@@ -52,7 +52,13 @@
 
       <div class="controls">
         <h2>Elever</h2>
-        <input type="text" v-model="searchQuery" placeholder="Sök" class="mb-3 search-input" />
+        <div class="d-flex gap-3 mb-3 align-center flex-wrap">
+          <input type="text" v-model="searchQuery" placeholder="Sök" class="search-input" style="flex:1; min-width:200px" />
+          <select v-model="selectedTeacher" class="search-input" style="flex:0 0 240px">
+            <option value="">Alla lärare</option>
+            <option v-for="t in teachers" :key="t._id" :value="t._id">{{ t.name }}</option>
+          </select>
+        </div>
         <!-- 
         <button 
           v-if="$store.getters.isSystemAdmin" 
@@ -618,6 +624,8 @@
         file: null,
         students: [],
         searchQuery: '',
+        selectedTeacher: '',
+        teachers: [],
         selectedFileName: '',
         uploadSuccess: false,
         editingStudent: null,
@@ -654,6 +662,10 @@
             courses: student.courses || [],
           }))
           .filter((student) => {
+            if (this.selectedTeacher) {
+              const teacherId = student.teacher?._id || student.teacher
+              if (teacherId !== this.selectedTeacher) return false
+            }
             const query = this.searchQuery.toLowerCase()
             return Object.values(student).some((value) =>
               String(value).toLowerCase().includes(query)
@@ -1159,6 +1171,15 @@
         }
       },
 
+      async fetchTeachers() {
+        try {
+          const { data } = await client.get('/teachers')
+          this.teachers = Array.isArray(data) ? data : data.teachers || []
+        } catch {
+          this.teachers = []
+        }
+      },
+
       async fetchStudents() {
         console.log('📡 fetchStudents called')
 
@@ -1296,6 +1317,7 @@
     mounted() {
       this.fetchStudents()
       this.fetchEducationOptions()
+      this.fetchTeachers()
     },
   }
 </script>

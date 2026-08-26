@@ -1,12 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ── Mock dependencies before importing the module under test ──────────────
+const { AplRecordMock } = vi.hoisted(() => {
+    const Mock = vi.fn(function (doc) {
+        Object.assign(this, doc);
+        this._id = (doc && doc._id) || "mock-apl-id";
+        this.save = vi.fn().mockResolvedValue(this);
+    });
+    Mock.find = vi.fn().mockReturnValue({
+        populate: vi.fn().mockResolvedValue([]),
+        sort: vi.fn().mockReturnThis(),
+        lean: vi.fn().mockResolvedValue([]),
+    });
+    Mock.findOne = vi.fn().mockResolvedValue(null);
+    Mock.create = vi.fn().mockImplementation((doc) => Promise.resolve(new Mock(doc)));
+    return { AplRecordMock: Mock };
+});
+
 vi.mock("../../src/models/AplRecord.js", () => ({
-    default: {
-        find: vi.fn().mockReturnValue({ populate: vi.fn().mockReturnThis(), sort: vi.fn().mockReturnThis(), lean: vi.fn().mockResolvedValue([]) }),
-        findOne: vi.fn().mockResolvedValue(null),
-        create: vi.fn().mockImplementation((doc) => Promise.resolve({ _id: "mock-id", ...doc, save: vi.fn() })),
-    },
+    default: AplRecordMock,
 }));
 vi.mock("../../src/models/Student.js", () => ({
     default: {
@@ -191,11 +203,7 @@ describe("APL Status Transitions", () => {
     describe("autoTransitionStatuses", () => {
         it("returns empty when no records to process", async () => {
             AplRecord.find.mockReturnValue({
-                populate: vi.fn().mockReturnThis(),
-            });
-            // The find chain resolves to []
-            AplRecord.find.mockReturnValue({
-                populate: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([]) }),
+                populate: vi.fn().mockResolvedValue([]),
             });
 
             const result = await autoTransitionStatuses();

@@ -90,12 +90,41 @@ router.get("/grade-catalogs", authenticateUser, hasRole(ADMIN_ROLES), async (req
   }
 });
 
+// ─── Lärarens egna kataloger (utan PDF-bytes) ──────────────────────────────
+router.get("/grade-catalogs/my", authenticateUser, async (req, res) => {
+  try {
+    const teacher = await Teacher.findOne({ userId: req.user.userId }).lean();
+    if (!teacher) {
+      return res.status(404).json({ error: "Ingen lärarprofil hittades." });
+    }
+    const catalogs = await GradeCatalog.find({ teacherId: teacher._id })
+      .select("-pdf")
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean();
+    return res.status(200).json(catalogs);
+  } catch (err) {
+    logger.error({ err }, "Error listing teacher grade catalogs");
+    return res.status(500).json({ error: "Kunde inte hämta betygskatalogerna." });
+  }
+});
+
 // ─── Hämta en katalog (inkl. PDF som base64) ────────────────────────────────
-router.get("/grade-catalogs/:id", authenticateUser, hasRole(ADMIN_ROLES), async (req, res) => {
+router.get("/grade-catalogs/:id", authenticateUser, async (req, res) => {
   try {
     const catalog = await GradeCatalog.findById(req.params.id);
     if (!catalog) {
       return res.status(404).json({ error: "Betygskatalogen hittades inte." });
+    }
+    const userRoles = req.user.roles || (req.user.role ? [req.user.role] : []);
+    const isAdminUser = userRoles.some((r) => ADMIN_ROLES.includes(r));
+    let isOwner = false;
+    if (!isAdminUser) {
+      const teacher = await Teacher.findOne({ userId: req.user.userId }).lean();
+      isOwner = Boolean(teacher && String(catalog.teacherId) === String(teacher._id));
+      if (!isOwner) {
+        return res.status(403).json({ error: "Åtkast nekad." });
+      }
     }
     const obj = catalog.toObject();
     obj.pdfData = obj.pdf && obj.pdf.length ? obj.pdf.toString("base64") : null;
@@ -276,6 +305,7 @@ router.post("/grade-catalogs/:id/send", authenticateUser, hasRole(ADMIN_ROLES), 
 
   // Notis till läraren (och admins) – samma mönster som grade lock/unlock.
   try {
+    const teacherUserId = teacherRecord?.userId || undefined;
     await Notification.create({
       type: NOTIFICATION_TYPES.SIGNING_REQUIRED,
       message: `Betygskatalog för ${catalog.studentName || catalog.filename} har skickats för signering. Vänligen signera i Scrive.`,
@@ -284,8 +314,8 @@ router.post("/grade-catalogs/:id/send", authenticateUser, hasRole(ADMIN_ROLES), 
       meta: {
         studentId: catalog.studentId || undefined,
         courseId: catalog.courseId || undefined,
-        teacherId: req.user?.userId,
-        url: "/admin/betygsrapporter",
+        teacherId: teacherUserId,
+        url: "/signering",
       },
       resolved: false,
     });

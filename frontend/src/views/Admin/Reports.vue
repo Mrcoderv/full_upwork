@@ -144,7 +144,7 @@
               :disabled="!selectedInstance || !selectedStudent"
               @click="downloadReport"
             >
-              Exportera rapport
+              Exportera CSV + PDF
             </v-btn>
             <v-spacer></v-spacer>
             <v-btn
@@ -164,6 +164,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import client from '@/api/client.js'
+import { exportToCSV, exportToPDF } from '@/utils/exportUtils.js'
 
 export default {
   name: 'Reports',
@@ -240,7 +241,24 @@ export default {
     }
 
     const downloadReport = () => {
-      // TODO: implement CSV/PDF export
+      const student = filteredStudents.value.find(s => s._id === selectedStudent.value)
+      const studentName = student?.name || 'okänd'
+      const rows = tableData.value.map(item => [
+        item.moduleNumber,
+        item.status === '✓' ? 'Klart' : item.status === '✗' ? 'Ej klart' : 'Ej valt',
+        item.updatedAt ? formatDate(item.updatedAt) : 'Ej uppfört',
+      ])
+      exportToCSV(
+        `rapport-${studentName}.csv`,
+        ['Modul', 'Status', 'Senast uppdaterad'],
+        rows,
+      )
+      exportToPDF(
+        `rapport-${studentName}.pdf`,
+        `Kompletionsrapport – ${studentName}`,
+        ['Modul', 'Status', 'Senast uppdaterad'],
+        rows,
+      )
     }
 
     const resetFilters = () => {

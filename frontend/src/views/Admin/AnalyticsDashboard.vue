@@ -256,7 +256,18 @@
           <v-card class="pa-4">
             <div class="d-flex justify-space-between align-center flex-wrap mb-4">
               <h2>Betygsfördelning</h2>
-              <div>
+              <div class="d-flex align-center">
+                <v-switch
+                  v-model="showOnlyF"
+                  label="Visa endast F-betyg"
+                  density="compact"
+                  hide-details
+                  class="mr-4"
+                  color="error"
+                />
+                <div class="text-body-2 mr-4">
+                  F-andel: <strong :class="fGradePercentage > 20 ? 'text-error' : ''">{{ fGradePercentage }}%</strong>
+                </div>
                 <v-btn size="small" class="mr-2" @click="exportGradesCSV">Exportera CSV</v-btn>
                 <v-btn size="small" @click="exportGradesPDF">Exportera PDF</v-btn>
               </div>
@@ -266,11 +277,15 @@
               Ingen betygsdata för valda filter.
             </v-alert>
 
+            <v-alert v-else-if="showOnlyF && filteredGradesPerCourse.length === 0" type="info" variant="tonal">
+              Inga F-betyg för valda filter.
+            </v-alert>
+
             <template v-else>
               <v-row>
                 <v-col cols="12" md="5">
                   <h4 class="mb-2">Totalt</h4>
-                  <Doughnut v-if="grades.overall.length" :data="gradesOverallChart" :options="chartOptions" />
+                  <Doughnut v-if="filteredGradesOverall.length" :data="filteredOverallChart" :options="chartOptions" />
                 </v-col>
                 <v-col cols="12" md="7">
                   <h4 class="mb-2">Per kurs</h4>
@@ -279,7 +294,7 @@
                       <tr><th>Kurs</th><th>Fördelning</th><th class="text-right">Totalt</th></tr>
                     </thead>
                     <tbody>
-                      <tr v-for="row in grades.perCourse" :key="row.course">
+                      <tr v-for="row in filteredGradesPerCourse" :key="row.course">
                         <td>{{ row.course }}</td>
                         <td>
                           <span v-for="g in row.grades" :key="g.grade" class="mr-2">
@@ -460,6 +475,7 @@ const revenue = ref({ totalRevenue: 0, byMunicipality: [], byCourse: [] })
 const forecast = ref({ history: [], forecast: [] })
 const students = ref([])
 const grades = ref({ overall: [], perCourse: [] })
+const showOnlyF = ref(false)
 const popularCourses = ref([])
 const dropouts = ref({ byMonth: [], byCourse: [] })
 
@@ -693,6 +709,39 @@ const gradesOverallChart = computed(() => ({
     {
       backgroundColor: chartPalette,
       data: grades.value.overall.map((g) => g.count),
+    },
+  ],
+}))
+
+const filteredGradesOverall = computed(() => {
+  if (!showOnlyF.value) return grades.value.overall
+  return grades.value.overall.filter((g) => g.grade === 'F')
+})
+
+const filteredGradesPerCourse = computed(() => {
+  if (!showOnlyF.value) return grades.value.perCourse
+  return grades.value.perCourse
+    .map((row) => ({
+      ...row,
+      grades: row.grades.filter((g) => g.grade === 'F'),
+      total: row.grades.filter((g) => g.grade === 'F').reduce((s, g) => s + g.count, 0),
+    }))
+    .filter((row) => row.total > 0)
+})
+
+const fGradePercentage = computed(() => {
+  const total = grades.value.overall.reduce((s, g) => s + g.count, 0)
+  if (total === 0) return 0
+  const fCount = grades.value.overall.find((g) => g.grade === 'F')?.count || 0
+  return Math.round((fCount / total) * 100)
+})
+
+const filteredOverallChart = computed(() => ({
+  labels: filteredGradesOverall.value.map((g) => g.grade),
+  datasets: [
+    {
+      backgroundColor: chartPalette,
+      data: filteredGradesOverall.value.map((g) => g.count),
     },
   ],
 }))

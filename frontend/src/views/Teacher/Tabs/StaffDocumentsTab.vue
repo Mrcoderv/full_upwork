@@ -2,7 +2,7 @@
   <div class="staff-documents-tab">
     <div class="card">
       <div class="card-header">
-        <h3>Dokument</h3>
+        <h3>Filarkiv</h3>
       </div>
       <div class="card-body">
         <div class="document-category">

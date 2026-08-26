@@ -213,6 +213,7 @@ describe("Lärteamet admission email (#26) — end-to-end", () => {
 
     it("attaches the Lärteamet brochure when it is available", async () => {
         const brochurePath = "/tmp/opencode/test-larteamet-brochure.pdf";
+        fs.mkdirSync("/tmp/opencode", { recursive: true });
         fs.writeFileSync(brochurePath, "%PDF-1.4 test brochure");
         process.env.LARTEAMET_PDF_PATH = brochurePath;
 

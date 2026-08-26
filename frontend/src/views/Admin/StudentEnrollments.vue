@@ -166,6 +166,24 @@
                     </svg>
                   </button>
                   <button
+                    v-if="enrollment.status !== 'dropped'"
+                    class="btn btn-sm btn-outline-danger me-1"
+                    @click="deleteEnrollment(enrollment)"
+                    title="Ta bort inskrivning"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      />
+                    </svg>
+                  </button>
+                  <button
                     class="btn btn-sm btn-outline-info"
                     @click="viewHistory(enrollment)"
                     title="Visa historik"
@@ -457,6 +475,20 @@
         }
       }
 
+      const deleteEnrollment = async (enrollment) => {
+        if (!confirm('Är du säker på att du vill ta bort denna inskrivning?')) return
+        try {
+          await client.delete(
+            `/students/${selectedStudent.value._id}/enrollments/${enrollment._id}`
+          )
+          toast.success('Inskrivning borttagen.')
+          await loadEnrollments()
+        } catch (error) {
+          console.error('Error deleting enrollment:', error)
+          toast.error('Kunde inte ta bort inskrivningen.')
+        }
+      }
+
       const viewHistory = (enrollment) => {
         selectedEnrollmentHistory.value = enrollment.statusHistory || []
 
@@ -530,6 +562,7 @@
         selectStudent,
         loadEnrollments,
         editEnrollment,
+        deleteEnrollment,
         saveEnrollment,
         viewHistory,
         formatDate,

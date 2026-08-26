@@ -24,4 +24,26 @@ router.post("/apl/auto-transition", isAuthenticated, hasRole(["admin", "systemad
 router.get("/apl/eligible", isAuthenticated, hasRole(APL_ROLES), asyncHandler(getEligibleStudents));
 router.get("/apl/statistics", isAuthenticated, hasRole(APL_ROLES), asyncHandler(getStatistics));
 
+// Student can view their own APL record
+router.get("/apl/my", isAuthenticated, async (req, res) => {
+    try {
+        const Student = (await import("../models/Student.js")).default;
+        const student = await Student.findOne({ email: req.user.email }).lean();
+        if (!student) return res.status(404).json({ error: "Ingen elevprofil hittad." });
+        const AplRecord = (await import("../models/AplRecord.js")).default;
+        const record = await AplRecord.findOne({ studentId: student._id }).lean();
+        if (!record) return res.json(null);
+        res.json({
+            color: record.color || "GRAY",
+            period: record.period || null,
+            workplace: record.workplace || null,
+            supervisor: record.supervisor || null,
+            hasLogbook: Boolean(record.logbook && record.logbook.length > 0),
+            hasCv: Boolean(record.cvUrl),
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Kunde inte hämta APL-status." });
+    }
+});
+
 export default router;

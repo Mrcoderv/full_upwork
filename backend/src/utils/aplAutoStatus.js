@@ -26,11 +26,11 @@ export const APL_AUTO_RED_WEEKS = (() => {
 /** Date-driven warning bands, evaluated from most urgent to least urgent. */
 export const APL_AUTO_ORANGE_WEEKS = (() => {
     const raw = parseInt(process.env.APL_AUTO_ORANGE_WEEKS, 10);
-    return Number.isFinite(raw) && raw > APL_AUTO_RED_WEEKS ? raw : 4;
+    return Number.isFinite(raw) && raw >= APL_AUTO_RED_WEEKS ? raw : 4;
 })();
 export const APL_AUTO_YELLOW_WEEKS = (() => {
     const raw = parseInt(process.env.APL_AUTO_YELLOW_WEEKS, 10);
-    return Number.isFinite(raw) && raw > APL_AUTO_ORANGE_WEEKS ? raw : 8;
+    return Number.isFinite(raw) && raw >= APL_AUTO_ORANGE_WEEKS ? raw : 8;
 })();
 
 /** Minimum days since the APL period start that triggers "behind schedule" consideration. */

@@ -202,6 +202,39 @@ export const buildCourseCards = async (studentId) => {
         };
     }
 
+    // Attach lastAccess: most recent of lastLoginAt or last submission per student
+    try {
+        const studentIds = [...new Set(cards.map((c) => c.students?.map((s) => s._id)).flat().filter(Boolean))];
+        if (studentIds.length > 0) {
+            const users = await User.find({ _id: { $in: studentIds } }).select("lastLoginAt").lean();
+            const loginById = new Map(users.map((u) => [u._id.toString(), u.lastLoginAt || null]));
+            const lastSubs = await AssignmentSubmission.aggregate([
+                { $match: { studentId: { $in: studentIds } } },
+                { $sort: { submittedAt: -1 } },
+                { $group: { _id: "$studentId", lastSubmittedAt: { $first: "$submittedAt" } } },
+            ]);
+            const subById = new Map(lastSubs.map((s) => [s._id.toString(), s.lastSubmittedAt]));
+            for (const card of cards) {
+                let latestAccess = null;
+                for (const student of (card.students || [])) {
+                    const sid = student._id?.toString();
+                    if (!sid) continue;
+                    const loginDate = loginById.get(sid);
+                    const subDate = subById.get(sid);
+                    const candidate = loginDate && subDate
+                        ? (new Date(loginDate) > new Date(subDate) ? loginDate : subDate)
+                        : loginDate || subDate || null;
+                    if (candidate && (!latestAccess || new Date(candidate) > new Date(latestAccess))) {
+                        latestAccess = candidate;
+                    }
+                }
+                card.lastAccess = latestAccess;
+            }
+        }
+    } catch (err) {
+        logger.warn({ err }, "Failed to attach lastAccess to course cards");
+    }
+
     return cards;
 };
 

@@ -8,6 +8,7 @@ import { createGlobalNotification } from "../controllers/notificationController.
 import { normalizeMunicipalityName } from "./studentController.js";
 import Course from "../models/Course.js";
 import CourseTemplate from "../models/CourseTemplate.js";
+import TeacherScheduleParameters from "../models/TeacherScheduleParameters.js";
 import { distance } from "fastest-levenshtein";
 import { cloneModules } from "../models/courseModuleSchema.js";
 import mongoose from "mongoose";
@@ -1804,6 +1805,46 @@ export const createCourseInstance = async (req, res) => {
             }
         }
 
+        // Auto-apply teacher schedule parameters to section dates
+        let sectionDates = [];
+        if (responsibleTeacherId && parsedStartDate && duplicatedModules.length > 0) {
+            try {
+                const startMs = new Date(parsedStartDate).getTime();
+                const endMs = new Date(parsedEndDate).getTime();
+                const courseWeeks = Math.round((endMs - startMs) / (7 * 24 * 60 * 60 * 1000));
+                const lengthWeeks = [5, 10, 20].reduce((prev, curr) =>
+                    Math.abs(curr - courseWeeks) < Math.abs(prev - courseWeeks) ? curr : prev
+                );
+
+                const teacherRecord = await createOrFindTeacher(responsibleTeacherId).catch(() => null);
+                const teacherId = teacherRecord?._id || responsibleTeacherId;
+
+                const params = await TeacherScheduleParameters.findOne({
+                    teacherId,
+                    courseId: String(mainCourseId),
+                    lengthWeeks,
+                }).catch(() => null);
+
+                const offsets = params?.sectionOffsets?.length === 5
+                    ? params.sectionOffsets
+                    : { 5: [0, 1, 2, 3, 4], 10: [0, 2, 4, 6, 8], 20: [0, 4, 8, 12, 16] }[lengthWeeks] || [0, 1, 2, 3, 4];
+
+                const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+                sectionDates = offsets.map((weekOffset) => new Date(startMs + weekOffset * msPerWeek));
+
+                duplicatedModules.forEach((mod, i) => {
+                    if (i < sectionDates.length) {
+                        mod.startDate = sectionDates[i];
+                        mod.endDate = i < sectionDates.length - 1 ? sectionDates[i + 1] : new Date(parsedEndDate);
+                    }
+                });
+
+                logger.info({ courseName: finalCourseName, lengthWeeks, offsets, sectionCount: sectionDates.length }, "Auto-applied teacher schedule parameters to course card");
+            } catch (err) {
+                logger.warn({ err, courseName: finalCourseName }, "Failed to auto-apply schedule parameters — continuing without dates");
+            }
+        }
+
         // Create the course instance
         const newInstance = new CourseInstance({
             mainCourseId,
@@ -1820,6 +1861,7 @@ export const createCourseInstance = async (req, res) => {
             notes: notes || '',
             isActive: true,
             modules: duplicatedModules,
+            sectionDates,
         });
 
         await newInstance.save();
@@ -2244,8 +2286,12 @@ export const updateCourseInstanceContent = async (req, res) => {
         }
 
         // Check permissions
-        const isResponsibleTeacher = instance.responsibleTeacher &&
-            instance.responsibleTeacher.toString() === callerId;
+        let isResponsibleTeacher = false;
+        if (instance.responsibleTeacher) {
+            const Teacher = (await import("../models/Teacher.js")).default;
+            const teacher = await Teacher.findById(instance.responsibleTeacher).select("userId").lean();
+            isResponsibleTeacher = Boolean(teacher && String(teacher.userId) === String(callerId));
+        }
 
         if (!isAdmin && !isResponsibleTeacher) {
             return res.status(403).json({ error: "Saknar behörighet" });
@@ -2414,9 +2460,10 @@ export const getCourseInstanceReport = async (req, res) => {
         }
 
         // Get the student's enrollment for this instance
-        const enrollment = student.enrollments.find(
-            e => String(e.courseInstanceId) === String(instanceId)
-        );
+        const enrollment = await StudentEnrollment.findOne({
+            studentId: student._id,
+            courseInstanceId: instanceId,
+        });
 
         let completedComponents = {};
         let totalModules = 0;

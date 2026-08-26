@@ -28,6 +28,7 @@
           <article
             v-for="card in cards"
             :key="card.courseInstanceId || card.enrollmentId"
+            :id="'course-' + card.courseInstanceId"
             class="course-card"
             :class="{ 'card-active': card.isCurrentlyActive }"
           >
@@ -110,6 +111,7 @@
                   {{ downloading === getEnrollmentId(card) + '-diploma' ? 'Förbereder...' : 'Ladda ner diplom' }}
                 </button>
                 <span v-if="card.status !== 'completed'" class="document-hint">Diplom blir tillgängligt när alla krav är godkända.</span>
+                <span v-if="downloadError" class="submit-error">{{ downloadError }}</span>
               </div>
 
               <div class="activity-feed">
@@ -219,8 +221,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import client from '@/api/client.js'
+
+const route = useRoute()
 
 const loading = ref(false)
 const error = ref('')
@@ -263,20 +268,25 @@ const loadActivity = async (card) => {
   }
 }
 
+const downloadError = ref('')
+
 const downloadDocument = async (card, type) => {
   const enrollmentId = getEnrollmentId(card)
   if (!enrollmentId) return
   downloading.value = `${enrollmentId}-${type}`
+  downloadError.value = ''
   try {
     const response = await client.get(`/${type === 'certificate' ? 'study-certificate' : 'diploma'}/${enrollmentId}/pdf`, { responseType: 'blob' })
     const blobUrl = URL.createObjectURL(response.data)
     const link = document.createElement('a')
     link.href = blobUrl
     link.download = `${type === 'certificate' ? 'studieintyg' : 'diplom'}-${enrollmentId}.pdf`
+    document.body.appendChild(link)
     link.click()
-    URL.revokeObjectURL(blobUrl)
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000)
   } catch (requestError) {
-    error.value = requestError.message || `Kunde inte skapa ${type === 'certificate' ? 'studieintyget' : 'diplomet'}.`
+    downloadError.value = requestError.response?.data?.error || requestError.message || 'Kunde inte ladda ner dokumentet.'
   } finally {
     downloading.value = ''
   }
@@ -387,6 +397,17 @@ const loadCourseCards = async () => {
         loadActivity(card)
       }
     }
+
+    const selectedId = route.query.selectedCourse
+    if (selectedId) {
+      await nextTick()
+      const el = document.getElementById('course-' + selectedId)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.classList.add('card-highlight')
+        el.querySelectorAll('details').forEach((d) => { d.open = true })
+      }
+    }
   } catch (e) {
     error.value = e?.response?.data?.error || 'Kunde inte hämta kurserna.'
   } finally {
@@ -438,6 +459,11 @@ onMounted(loadCourseCards)
 
 .course-card.card-active {
   border-left-color: #16a34a;
+}
+
+.course-card.card-highlight {
+  border-left-color: #4338ca;
+  box-shadow: 0 0 0 2px #c7d2fe;
 }
 
 .course-title-row {

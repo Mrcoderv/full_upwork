@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Student from "../models/Student.js";
 import Teacher from "../models/Teacher.js";
+import User from "../models/User.js";
 import CourseInstance from "../models/CourseInstance.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import AssignmentSubmission from "../models/AssignmentSubmission.js";
@@ -353,9 +354,10 @@ export const getCourseInstanceReport = async (req, res) => {
         }
 
         // Get the student's enrollment for this instance
-        const enrollment = student.enrollments.find(
-            e => String(e.courseInstanceId) === String(instanceId)
-        );
+        const enrollment = await StudentEnrollment.findOne({
+            studentId: student._id,
+            courseInstanceId: instanceId,
+        });
 
         // Compute completion status from enrollment
         let completedComponents = {};
@@ -662,9 +664,10 @@ export const getStudentLastAccess = async (req, res) => {
         }
 
         // Get the student's enrollment for this instance
-        const enrollment = student.enrollments.find(
-            e => String(e.courseInstanceId) === String(instanceId)
-        );
+        const enrollment = await StudentEnrollment.findOne({
+            studentId: student._id,
+            courseInstanceId: instanceId,
+        });
 
         // Check last login from user model
         const user = await User.findById(student._id).select("lastLoginAt");

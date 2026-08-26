@@ -448,7 +448,7 @@
             @change="handleAplIntygChange"
           />
           <small class="text-muted">
-            Ladda upp intyget. Dokumentet visas i elevens Dokument-flik.
+            Ladda upp intyget. Dokumentet visas i elevens Filarkiv-flik.
           </small>
         </div>
       </div>
@@ -1070,7 +1070,7 @@
       console.log('📋 Education entries:', response.data.education)
 
       // Upload prior-APL intyg after the student exists, then link it to the
-      // student so the certificate is traceable in the Dokument-fliken.
+      // student so the certificate is traceable in the Filarkiv-fliken.
       if (studentForm.priorAplCompleted && aplIntygFile.value) {
         try {
           const formData = new FormData()
@@ -1087,7 +1087,7 @@
         } catch (uploadError) {
           console.error('❌ Prior-APL intyg upload failed:', uploadError)
           errorMessage.value =
-            'Eleven skapades, men intyget kunde inte laddas upp. Ladda upp det i Dokument-fliken istället.'
+            'Eleven skapades, men intyget kunde inte laddas upp. Ladda upp det i Filarkiv-fliken istället.'
         }
       }
 

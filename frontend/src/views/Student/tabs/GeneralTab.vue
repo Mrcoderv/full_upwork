@@ -183,8 +183,14 @@
           </div>
 
           <div class="info-item">
-            <label>Provlokal-anpassningar:</label>
-            <div v-if="editMode && isAdmin" class="checkbox-group">
+            <label>Provlokal-anpassningar:
+              <button
+                v-if="isSpecped && !editMode && !specpedAccommodationMode"
+                @click="enterSpecpedAccommodationMode"
+                class="btn btn-sm btn-outline-primary ms-2"
+              >Redigera</button>
+            </label>
+            <div v-if="(editMode && isAdmin) || specpedAccommodationMode" class="checkbox-group">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="editData.examAccommodations.extraTime" />
                 Extra skrivtid
@@ -203,6 +209,12 @@
                 class="form-control mt-2"
                 placeholder="Anteckningar om anpassningar"
               />
+              <div v-if="specpedAccommodationMode" class="mt-2 d-flex gap-2">
+                <button @click="saveAccommodations" class="btn btn-sm btn-success" :disabled="saving">
+                  {{ saving ? 'Sparar...' : 'Spara' }}
+                </button>
+                <button @click="cancelSpecpedAccommodationMode" class="btn btn-sm btn-secondary">Avbryt</button>
+              </div>
             </div>
             <div v-else>
               <span v-if="student.examAccommodations?.extraTime" class="badge bg-info me-1">Extra skrivtid</span>
@@ -616,8 +628,10 @@ export default {
     ];
 
     const isAdmin = computed(() => store.getters.isAdmin);
+    const isSpecped = computed(() => userRole.value === 'specped');
     const userRole = computed(() => store.getters.userRole);
     const userId = computed(() => store.getters.userId);
+    const specpedAccommodationMode = ref(false);
 
     const canComment = computed(() => ['teacher', 'admin', 'systemadmin'].includes(userRole.value));
 
@@ -679,6 +693,34 @@ export default {
     const cancelEdit = () => {
       editMode.value = false;
       initializeEditData();
+    };
+
+    const enterSpecpedAccommodationMode = () => {
+      specpedAccommodationMode.value = true;
+      initializeEditData();
+    };
+
+    const cancelSpecpedAccommodationMode = () => {
+      specpedAccommodationMode.value = false;
+      initializeEditData();
+    };
+
+    const saveAccommodations = async () => {
+      try {
+        saving.value = true;
+        await client.put(
+          `/student-details/${route.params.id}`,
+          { examAccommodations: editData.value.examAccommodations }
+        );
+        localStudent.value.examAccommodations = { ...editData.value.examAccommodations };
+        specpedAccommodationMode.value = false;
+        toast.success('Anpassningar sparade');
+      } catch (err) {
+        console.error('Error saving accommodations:', err);
+        toast.error('Kunde inte spara anpassningar');
+      } finally {
+        saving.value = false;
+      }
     };
 
     const addComment = async () => {
@@ -1001,10 +1043,31 @@ export default {
       }
     }, { immediate: true, deep: true });
 
+    const markCommentsSeen = async () => {
+      const comments = localStudent.value?.commentHistory;
+      if (!comments || comments.length === 0) return;
+      const unseen = comments.filter(c => !c.isDeleted && !(c.seenBy || []).includes(userId.value));
+      if (unseen.length === 0) return;
+      try {
+        await Promise.all(
+          unseen.map(c =>
+            client.put(`/student-details/${route.params.id}/comments/${c._id}/seen`)
+          )
+        );
+        unseen.forEach(c => {
+          if (!c.seenBy) c.seenBy = [];
+          c.seenBy.push(userId.value);
+        });
+      } catch {
+        // silent – non-critical
+      }
+    };
+
     onMounted(() => {
         initializeEditData();
         loadSupportInfo();
         loadDeviations();
+        markCommentsSeen();
     });
 
     return {
@@ -1018,6 +1081,8 @@ export default {
       editingComment,
       localStudent,
       isAdmin,
+      isSpecped,
+      specpedAccommodationMode,
       canComment,
       activeComments,
       studentPassword,
@@ -1025,6 +1090,9 @@ export default {
       toggleEditMode,
       saveChanges,
       cancelEdit,
+      enterSpecpedAccommodationMode,
+      cancelSpecpedAccommodationMode,
+      saveAccommodations,
       addComment,
       editComment,
       saveEditedComment,

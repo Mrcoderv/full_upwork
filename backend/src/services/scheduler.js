@@ -13,6 +13,7 @@
  */
 import logger from "../utils/logger.js";
 import { runInactivityScan } from "./inactivityScanner.js";
+import { runDiplomaNotificationScan } from "./diplomaNotificationScan.js";
 
 const SCAN_HOUR_UTC = (() => {
     const raw = parseInt(process.env.INACTIVITY_SCAN_HOUR_UTC, 10);
@@ -48,8 +49,13 @@ const executeScan = async () => {
             { summary },
             "Scheduled inactivity scan completed"
         );
+        try {
+            const diplomaSummary = await runDiplomaNotificationScan();
+            logger.info({ summary: diplomaSummary }, "Diploma notification scan completed");
+        } catch (err) {
+            logger.error({ err }, "Diploma notification scan failed");
+        }
     } catch (error) {
-        // runInactivityScan never throws; this is a safety net.
         logger.error({ err: error }, "Scheduled inactivity scan failed");
     } finally {
         running = false;

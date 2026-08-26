@@ -52,10 +52,10 @@ const questionSchema = new mongoose.Schema(
 
         // For multiple choice and true/false questions
         options: {
-            type: [String], // Array of option texts (e.g., ["A", "B", "C", "D"] or the actual text)
+            type: [String],
             validate: {
                 validator: function (options) {
-                    // Only required for certain question types
+                    if (!options || options.length === 0) return true;
                     return this.questionType !== "essay" && this.questionType !== "shortAnswer";
                 },
                 message: "Options are only supported for multipleChoice and trueFalse question types",

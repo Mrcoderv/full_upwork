@@ -241,7 +241,7 @@ export default {
         const hasCompleted = student.value.enrollments.some(e => e.status === 'completed');
         if (hasCompleted) {
           allTabs.push({
-            name: 'Dokument',
+            name: 'Filarkiv',
             component: DocumentsTab,
             alwaysShow: false,
             description: 'Genererade intygg och diplom',

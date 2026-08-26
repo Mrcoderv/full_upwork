@@ -35,8 +35,9 @@
             clearable
           />
         </v-col>
-        <v-col cols="12" md="2" class="d-flex align-center">
+        <v-col cols="12" md="2" class="d-flex align-center gap-2">
           <v-btn color="primary" @click="openForm()">Registrera Ny</v-btn>
+          <v-btn color="secondary" variant="outlined" @click="showImport = true">Importera</v-btn>
         </v-col>
       </v-row>
 
@@ -86,6 +87,53 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+
+      <!-- Import Dialog -->
+      <v-dialog v-model="showImport" max-width="550px" persistent>
+        <v-card>
+          <v-card-title>Importera prövningar</v-card-title>
+          <v-card-text>
+            <div
+              class="import-dropzone"
+              :class="{ 'dropzone-hover': isDragging }"
+              @dragover.prevent="isDragging = true"
+              @dragleave.prevent="isDragging = false"
+              @drop.prevent="handleDrop"
+            >
+              <v-icon size="48" color="grey">mdi-cloud-upload-outline</v-icon>
+              <p class="mt-2 mb-1"><strong>Dra och släpp</strong> en CSV- eller Excel-fil här</p>
+              <p class="text-caption text-grey">eller</p>
+              <v-btn size="small" variant="outlined" @click="$refs.fileInput.click()">Välj fil</v-btn>
+              <input
+                ref="fileInput"
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                class="d-none"
+                @change="handleFileSelect"
+              />
+            </div>
+            <div v-if="importFile" class="mt-3">
+              <v-chip closable @click:close="importFile = null">
+                <v-icon start>mdi-file-document</v-icon>
+                {{ importFile.name }}
+              </v-chip>
+            </div>
+            <v-alert v-if="importResult" :type="importResult.success ? 'success' : 'error'" class="mt-3" density="compact">
+              {{ importResult.message }}
+              <div v-if="importResult.skipped?.length" class="mt-1 text-caption">
+                Spragna rader: {{ importResult.skipped.length }} (t.ex. dubletter eller saknade fält)
+              </div>
+            </v-alert>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn text @click="closeImport()">Avbryt</v-btn>
+            <v-btn color="primary" :disabled="!importFile || importing" :loading="importing" @click="submitImport()">
+              Importera
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </v-container>
   </div>
 </template>
@@ -103,6 +151,11 @@ const currentExam = ref({})
 const searchQuery = ref('')
 const filterStatus = ref('')
 const filterMonth = ref('')
+const showImport = ref(false)
+const importFile = ref(null)
+const isDragging = ref(false)
+const importing = ref(false)
+const importResult = ref(null)
 
 const headers = [
   { title: 'Namn', key: 'name' },
@@ -194,5 +247,85 @@ const deleteExam = async (id) => {
   }
 }
 
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) setImportFile(file)
+}
+
+const handleDrop = (event) => {
+  isDragging.value = false
+  const file = event.dataTransfer.files[0]
+  if (file) setImportFile(file)
+}
+
+const setImportFile = (file) => {
+  const ext = file.name.split('.').pop().toLowerCase()
+  if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+    toast.error('Endast CSV och Excel-filer är tillåtna')
+    return
+  }
+  importFile.value = file
+  importResult.value = null
+}
+
+const closeImport = () => {
+  showImport.value = false
+  importFile.value = null
+  importResult.value = null
+  isDragging.value = false
+}
+
+const submitImport = async () => {
+  if (!importFile.value) return
+  importing.value = true
+  importResult.value = null
+
+  try {
+    const ext = importFile.value.name.split('.').pop().toLowerCase()
+    const type = ext === 'csv' ? 'csv' : 'excel'
+    let fileData
+
+    if (type === 'csv') {
+      fileData = await importFile.value.text()
+    } else {
+      const buffer = await importFile.value.arrayBuffer()
+      fileData = Array.from(new Uint8Array(buffer))
+    }
+
+    const { data } = await client.post('/exams/import', { file: fileData, type })
+    importResult.value = data
+    if (data.saved?.length) {
+      toast.success(`Import klar: ${data.saved.length} sparade`)
+      fetchExams()
+    }
+  } catch (err) {
+    importResult.value = {
+      success: false,
+      message: err.response?.data?.error || 'Kunde inte importera filen',
+    }
+  } finally {
+    importing.value = false
+  }
+}
+
 onMounted(fetchExams)
 </script>
+
+<style scoped>
+.import-dropzone {
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.import-dropzone:hover,
+.import-dropzone.dropzone-hover {
+  border-color: #1976d2;
+  background: rgba(25, 118, 210, 0.04);
+}
+.gap-2 {
+  gap: 8px;
+}
+</style>

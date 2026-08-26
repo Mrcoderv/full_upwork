@@ -303,7 +303,7 @@ describe("POST /api/grade-catalogs/:id/send", () => {
     const notif = Notification.create.mock.calls[0][0];
     expect(notif.type).toBe("signing_required");
     expect(notif.message).toContain("Anna");
-    expect(notif.meta.url).toBe("/admin/betygsrapporter");
+    expect(notif.meta.url).toBe("/signering");
     expect(notif.resolved).toBe(false);
 
     expect(doc.status).toBe("pending");

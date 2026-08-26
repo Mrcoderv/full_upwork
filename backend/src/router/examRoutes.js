@@ -2635,16 +2635,42 @@ router.post(
                 return res.status(400).json({ error: "Fil krävs" });
             }
 
-            let parsed;
+            let parsed = [];
             if (type === "csv") {
-                const { parse } = await import("csv/sync");
-                parsed = parse(file, { headers: true, skipEmptyLines: true });
+                const text = typeof file === "string" ? file : Buffer.from(file).toString("utf-8");
+                const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+                if (lines.length > 1) {
+                    const headers = lines[0].split(",").map((h) => h.trim().replace(/^["']|["']$/g, ""));
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(",").map((v) => v.trim().replace(/^["']|["']$/g, ""));
+                        const rowObj = {};
+                        headers.forEach((header, idx) => {
+                            rowObj[header] = values[idx] !== undefined ? values[idx] : "";
+                        });
+                        parsed.push(rowObj);
+                    }
+                }
             } else if (type === "excel") {
-                const { parse } = await import("exceljs");
-                const workbook = new exceljs.Workbook();
-                await workbook.xlsx.load(file);
+                const ExcelJS = (await import("exceljs")).default;
+                const workbook = new ExcelJS.Workbook();
+                const buffer = Buffer.isBuffer(file) ? file : Buffer.from(file, "base64");
+                await workbook.xlsx.load(buffer);
                 const worksheet = workbook.getWorksheet(1);
-                parsed = worksheet.getRows();
+                if (worksheet) {
+                    const headers = [];
+                    worksheet.getRow(1).eachCell((cell, colNumber) => {
+                        headers[colNumber] = cell.value ? String(cell.value).trim() : `col_${colNumber}`;
+                    });
+                    worksheet.eachRow((row, rowNumber) => {
+                        if (rowNumber === 1) return;
+                        const rowObj = {};
+                        row.eachCell((cell, colNumber) => {
+                            const header = headers[colNumber] || `col_${colNumber}`;
+                            rowObj[header] = cell.value;
+                        });
+                        parsed.push(rowObj);
+                    });
+                }
             } else {
                 return res.status(400).json({ error: "Ogiltigt filformat. Använd csv eller excel." });
             }

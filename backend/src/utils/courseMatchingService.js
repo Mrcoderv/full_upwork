@@ -468,37 +468,37 @@ class CourseMatchingService {
 
         const studentDoc = await Student.findById(studentId);
         if (!studentDoc) {
-            logger.error({ studentId }, "Student not found when creating learning kit");
-            return;
-        }
-
-        // Check if a learning kit already exists for this course
-        const existingKit = studentDoc.logbook.find(
-            kit => kit.title && kit.title.includes("Introduktionskit")
-        );
-
-        if (existingKit) {
-            logger.debug({ kitId: existingKit._id }, "Learning kit already exists for student");
+            logger.debug({ studentId }, "Student not found when creating learning kit (skipped)");
         } else {
-            // Create a new learning kit for the student
-            const newKitId = new mongoose.Types.ObjectId();
+            // Check if a learning kit already exists for this course
+            const existingKit = studentDoc.logbook?.find(
+                kit => kit.title && kit.title.includes("Introduktionskit")
+            );
 
-            const learningKit = {
-                id: newKitId,
-                title: "Introduktionskit",
-                description: `Introduktionskit för ${entry.name || "kursen"}`,
-                startDate: new Date(), // Today - when the kit was sent
-                endDate: null, // Will be set when placement ends
-                status: "pending", // Initially pending, becomes "active" when student starts
-                placementId: null,
-                coursePackageId: null,
-            };
+            if (existingKit) {
+                logger.debug({ kitId: existingKit._id }, "Learning kit already exists for student");
+            } else {
+                // Create a new learning kit for the student
+                const newKitId = new mongoose.Types.ObjectId();
 
-            // Add to logbook
-            studentDoc.logbook.unshift(learningKit);
-            await studentDoc.save();
+                const learningKit = {
+                    id: newKitId,
+                    title: "Introduktionskit",
+                    description: `Introduktionskit för ${entry.name || "kursen"}`,
+                    startDate: new Date(), // Today - when the kit was sent
+                    endDate: null, // Will be set when placement ends
+                    status: "pending", // Initially pending, becomes "active" when student starts
+                    placementId: null,
+                    coursePackageId: null,
+                };
 
-            logger.info({ studentId, kitTitle: learningKit.title }, "Created learning kit in student logbook");
+                // Add to logbook
+                if (!studentDoc.logbook) studentDoc.logbook = [];
+                studentDoc.logbook.unshift(learningKit);
+                await studentDoc.save();
+
+                logger.info({ studentId, kitTitle: learningKit.title }, "Created learning kit in student logbook");
+            }
         }
     } catch (kitError) {
         logger.error({ err: kitError, studentId }, "Error creating learning kit");

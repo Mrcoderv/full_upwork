@@ -173,6 +173,7 @@ describe("resolveLarteametBrochure", () => {
 
   it("resolves the brochure via LARTEAMET_PDF_PATH", () => {
     const file = "/tmp/opencode/folder-om-larteamet.pdf";
+    fs.mkdirSync("/tmp/opencode", { recursive: true });
     fs.writeFileSync(file, "%PDF-1.4 test");
     process.env.LARTEAMET_PDF_PATH = file;
 
@@ -260,6 +261,7 @@ describe("maybeSendLarteametEmail", () => {
   it("attaches the Lärteamet brochure when it is available", async () => {
     process.env.GOOGLE_PWD = "real-app-password-1234";
     const file = "/tmp/opencode/folder-om-larteamet.pdf";
+    fs.mkdirSync("/tmp/opencode", { recursive: true });
     fs.writeFileSync(file, "%PDF-1.4 test brochure");
     process.env.LARTEAMET_PDF_PATH = file;
     const student = { name: "Emma Ek", email: "emma@sollentuna.se", municipality: SOLLENTUNA_MUNICIPALITY };

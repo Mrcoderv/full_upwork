@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 import Question from "../../src/models/Question.js";
 import ExamAttempt from "../../src/models/ExamAttempt.js";
 import Course from "../../src/models/Course.js";
@@ -10,9 +11,20 @@ import User from "../../src/models/User.js";
 import app from "../../index.js";
 import { connectTestDatabase, disconnectTestDatabase } from "../helpers/mongoTest.js";
 
+const buildAuthHeader = (role = "admin") => {
+    const token = jwt.sign(
+        { userId: new mongoose.Types.ObjectId().toString(), role, roles: [role] },
+        process.env.JWT_SECRET || "test-secret"
+    );
+    return { Authorization: `Bearer ${token}` };
+};
+
+const adminUser = () => ({ userId: new mongoose.Types.ObjectId().toString(), role: "admin", roles: ["admin"] });
+
 describe("Question Bank Routes", () => {
     beforeAll(async () => {
         await connectTestDatabase();
+        process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
     }, 60000);
 
     afterAll(async () => {
@@ -39,11 +51,6 @@ describe("Question Bank Routes", () => {
             Teacher.deleteMany({}),
             User.deleteMany({}),
         ]);
-        vi.restoreAllMocks();
-    });
-
-    const authHeaders = (role) => ({
-        "x-test-user-role": role,
     });
 
     it("fetches all questions", async () => {
@@ -59,14 +66,15 @@ describe("Question Bank Routes", () => {
             questionType: "multipleChoice",
             options: ["Stockholm", "Göteborg", "Malmö", "Umeå"],
             correctAnswer: "Stockholm",
+            createdBy: adminUser().userId,
         });
 
         const response = await request(app)
-            .get("/question-bank")
-            .set(authHeaders("admin"));
+            .get("/api/question-bank")
+            .set(buildAuthHeader("admin"));
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
-        expect(response.body.questions).toBeArrayOfLength(1);
+        expect(response.body.questions).toHaveLength(1);
         expect(response.body.total).toBe(1);
     });
 
@@ -81,11 +89,12 @@ describe("Question Bank Routes", () => {
             course: course._id,
             subject: "Samhällskunskap",
             questionType: "essay",
+            createdBy: adminUser().userId,
         });
 
         const response = await request(app)
-            .get("/question-bank?subject=Samhällskunskap")
-            .set(authHeaders("admin"));
+            .get("/api/question-bank?subject=Samhällskunskap")
+            .set(buildAuthHeader("admin"));
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
         expect(response.body.total).toBe(1);
@@ -98,8 +107,8 @@ describe("Question Bank Routes", () => {
         });
 
         const response = await request(app)
-            .post("/question-bank")
-            .set(authHeaders("admin"))
+            .post("/api/question-bank")
+            .set(buildAuthHeader("admin"))
             .send({
                 questionText: "Vad är 2 + 2?",
                 course: course._id,
@@ -127,11 +136,12 @@ describe("Question Bank Routes", () => {
             questionType: "multipleChoice",
             options: ["Stockholm", "Göteborg", "Malmö", "Umeå"],
             correctAnswer: "Stockholm",
+            createdBy: adminUser().userId,
         });
 
         const response = await request(app)
-            .post("/question-bank/generate-exam")
-            .set(authHeaders("admin"))
+            .post("/api/question-bank/generate-exam")
+            .set(buildAuthHeader("admin"))
             .send({
                 courseId: course._id,
                 numberOfQuestions: 1,
@@ -151,8 +161,8 @@ describe("Question Bank Routes", () => {
         });
 
         const response = await request(app)
-            .post("/question-bank/generate-exam")
-            .set(authHeaders("admin"))
+            .post("/api/question-bank/generate-exam")
+            .set(buildAuthHeader("admin"))
             .send({
                 courseId: course._id,
                 numberOfQuestions: 5,
@@ -164,11 +174,12 @@ describe("Question Bank Routes", () => {
 
     it("fetches exam attempts", async () => {
         const response = await request(app)
-            .get("/question-bank/exam-attempts")
-            .set(authHeaders("admin"));
+            .get("/api/question-bank/exam-attempts")
+            .set(buildAuthHeader("admin"));
 
+        // Temporarily expose the actual response for debugging
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
-        expect(response.body.examAttempts).toBeArray();
+        expect(Array.isArray(response.body.examAttempts)).toBe(true);
     });
 });

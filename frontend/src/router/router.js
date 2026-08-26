@@ -210,7 +210,7 @@ const routes = [
     path: '/schedule-parameters',
     name: 'ScheduleParameters',
     component: ScheduleParameters,
-    meta: { title: 'Schemaparametrar', role: 'admin' },
+    meta: { title: 'Schemaparametrar', role: ['admin', 'systemadmin', 'teacher'] },
   },
   {
     path: '/grade-lookups',
@@ -277,6 +277,12 @@ const routes = [
     name: 'Betygsrapporter',
     component: () => import('@/views/Admin/Betygsrapporter.vue'),
     meta: { title: 'Betygsrapporter', role: ['admin', 'systemadmin'] },
+  },
+  {
+    path: '/signering',
+    name: 'TeacherSigning',
+    component: () => import('@/views/Teacher/TeacherSigningView.vue'),
+    meta: { title: 'Betygssignering', role: ['teacher', 'admin', 'systemadmin'] },
   },
   {
     path: '/admin/analytics',
@@ -397,10 +403,23 @@ const routes = [
   },
 
   {
+    path: '/larare/fragebank',
+    name: 'QuestionBank',
+    component: () => import('@/views/Admin/QuestionBank/QuestionBank.vue'),
+    meta: { title: 'Frågebank', role: ['admin', 'systemadmin', 'teacher'] },
+  },
+
+  {
     path: '/course-cards',
     name: 'CourseCards',
     component: CourseCards,
     meta: { title: 'Mina kurser', role: 'student' },
+  },
+  {
+    path: '/student/fragebank',
+    name: 'StudentQuestionBank',
+    component: () => import('@/views/Student/StudentQuestionBank.vue'),
+    meta: { title: 'Frågebank', role: 'student' },
   },
   {
     path: '/chatbot',
@@ -449,7 +468,7 @@ const routes = [
     path: '/admin/course-content',
     name: 'CourseContentEditor',
     component: CourseContentEditor,
-    meta: { title: 'Kursinnehåll', role: 'admin' },
+    meta: { title: 'Kursinnehåll', role: ['admin', 'systemadmin', 'teacher'] },
   },
   // Admin Category A – Extended Course Statistics
   {

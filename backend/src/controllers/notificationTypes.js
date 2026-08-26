@@ -37,6 +37,9 @@ const NOTIFICATION_TYPES = {
     // 👷 APL-status
     APL_WARNING: "apl_warning", // T.ex. röd varning – praktik snart slut
     APL_COMPLETE: "apl_complete", // Praktik avslutad
+
+    // 🎓 Diploma
+    DIPLOMA_READY: "diploma_ready", // Alla kurser + APL klara — diplom kan genereras
   
     // 🧹 Annat/metodiskt
     SYSTEM_ALERT: "system_alert", // För generella systemmeddelanden

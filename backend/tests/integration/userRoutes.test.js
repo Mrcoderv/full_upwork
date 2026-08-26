@@ -20,6 +20,14 @@ import {
 } from "../helpers/mongoTest.js";
 
 describe("User Routes", () => {
+    const buildAdminAuth = () => {
+        const token = jwt.sign(
+            { userId: new mongoose.Types.ObjectId().toString(), role: "admin", roles: ["admin"] },
+            process.env.JWT_SECRET || "test-secret"
+        );
+        return { Authorization: `Bearer ${token}` };
+    };
+
     beforeAll(async () => {
         await connectTestDatabase();
         process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
@@ -42,6 +50,7 @@ describe("User Routes", () => {
         it("rejects missing fields", async () => {
             const response = await request(app)
                 .post("/api/register")
+                .set(buildAdminAuth())
                 .send({ email: "user@example.com", password: "Secret123" })
                 .expect(400);
 
@@ -59,6 +68,7 @@ describe("User Routes", () => {
 
             const response = await request(app)
                 .post("/api/register")
+                .set(buildAdminAuth())
                 .send({
                     name: "Existing User",
                     email: "user@example.com",
@@ -75,6 +85,7 @@ describe("User Routes", () => {
         it("creates a new user with a hashed password", async () => {
             const response = await request(app)
                 .post("/api/register")
+                .set(buildAdminAuth())
                 .send({
                     name: "New User",
                     email: "new@example.com",
@@ -99,6 +110,7 @@ describe("User Routes", () => {
 
             const response = await request(app)
                 .post("/api/register")
+                .set(buildAdminAuth())
                 .send({
                     name: "New User",
                     email: "new@example.com",

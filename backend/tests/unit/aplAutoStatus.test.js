@@ -129,6 +129,8 @@ describe("computeAplEffectiveStatus", () => {
     it("reads the threshold from APL_AUTO_RED_WEEKS env when set", async () => {
         vi.resetModules();
         process.env.APL_AUTO_RED_WEEKS = "1";
+        process.env.APL_AUTO_ORANGE_WEEKS = "2";
+        process.env.APL_AUTO_YELLOW_WEEKS = "2";
         const fresh = await import("../../src/utils/aplAutoStatus.js");
         const result = fresh.computeAplEffectiveStatus(
             "GRAY",
@@ -139,5 +141,7 @@ describe("computeAplEffectiveStatus", () => {
         expect(result.aplStatus).toBe("GRAY");
         expect(result.aplAutoRed).toBe(false);
         delete process.env.APL_AUTO_RED_WEEKS;
+        delete process.env.APL_AUTO_ORANGE_WEEKS;
+        delete process.env.APL_AUTO_YELLOW_WEEKS;
     });
 });

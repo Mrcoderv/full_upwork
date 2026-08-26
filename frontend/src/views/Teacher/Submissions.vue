@@ -74,6 +74,30 @@
             </span>
           </div>
         </div>
+
+        <!-- Comment thread -->
+        <div class="comment-thread" v-if="submissionComments[submission._id]?.length > 0">
+          <h4 class="thread-title">Kommentarer</h4>
+          <div v-for="comment in submissionComments[submission._id]" :key="comment.id" class="thread-comment">
+            <span class="thread-meta">{{ formatDateTime(comment.at) }}</span>
+            <p class="thread-text">{{ comment.text }}</p>
+          </div>
+        </div>
+        <div class="comment-thread-form">
+          <input
+            v-model="newSubmissionComment[submission._id]"
+            class="comment-input"
+            placeholder="Lägg till kommentar..."
+            @keyup.enter="postSubmissionComment(submission)"
+          />
+          <button
+            class="save-btn save-btn-sm"
+            :disabled="!newSubmissionComment[submission._id]?.trim() || !!commentSaving[submission._id]"
+            @click="postSubmissionComment(submission)"
+          >
+            {{ commentSaving[submission._id] ? 'Skickar...' : 'Kommentera' }}
+          </button>
+        </div>
       </article>
     </div>
   </div>
@@ -91,6 +115,9 @@ const feedbackStatus = reactive({})
 const feedbackComment = reactive({})
 const feedbackError = reactive({})
 const saving = reactive({})
+const submissionComments = reactive({})
+const newSubmissionComment = reactive({})
+const commentSaving = reactive({})
 
 const courses = computed(() => {
   const map = new Map()
@@ -180,11 +207,37 @@ const loadSubmissions = async () => {
     for (const submission of submissions.value) {
       feedbackStatus[submission._id] = submission.feedback?.status || ''
       feedbackComment[submission._id] = submission.feedback?.comment || ''
+      loadSubmissionComments(submission._id)
     }
   } catch (e) {
     error.value = e?.response?.data?.error || 'Kunde inte hämta inlämningarna.'
   } finally {
     loading.value = false
+  }
+}
+
+const loadSubmissionComments = async (submissionId) => {
+  try {
+    const { data } = await client.get(`/learning/submissions/${submissionId}/comments`)
+    submissionComments[submissionId] = data.comments || []
+  } catch {
+    submissionComments[submissionId] = []
+  }
+}
+
+const postSubmissionComment = async (submission) => {
+  const id = submission._id
+  const text = (newSubmissionComment[id] || '').trim()
+  if (!text) return
+  commentSaving[id] = true
+  try {
+    const { data } = await client.post(`/learning/submissions/${id}/comments`, { text })
+    submissionComments[id] = data.comments || []
+    newSubmissionComment[id] = ''
+  } catch {
+    feedbackError[id] = 'Kunde inte lägga till kommentar.'
+  } finally {
+    commentSaving[id] = false
   }
 }
 
@@ -360,5 +413,53 @@ onMounted(loadSubmissions)
 .feedback-error {
   font-size: 0.8rem;
   color: #b91c1c;
+}
+
+.comment-thread {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.thread-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.5rem;
+}
+
+.thread-comment {
+  padding: 0.4rem 0;
+}
+
+.thread-meta {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.thread-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.comment-thread-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.comment-input {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.35rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.save-btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
 }
 </style>

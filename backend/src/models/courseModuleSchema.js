@@ -26,6 +26,9 @@ export const courseModuleSchema = new mongoose.Schema(
             title: { type: String, default: "" },
             description: { type: String, default: "" },
         },
+        // Scheduled dates (auto-applied from teacher schedule parameters)
+        startDate: { type: Date },
+        endDate: { type: Date },
     },
     { _id: false }
 );
