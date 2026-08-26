@@ -35,9 +35,7 @@
     try {
       const res = await client.get('/students/earnings')
       students.value = res.data
-      console.log('Loaded students:', students.value) // ✅ DEBUG
     } catch (err) {
-      console.error('❌ Failed to load student data:', err)
       toast.error('Kunde inte ladda elevdata.')
     }
   })

@@ -175,7 +175,8 @@ export default {
       required: true,
     },
   },
-  setup(props) {
+  emits: ['user-created'],
+  setup(props, { emit }) {
     const store = useStore();
     const route = useRoute();
     const toast = useToast();
@@ -283,12 +284,9 @@ export default {
         });
         
         createdUserPassword.value = response.data.tempPassword;
-        
-        // Reload student data to get the new user
-        // Emit event to parent to reload
-        window.location.reload(); // Simple reload for now
+
+        emit('user-created');
       } catch (error) {
-        console.error('Error creating user:', error);
         toast.error('Kunde inte skapa användare. ' + error.message);
       } finally {
         isCreatingUser.value = false;

@@ -12,6 +12,8 @@
 </template>
 
 <script>
+import { useStore } from 'vuex'
+
 export default {
   name: 'MessageInput',
   props: {
@@ -24,6 +26,11 @@ export default {
       draft: '',
     }
   },
+  computed: {
+    currentUser() {
+      return this.$store.getters.user || {}
+    },
+  },
   methods: {
     send() {
       const text = this.draft.trim()
@@ -31,8 +38,8 @@ export default {
       this.$emit('send-message', {
         _id: 'm' + Date.now(),
         body: text,
-        senderId: 'currentUser',
-        senderRole: 'user',
+        senderId: this.currentUser._id || this.currentUser.id || 'currentUser',
+        senderRole: this.currentUser.role || 'user',
         createdAt: new Date(),
         readBy: [],
       })

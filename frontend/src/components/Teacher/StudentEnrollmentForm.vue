@@ -267,6 +267,10 @@ const submitForm = async () => {
       // Handle success
       toast.success('Eleven har anmälts till kursen framgångsrikt!');
       
+      // Save APL status before reset (if changed from default)
+      const previousAplStatus = aplStatus.value;
+      const previousStudentId = selectedStudent.value?._id;
+
       // Reset form
       selectedStudent.value = null;
       selectedCourseInstance.value = null;
@@ -278,9 +282,9 @@ const submitForm = async () => {
       aplStatus.value = 'GRAY';
       studentSearchQuery.value = '';
       courseInstanceSearchQuery.value = '';
-      
-      if (aplStatus.value !== 'GRAY') {
-        await client.patch(`/students/${selectedStudent.value._id}`, { aplStatus: aplStatus.value });
+
+      if (previousAplStatus !== 'GRAY' && previousStudentId) {
+        await client.patch(`/students/${previousStudentId}`, { aplStatus: previousAplStatus });
       }
 
   } catch (error) {

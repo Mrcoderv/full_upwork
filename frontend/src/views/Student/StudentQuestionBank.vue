@@ -188,17 +188,27 @@ export default {
           activeTab.value = 0;
         }
       } catch (error) {
-        console.error("Error loading student question bank:", error);
       } finally {
         loading.value = false;
       }
     };
 
-    const downloadPdf = (courseId, type) => {
-      window.open(
-        `/api/question-bank/pdfs/${type}/download?course=${courseId}`,
-        "_blank"
-      );
+    const downloadPdf = async (courseId, type) => {
+      try {
+        const response = await client.get(
+          `/question-bank/pdfs/${type}/download`,
+          { params: { course: courseId }, responseType: 'blob' }
+        );
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `fragebank-${type}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+      }
     };
 
     loadCourses();

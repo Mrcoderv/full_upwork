@@ -146,10 +146,6 @@
         }
       }
 
-      // Debug logs to verify filename extraction
-      console.log('Content-Disposition:', disposition)
-      console.log('Extracted filename:', filename)
-
       const blobUrl = window.URL.createObjectURL(res.data)
       const link = document.createElement('a')
       link.href = blobUrl

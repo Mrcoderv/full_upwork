@@ -83,7 +83,6 @@ const fetchAllFiles = async () => {
   loading.value = true;
   try {
     const { data } = await client.get('/uploads/all/apl');
-    console.log(`✅ Fetched ${data?.length || 0} students with APL files:`, data);
     studentsWithFiles.value = data || [];
   } catch (err) {
     console.error('❌ Failed to fetch all APL files:', err);

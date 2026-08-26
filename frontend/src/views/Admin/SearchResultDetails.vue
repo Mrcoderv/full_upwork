@@ -37,7 +37,7 @@ import CoursesTab from "@/views/Admin/SearchTabs/CoursesTab.vue";
 
 
 export default {
-  components: { AccountTab, StudyPlan, DocumentSection, StudentsTab, CoursesTab },
+  components: { AccountTab, StudyPlan, DocumentSection, ActionPlanTab, StudentsTab, CoursesTab },
   setup() {
     const route = useRoute();
     const router = useRouter();

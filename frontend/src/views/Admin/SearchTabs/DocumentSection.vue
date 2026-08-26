@@ -152,22 +152,13 @@ export default {
         return;
       }
 
-      console.log('Uploading file for:', {
-        isStudent: isStudent.value,
-        isTeacher: isTeacher.value,
-        entityId: id,
-        fileName: selectedFile.value.name
-      });
-
       const formData = new FormData();
       formData.append('file', selectedFile.value);
       
       if (isStudent.value) {
         formData.append('studentId', id);
-        console.log('Appending studentId:', id);
       } else if (isTeacher.value) {
         formData.append('teacherId', id);
-        console.log('Appending teacherId:', id);
       }
       
       formData.append('type', props.type);
@@ -181,7 +172,6 @@ export default {
             'Content-Type': 'multipart/form-data',
           },
         });
-        console.log('Upload successful:', response.data);
         selectedFile.value = null;
         // Reset file input
         const inputFile = document.querySelector('input[type="file"]');
@@ -190,8 +180,6 @@ export default {
         await fetchDocuments();
         toast.success('Filen laddades upp framgångsrikt!');
       } catch (error) {
-        console.error('Error uploading file:', error);
-        console.error('Error response:', error.response?.data);
         toast.error('Kunde inte ladda upp filen: ' + error.message);
       }
     };

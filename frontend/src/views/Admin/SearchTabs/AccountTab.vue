@@ -709,14 +709,6 @@
         
         const hasChanges = current !== original;
         
-        // Debug logging (can be removed later)
-        if (hasChanges) {
-          console.log('Permission changes detected:', {
-            current: currentNormalized,
-            original: originalNormalized
-          });
-        }
-        
         return hasChanges;
       });
 
@@ -731,7 +723,6 @@
           originalPermissions.value = JSON.parse(JSON.stringify(customPermissions.value));
           toast.success('Behörigheterna har uppdaterats!');
         } catch (error) {
-          console.error('Error saving permissions:', error);
           toast.error('Kunde inte spara behörigheter.');
         } finally {
           isSavingPermissions.value = false;
@@ -811,7 +802,6 @@
             await loadChangeHistory()
           }
         } catch (err) {
-          console.error('Error loading student:', err)
           error.value = 'Kunde inte ladda elevinformation'
         } finally {
           loading.value = false
@@ -822,8 +812,8 @@
         try {
           const response = await client.get(`/student-details/${props.userData._id}/history`)
           changeHistory.value = response.data.changeHistory
-        } catch (err) {
-          console.error('Error loading change history:', err)
+        } catch {
+          // change history load is non-critical
         }
       }
 
@@ -847,7 +837,6 @@
             await loadChangeHistory()
           }
         } catch (err) {
-          console.error('Error saving changes:', err)
           toast.error('Kunde inte spara ändringar')
         } finally {
           saving.value = false
@@ -884,7 +873,6 @@
           newComment.value = ''
           showCommentModal.value = false
         } catch (err) {
-          console.error('Error adding comment:', err)
           toast.error('Kunde inte lägga till kommentar')
         }
       }
@@ -914,7 +902,6 @@
           showEditModal.value = false
           editingComment.value = null
         } catch (err) {
-          console.error('Error editing comment:', err)
           toast.error('Kunde inte redigera kommentar')
         }
       }
@@ -932,7 +919,6 @@
             student.value.commentHistory[commentIndex].comment = '[DELETED]'
           }
         } catch (err) {
-          console.error('Error deleting comment:', err)
           toast.error('Kunde inte radera kommentar')
         }
       }
@@ -1066,8 +1052,8 @@
             ? JSON.parse(JSON.stringify(permissions))
             : {}
           originalPermissions.value = JSON.parse(JSON.stringify(customPermissions.value))
-        } catch (error) {
-          console.error('Error loading roles:', error)
+        } catch {
+          // role loading is non-critical
         } finally {
           loadingRoles.value = false
         }
@@ -1098,7 +1084,6 @@
           originalRoles.value = [...selectedRoles.value]
           toast.success('Rollerna har uppdaterats!')
         } catch (error) {
-          console.error('Error saving roles:', error)
           toast.error('Kunde inte spara roller.')
         } finally {
           isSavingRoles.value = false
@@ -1110,16 +1095,11 @@
           try {
             const endpoint = `/update-user/${props.userData._id}`
 
-            const response = await client.put(endpoint, {
+            await client.put(endpoint, {
               [key]: editablePersonalData.value[key],
             })
-
-            console.log('✅ Uppdatering lyckades:', response.data)
-          } catch (error) {
-            console.error(
-              '❌ Fel vid uppdatering av fält:',
-              error.response ? error.response.data : error.message
-            )
+          } catch {
+            // field update error
           }
         }
         editFields.value[key] = !editFields.value[key]
@@ -1141,7 +1121,6 @@
           studentPassword.value = response.data.tempPassword
           toast.success('Lösenordet har återställts! Det nya lösenordet visas nedan.')
         } catch (error) {
-          console.error('Error resetting password:', error)
           toast.error('Kunde inte återställa lösenord.')
         } finally {
           resettingPassword.value = false

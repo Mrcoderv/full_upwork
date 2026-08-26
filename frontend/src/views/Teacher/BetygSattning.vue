@@ -1,9 +1,6 @@
 <template>
   <div class="scrollable-view">
     <section class="container py-4">
-      <div v-if="studentsToGrade.length === 0" class="text-muted empty-state">
-        <p>Inga elever att betygsätta just nu.</p>
-      </div>
       <div v-if="studentsToGrade.length === 0" class="text-center text-muted py-5">
         <v-icon size="48">mdi-account-off</v-icon>
         <div class="mt-2">Inga elever att betygsätta just nu.</div>
@@ -115,12 +112,10 @@
   import { ref, onMounted, computed } from 'vue'
   import client from '@/api/client.js'
   import { useStore } from 'vuex'
-  import { useRouter } from 'vue-router'
   import { useToast } from '@/composables/useToast.js'
 
   const toast = useToast()
   const store = useStore()
-  const router = useRouter()
   const isAdmin = computed(() => store.getters.isAdmin)
   const studentsToGrade = ref([])
   const grades = ['A', 'B', 'C', 'D', 'E', 'F']
@@ -155,8 +150,6 @@
     try {
       const { data } = await client.get('/students-to-grade')
 
-      console.log('📦 Mottagna elever från backend:', data)
-
       // Transform backend response to frontend expected format
       // Backend returns: [{ student, courseInstance, endDate, grade, enrollmentId, source }]
       // Frontend expects: [{ _id, name, coursesToGrade: [{ refId, courseCode, grade, ... }] }]
@@ -166,7 +159,6 @@
       data.forEach((item) => {
         const studentId = item.student?._id?.toString() || item.student?._id
         if (!studentId) {
-          console.warn('⚠️ Item missing student ID:', item)
           return
         }
         
@@ -262,16 +254,9 @@
       
       // Convert map to array and filter out students with no courses
       studentsToGrade.value = Array.from(studentMap.values()).filter(s => s.coursesToGrade.length > 0)
-      
-      console.log('✅ Transformerade elever:', studentsToGrade.value)
     } catch (err) {
-      console.error('❌ Kunde inte hämta elever:', err)
       toast.error('Kunde inte ladda elever.')
     }
-  }
-
-  const shouldShowCourse = (course, student) => {
-    return true
   }
 
   // National-test subjects (Engelska/Svenska/Matematik) follow the same

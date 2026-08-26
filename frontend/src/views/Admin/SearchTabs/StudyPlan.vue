@@ -75,10 +75,8 @@
         `/students/${student.value._id}/education/${refId}/status`,
         { status: education.status }
       )
-      console.log('✅ Uppdaterad:', res.data)
       savedEducations.add(education.refId)
     } catch (err) {
-      console.error('❌ Fel vid uppdatering:', err.response?.data || err.message)
       toast.error('Kunde inte uppdatera kursstatus.')
     }
   }

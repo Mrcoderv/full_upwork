@@ -27,21 +27,19 @@
 
 <script>
   import { ref, onMounted } from 'vue'
+  import client from '@/api/client.js'
 
   export default {
-    name: 'EditStudent',
+    name: 'ListStudent',
     setup() {
       const students = ref([])
       const selectedStudent = ref(null)
 
-      // Fetch students data (use your actual API here)
       onMounted(async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/student`)
-          const data = await response.json()
-          students.value = data // Assuming the response has a list of students
+          const { data } = await client.get('/student')
+          students.value = data
         } catch (error) {
-          console.error('Error fetching students:', error)
         }
       })
 

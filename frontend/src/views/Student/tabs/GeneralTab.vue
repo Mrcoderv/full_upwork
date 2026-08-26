@@ -845,7 +845,7 @@ export default {
 
     const formatChangeValue = (value) => {
       if (value === null || value === undefined || value === '') {
-        return '<em>tomt</em>';
+        return 'tomt';
       }
       
       // Handle date values

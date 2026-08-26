@@ -552,10 +552,6 @@
               fetchNotifications()
             }
           }, NOTIFICATION_POLL_INTERVAL)
-
-          console.log(
-            `🔄 Started notification polling (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`
-          )
         }
       }
 
@@ -564,7 +560,6 @@
         if (notificationPollInterval) {
           clearInterval(notificationPollInterval)
           notificationPollInterval = null
-          console.log('⏹️ Stopped notification polling')
         }
       }
 
@@ -572,14 +567,12 @@
       const handleVisibilityChange = () => {
         if (document.hidden) {
           isPollingPaused = true
-          console.log('⏸️ Paused notification polling (tab hidden)')
         } else {
           isPollingPaused = false
           // Immediately fetch when tab becomes visible
           if (isLoggedIn.value && canSeeNotifications.value) {
             fetchNotifications()
           }
-          console.log('▶️ Resumed notification polling (tab visible)')
         }
       }
 
@@ -896,7 +889,6 @@
         if (!isLoggedIn.value) return []
         const userRole = store.getters.userRole
         const isAdmin = store.getters.isAdmin
-        console.log('🔍 Filtering menu items. User role:', userRole, 'User data:', store.state.user)
         const filtered = menuItems.filter((item) => {
           if (secretMenuNames.includes(item.name)) return false
           if (!item.role) return true
@@ -914,13 +906,8 @@
           
           // For all other items, use the standard permission check
           const hasPerm = hasPermission(item.role)
-          console.log(`  - ${item.name}: hasPermission(${JSON.stringify(item.role)}) = ${hasPerm}`)
           return hasPerm
         })
-        console.log(
-          '✅ Filtered menu items:',
-          filtered.map((i) => i.name)
-        )
         return filtered
       })
       const secretMenuItems = computed(() => {
@@ -1977,7 +1964,7 @@
     left: 0 !important;
     width: 100% !important;
     height: 100vh !important;
-    background: rgba(255, 0, 0, 0.8) !important;
+    background: rgba(0, 0, 0, 0.4) !important;
     z-index: 9998 !important;
   }
 
@@ -1988,12 +1975,12 @@
     width: 320px !important;
     max-width: 85vw !important;
     height: 100vh !important;
-    background: red !important;
+    background: white !important;
     z-index: 9999 !important;
     box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5) !important;
     display: flex !important;
     flex-direction: column !important;
-    border: 5px solid blue !important;
+    border: none !important;
   }
 
   @keyframes slideInRight {

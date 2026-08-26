@@ -53,6 +53,7 @@
         selectedEvent: null,
         showAddEventModal: false,
         eventType: null,
+        currentTeacherId: null,
         calendarOptions: {
           plugins: [dayGridPlugin, interactionPlugin],
           initialView: 'dayGridMonth',
@@ -121,8 +122,8 @@
           if (res.data && res.data._id) {
             this.currentTeacherId = res.data._id.toString()
           }
-        } catch (err) {
-          console.error('❌ Kunde inte hämta lärare:', err)
+        } catch {
+          // Silently handle - teacher ID will remain null
         }
       }
       await this.fetchEvents()
@@ -255,14 +256,6 @@
               const studentName = meeting.student?.name || 'Okänd'
               let displayTitle = meeting.title // Use the original title from database
 
-              // Debug log
-              console.log('📅 Processing meeting:', {
-                title: meeting.title,
-                bookedBy: meeting.bookedBy,
-                createdBy: meeting.createdBy,
-                studentName,
-              })
-
               // If title is in "Möte, Student name" format (admin/systemadmin), keep it
               // Otherwise, format as "Role, Student name" for syv/specped
               if (!displayTitle || displayTitle === 'Möte') {
@@ -321,16 +314,8 @@
           const calendarApi = this.$refs.fullCalendar.getApi()
           calendarApi.removeAllEvents()
           allEvents.forEach((e) => calendarApi.addEvent(e))
-
-          // Debug
-          console.log('Alla events som skickas till kalendern:', allEvents)
-          allEvents.forEach((e) => {
-            if (e.extendedProps && e.extendedProps.type === 'slutprov') {
-              console.log('EXAM-EVENT:', e)
-            }
-          })
-        } catch (error) {
-          console.error('❌ Kunde inte ladda kalender-events:', error.message)
+        } catch {
+          // Silently handle - calendar will show empty state
         }
       },
       openEventModal(info) {
@@ -350,11 +335,8 @@
           },
         }
 
-        console.log('extendedProps on click:', fcEvent.extendedProps)
         this.selectedEvent = JSON.parse(JSON.stringify(eventObj))
         this.eventType = this.selectedEvent.extendedProps?.type === 'slutprov' ? 'exam' : 'meeting'
-
-        console.log('SKICKAR event till modal:', this.selectedEvent)
       },
       handleEventDrop(info) {
         const updatedEvent = {

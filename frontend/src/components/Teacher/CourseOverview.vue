@@ -147,12 +147,6 @@
           const response = await client.get('/course-instances/mine');
           const instances = response.data.instances || [];
           
-          // Debug: Log first instance to see data structure
-          if (instances.length > 0) {
-            console.log('Sample course instance:', instances[0]);
-            console.log('Responsible teacher data:', instances[0].responsibleTeacher);
-          }
-          
           // Deduplicate by _id to prevent duplicate entries
           const seen = new Map();
           this.courses = instances.filter(instance => {
@@ -198,14 +192,6 @@
         if (teacher.username) {
           return teacher.username;
         }
-        
-        // Debug: Log what we actually have
-        console.log('Teacher data structure:', {
-          teacher,
-          hasUserId: !!teacher.userId,
-          userIdType: typeof teacher.userId,
-          userIdValue: teacher.userId
-        });
         
         return 'Ej tilldelad';
       },

@@ -503,6 +503,9 @@ export default {
       if (newStudent?._id) loadStudentRecord()
     })
 
+    const cvFileInput = ref(null)
+    const contractFileInput = ref(null)
+
     return {
       allRecords, aplRecord, loading, search, activeFilter,
       updatingStatus, savingDetails, uploadingCv, uploadingContract,
@@ -513,6 +516,7 @@ export default {
       handleStatusChange, saveRecordDetails,
       handleCvUpload, handleContractUpload,
       createRecord, runAutoTransition,
+      cvFileInput, contractFileInput,
     }
   },
 }

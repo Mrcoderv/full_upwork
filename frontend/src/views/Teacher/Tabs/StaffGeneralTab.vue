@@ -125,6 +125,7 @@
 import { ref, reactive, computed } from 'vue';
 import { useStore } from 'vuex';
 import client from '@/api/client.js';
+import { useToast } from '@/composables/useToast.js';
 
 export default {
   name: 'StaffGeneralTab',
@@ -134,6 +135,7 @@ export default {
   emits: ['teacher-updated'],
   setup(props, { emit }) {
     const store = useStore();
+    const toast = useToast();
     const editMode = ref(false);
     const saving = ref(false);
     const savingVacation = ref(false);
@@ -179,9 +181,8 @@ export default {
         });
         editMode.value = false;
         emit('teacher-updated');
-      } catch (err) {
-        console.error('Error saving profile:', err);
-        alert('Kunde inte spara profil.');
+      } catch {
+        toast.error('Kunde inte spara profil.');
       } finally {
         saving.value = false;
       }
@@ -200,9 +201,8 @@ export default {
         vacationData.vacationEnd = '';
         vacationData.vacationNote = '';
         emit('teacher-updated');
-      } catch (err) {
-        console.error('Error setting vacation:', err);
-        alert('Kunde inte sätta ledighet.');
+      } catch {
+        toast.error('Kunde inte sätta ledighet.');
       } finally {
         savingVacation.value = false;
       }
@@ -215,9 +215,8 @@ export default {
           onVacation: false,
         });
         emit('teacher-updated');
-      } catch (err) {
-        console.error('Error clearing vacation:', err);
-        alert('Kunde inte ta bort ledighet.');
+      } catch {
+        toast.error('Kunde inte ta bort ledighet.');
       } finally {
         savingVacation.value = false;
       }
