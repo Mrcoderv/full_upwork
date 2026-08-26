@@ -214,7 +214,6 @@ router.get('/documents/:id', authenticateUser, async (req, res) => {
     const id = req.params.id;
 
     const user = req.user;
-    const isAdmin = user.role === 'admin' || user.role === 'systemadmin';
 
     // Students can only access their own documents; staff can access any
     if (user.role === 'student' && String(user.userId) !== String(id)) {

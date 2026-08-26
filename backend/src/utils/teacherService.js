@@ -81,7 +81,7 @@ async function getNextAvailableColor() {
  */
 export async function createOrFindTeacher(
     teacherName,
-    createdByUserId = null,
+    _createdByUserId = null,
     subject = "Övrigt"
 ) {
     try {

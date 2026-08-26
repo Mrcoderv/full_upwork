@@ -43,6 +43,7 @@ function normalize(value) {
  * @param {number} [maxRatio=0.3] - Maximum allowed ratio for a match
  * @returns {string|null} The best match or null if none found
  */
+// eslint-disable-next-line no-unused-vars
 function getBestFuzzyMatch(target, candidates, maxRatio = 0.3) {
     let best = null;
     let minDistance = Infinity;
@@ -156,7 +157,6 @@ async function uploadXlsx(req, res) {
 
     try {
         const fileBuffer = req.file.buffer;
-        const fileName = req.file.originalname;
         // Teacher will be read from the document, so we pass empty string as fallback
         const teacherNameFallback = "";
         const parsedStudents = await parseStudentExcel(

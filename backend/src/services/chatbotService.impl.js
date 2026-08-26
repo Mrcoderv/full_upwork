@@ -1,9 +1,7 @@
 import BaseChatbotService from "./chatbotService.js";
 import { generateSessionId } from "./chatbotService.js";
 import mongoose from "mongoose";
-import Student from "../models/Student.js";
 import CourseInstance from "../models/CourseInstance.js";
-import AssignmentSubmission from "../models/AssignmentSubmission.js";
 import logger from "../utils/logger.js";
 import { findMatchingFaq } from "./faqService.js";
 
@@ -297,8 +295,7 @@ class ConcreteChatbotService extends BaseChatbotService {
   /**
    * Extract a direct answer from content by looking for question-related info.
    */
-  extractDirectAnswer(content, question) {
-    const questionLower = question.toLowerCase();
+  extractDirectAnswer(content, _question) {
     const lines = content.split("\n");
 
     // Look for lines that contain question keywords

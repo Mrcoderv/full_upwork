@@ -1,8 +1,5 @@
 import logger from "../utils/logger.js";
-import Student from "../models/Student.js";
-import StudentEnrollment from "../models/StudentEnrollment.js";
 import User from "../models/User.js";
-import Teacher from "../models/Teacher.js";
 import { sendEmail, renderMessageCopyEmail } from "./emailService.js";
 
 /**

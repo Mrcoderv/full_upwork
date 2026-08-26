@@ -74,18 +74,13 @@ export async function syncCalendarEventsForStudent(studentId) {
         // Determine teacher info
         let teacherId = null;
         let teacherName = "Okänd lärare";
-        let teacherColor = "#999999";
 
         if (student.teacherId) {
             teacherId = student.teacherId._id;
             if (student.teacherId.userId) {
                 teacherName = student.teacherId.userId.username || teacherName;
             }
-            teacherColor = student.teacherId.colorCode || teacherColor;
         }
-
-        // Create a key for grouping: teacherId_date or just date if no teacher
-        const groupKey = teacherId ? `${teacherId}_${dateKey}` : `no_teacher_${dateKey}`;
 
         // Find or create calendar event for this group
         const existingEvent = await CalendarEvent.findOne({
@@ -239,7 +234,6 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
         // This ensures students in the same course instance are grouped together
         let teacherId = null;
         let teacherName = "Okänd lärare";
-        let teacherColor = "#999999";
 
         if (enrollment.courseInstanceId?.responsibleTeacher) {
             // Course instance's responsible teacher takes priority
@@ -248,14 +242,12 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
             if (responsibleTeacher.userId) {
                 teacherName = responsibleTeacher.userId.username || teacherName;
             }
-            teacherColor = responsibleTeacher.colorCode || teacherColor;
         } else if (enrollment.teacherId) {
             // Fallback to enrollment's teacherId if no course instance
             teacherId = enrollment.teacherId._id;
             if (enrollment.teacherId.userId) {
                 teacherName = enrollment.teacherId.userId.username || teacherName;
             }
-            teacherColor = enrollment.teacherId.colorCode || teacherColor;
         } else if (student.teacherId) {
             // Last resort: student's teacherId
             const studentTeacher = await Teacher.findById(student.teacherId).populate("userId", "username");
@@ -264,7 +256,6 @@ export async function syncCalendarEventFromEnrollment(enrollmentId) {
                 if (studentTeacher.userId) {
                     teacherName = studentTeacher.userId.username || teacherName;
                 }
-                teacherColor = studentTeacher.colorCode || teacherColor;
             }
         }
 

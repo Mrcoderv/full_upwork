@@ -128,7 +128,6 @@ export const uploadStudentsForMatching = async (req, res) => {
         }
 
         const fileBuffer = req.file.buffer;
-        const fileName = req.file.originalname;
         // Teacher will be read from the document, so we pass empty string as fallback
         const teacherNameFallback = "";
 
@@ -397,8 +396,6 @@ export const uploadStudentsForMatching = async (req, res) => {
                             .slice(0, 5);
                         logger.debug({ normalized, closest }, "Closest matches");
                     }
-                    const isCourse = /NIVÅ\s*\d+$/i.test(normalized);
-
                     // Check if the normalized name exists in either Course or CoursePackage collections
                     const matchPkg = strictMatch(
                         normalized,
@@ -2146,7 +2143,6 @@ export const updateCourseInstance = async (req, res) => {
         if (slutprovDateExplicitlySet && finalSlutprovDate) {
             try {
                 const { default: StudentEnrollment } = await import("../models/StudentEnrollment.js");
-                const { syncCalendarEventFromEnrollment } = await import("../utils/calendarEventSync.js");
                 
                 // Find all enrollments for this course instance
                 const enrollments = await StudentEnrollment.find({

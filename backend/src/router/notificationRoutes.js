@@ -1,6 +1,5 @@
 import express from "express";
 import mongoose from "mongoose";
-import Student from "../models/Student.js";
 import Notification from "../models/Notification.js";
 import Teacher from "../models/Teacher.js";
 import { authenticateUser } from "../controllers/authController.js";

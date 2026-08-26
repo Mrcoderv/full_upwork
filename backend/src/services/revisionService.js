@@ -253,7 +253,7 @@ async function removeEnrollments({ studentId, enrollmentIds, userId, session }) 
 /**
  * Add new courses to the study plan after the last existing enrollment.
  */
-async function addNewCourses({ student, courses, userId, userRole, session }) {
+async function addNewCourses({ student, courses, userId, userRole: _userRole, session }) {
     // Find the last enrollment end date
     const lastEnrollment = await StudentEnrollment.findOne({
         studentId: student._id,
@@ -305,7 +305,7 @@ async function addNewCourses({ student, courses, userId, userRole, session }) {
 /**
  * Adjust dates for specific enrollments.
  */
-async function adjustDates({ studentId, adjustments, userId, session }) {
+async function adjustDates({ studentId, adjustments, userId: _userId, session }) {
     let count = 0;
     const previous = [];
 
@@ -335,7 +335,7 @@ async function adjustDates({ studentId, adjustments, userId, session }) {
 /**
  * Send notifications to teacher and student about the study-plan revision.
  */
-async function sendRevisionNotifications({ student, revisionReason, description, userId }) {
+async function sendRevisionNotifications({ student, revisionReason, description, userId: _userId }) {
     const teacherId = student.teacherId;
     if (!teacherId) return;
 

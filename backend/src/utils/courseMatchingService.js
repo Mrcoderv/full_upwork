@@ -72,6 +72,7 @@ class CourseMatchingService {
     /**
      * Find the best matching course using strict exact code matching only
      */
+    // eslint-disable-next-line no-unused-vars
     static async findBestCourseMatch(courseCodeOrName, threshold = 0.7) {
         const { default: Course } = await import("../models/Course.js");
         // Normalize input: treat as code using the same function as database codes
@@ -332,6 +333,7 @@ class CourseMatchingService {
         logger.debug({ educationCount: educationEntries.length, studentId }, "Processing education entries for student");
 
         // Deduplicate missing package errors
+        // eslint-disable-next-line no-unused-vars
         const missingPackages = new Set();
         for (const entry of educationEntries) {
             try {
@@ -724,7 +726,7 @@ class CourseMatchingService {
                         }
 
                         // Process current course - use student's teacher as responsibleTeacher
-                        const { instance: courseInstance, wasCreated } =
+                        const { instance: courseInstance } =
                             await this.findOrCreateCourseInstance(
                                 course._id,
                                 courseStart,
@@ -877,7 +879,6 @@ class CourseMatchingService {
                             // Use student's teacher as responsibleTeacher
                             const {
                                 instance: nextCourseInstance,
-                                wasCreated: nextWasCreated,
                             } = await this.findOrCreateCourseInstance(
                                 nextCourse._id,
                                 courseStart,
@@ -1111,7 +1112,7 @@ class CourseMatchingService {
                     const individualResponsibleTeacherId = studentDocIndividual?.teacherId || entry.teacherId || null;
 
                     // Find or create CourseInstance - use student's teacher as responsibleTeacher
-                    const { instance: courseInstance, wasCreated } =
+                    const { instance: courseInstance } =
                         await this.findOrCreateCourseInstance(
                             course._id,
                             courseStart,

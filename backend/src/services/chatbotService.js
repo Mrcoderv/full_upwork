@@ -1,8 +1,6 @@
 import logger from "../utils/logger.js";
 import Student from "../models/Student.js";
 import CourseInstance from "../models/CourseInstance.js";
-import AssignmentSubmission from "../models/AssignmentSubmission.js";
-import User from "../models/User.js";
 import mongoose from "mongoose";
 
 const MAX_CONTEXT_MODULES = 5;
@@ -74,6 +72,7 @@ export function generateSessionId(prefix = "") {
  * @param {*} val - Value to check
  * @returns {boolean} True if valid date
  */
+// eslint-disable-next-line no-unused-vars
 function isValidDate(val) {
   return val && !isNaN(new Date(val).getTime()) && new Date(val).getFullYear() > 1970;
 }

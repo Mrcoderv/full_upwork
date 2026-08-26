@@ -24,7 +24,6 @@ import {
   resolveNotification,
   evaluateGradingStatusAndNotify,
   evaluateActionPlanStatusAndNotify,
-  checkPendingGradesAndNotify,
 } from "../controllers/notificationController.js";
 import NOTIFICATION_TYPES from "../controllers/notificationTypes.js";
 
@@ -503,7 +502,7 @@ router.post("/teacher/save-grade", authenticateUser, async (req, res) => {
   }
 
   try {
-    const result = await Student.updateOne(
+    await Student.updateOne(
       {
         _id: studentId,
         "education.refId": courseId,

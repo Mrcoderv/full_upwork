@@ -3,8 +3,6 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Course from "../models/Course.js";
 import CourseInstance from "../models/CourseInstance.js";
-import CoursePackage from "../models/CoursePackage.js";
-import Program from "../models/Program.js";
 import Student from "../models/Student.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import Teacher from "../models/Teacher.js";

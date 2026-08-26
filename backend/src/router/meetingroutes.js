@@ -181,7 +181,7 @@ router.put('/students/:id/exam-accommodations', authenticateUser, async (req, re
         const { extraTime, computer, separateRoom, notes } = req.body;
 
         // Validate that the user has permission
-        const { role, userId } = req.user;
+        const { role } = req.user;
         const isAdmin = ['admin', 'systemadmin'].includes(role);
         const isSpecped = role === 'specped';
 

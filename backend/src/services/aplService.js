@@ -1,9 +1,7 @@
-import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 import { AppError } from "../utils/errorHandler.js";
 import AplRecord from "../models/AplRecord.js";
 import Student from "../models/Student.js";
-import StudentEnrollment from "../models/StudentEnrollment.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import NOTIFICATION_TYPES from "../controllers/notificationTypes.js";
@@ -195,7 +193,7 @@ export async function autoTransitionStatuses() {
         // Auto-RED: ending within threshold
         if (daysRemaining >= 0 && daysRemaining <= APL_AUTO_RED_WEEKS * 7) {
             if (record.status !== "RED") {
-                const { student: updatedStudent, record: updatedRecord } = await updateAplStatus({
+                await updateAplStatus({
                     studentId: student._id,
                     status: "RED",
                     reason: `Automatisk: ${daysRemaining} dagar kvar (tröskel: ${APL_AUTO_RED_WEEKS * 7} dagar)`,
@@ -309,7 +307,7 @@ export async function getAplRecordByStudent(studentId) {
 /**
  * Update APL record details (placement, notes, requirements, documents).
  */
-export async function updateAplRecordDetails({ studentId, updates, userId }) {
+export async function updateAplRecordDetails({ studentId, updates, userId: _userId }) {
     let record = await AplRecord.findOne({ studentId });
     if (!record) {
         // Auto-create if not exists
@@ -349,7 +347,7 @@ export async function updateAplRecordDetails({ studentId, updates, userId }) {
 /**
  * Send notification on APL status change.
  */
-async function sendAplStatusNotification({ student, previousStatus, newStatus, userId }) {
+async function sendAplStatusNotification({ student, previousStatus, newStatus, userId: _userId }) {
     // Notify teachers and coordinators
     const teacherId = student.teacherId?._id || student.teacherId;
 

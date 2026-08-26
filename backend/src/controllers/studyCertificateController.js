@@ -1,5 +1,4 @@
 import StudentEnrollment from "../models/StudentEnrollment.js";
-import CoursePackage from "../models/CoursePackage.js";
 import { ROLES } from "../config/permissions.js";
 import { buildStudyCertificatePdf } from "../services/studyCertificatePdf.js";
 import logger from "../utils/logger.js";
@@ -12,8 +11,6 @@ const STAFF_ROLES = [
     ROLES.SPECPED,
     ROLES.COORDINATOR,
 ];
-
-const STUDENT_ROLE = "student";
 
 /**
  * Add audit trail entry for certificate/diploma generation.

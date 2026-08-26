@@ -193,7 +193,7 @@ export const errorMonitor = {
 };
 
 // Global error handler middleware
-export const globalErrorHandler = (err, req, res, next) => {
+export const globalErrorHandler = (err, req, res, _next) => {
     let error = { ...err };
     error.message = err.message;
 

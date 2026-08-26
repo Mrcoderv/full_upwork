@@ -12,11 +12,9 @@ import Student from "../models/Student.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js";
-import Notification from "../models/Notification.js";
 import CoursePackage from "../models/CoursePackage.js";
 import { authenticateUser } from "../controllers/authController.js";
 import { hasCommentPermission } from "../utils/roles.js";
-import User from "../models/User.js";
 import { sendDropoutNotification } from "../controllers/notificationController.js";
 import { hasRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
@@ -1187,8 +1185,7 @@ router.put("/student/:id", authenticateUser, hasRole(ALLOWED_STAFF_ROLES), valid
                                 refId: courseId,
                             };
 
-                            const enrollmentResult =
-                                await CourseMatchingService.default.processStudentEducation(
+                            await CourseMatchingService.default.processStudentEducation(
                                     student._id,
                                     [eduDataForService],
                                     req.user?.userId || null

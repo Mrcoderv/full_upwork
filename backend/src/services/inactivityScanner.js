@@ -26,11 +26,9 @@ import Teacher from "../models/Teacher.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
 import CourseInstance from "../models/CourseInstance.js";
 import AssignmentSubmission from "../models/AssignmentSubmission.js";
-import Conversation from "../models/Conversation.js";
 import {
     ACTIVE_ENROLLMENT_STATUSES,
     INACTIVITY_WITHDRAW_DAYS,
-    INACTIVITY_WARNING_DAYS,
     computeInactivitySignal,
 } from "../utils/inactivityStatus.js";
 import { sendInactivityWarningEmail } from "./emailService.js";
@@ -100,7 +98,7 @@ async function evaluateActiveStudents(today) {
     const enrollmentIds = enrollments.map((e) => e._id);
     const enrollmentTeacherIds = uniq(enrollments.map((e) => e.teacherId));
 
-    const [students, courseInstances, submissions, teachers] = await Promise.all([
+    const [students, , submissions, teachers] = await Promise.all([
         Student.find({ _id: { $in: studentIds } })
             .select("name email changeHistory")
             .lean(),
@@ -215,7 +213,7 @@ async function evaluateActiveStudents(today) {
  * @param {{ studentId: string, student: Object, signal: Object, teacherId: string|null, teacherUserId: string|null, teacherName: string, today: Date }} ctx
  * @returns {Promise<{sent: boolean, reason?: string, error?: string}>}
  */
-async function warnStudent({ studentId, student, signal, teacherId, teacherUserId, teacherName, today }) {
+async function warnStudent({ studentId, student, signal, teacherId, teacherUserId, teacherName: _teacherName, today }) {
     if (!student.email) {
         return { sent: false, reason: "no_email" };
     }

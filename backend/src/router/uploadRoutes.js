@@ -22,7 +22,6 @@ const DANGEROUS_EXTENSIONS = [
   '.jsp', '.asp', '.aspx', '.vbs', '.cmd', '.pl', '.cgi', '.msi', '.jar', '.scr'
 ];
 
-const ALLOWED_STAFF_ROLES = ["systemadmin", "admin", "teacher", "coordinator", "syv", "specped", "tester"];
 const ALLOWED_ADMIN_ROLES = ["systemadmin", "admin", "tester"];
 
 const sanitizeFilename = (filename) => {

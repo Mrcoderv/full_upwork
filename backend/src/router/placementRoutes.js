@@ -1,5 +1,4 @@
 import express from "express";
-import mongoose from "mongoose";
 import { isAuthenticated, hasRole } from "../middleware/auth.js";
 import { asyncHandler } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
@@ -25,6 +24,7 @@ router.post(
             durationWeeks,
             packageId,
             excludeCourseIds = [],
+            // eslint-disable-next-line no-unused-vars
             pace,
             examMode,
             municipality,

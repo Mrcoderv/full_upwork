@@ -1,17 +1,6 @@
 import mongoose from "mongoose";
 
-const studentSchema = new mongoose.Schema(
-    {
-        _id: { type: mongoose.Schema.Types.ObjectId, auto: false }, // 👈 ändring
-        name: String,
-        personalNumber: String,
-        additionalInfo: String,
-        attended: { type: Boolean, default: false },
-    },
-    { _id: false }
-  );
-  
-  const studentAttendedSchema = new mongoose.Schema(
+const studentAttendedSchema = new mongoose.Schema(
     {
       _id: { type: mongoose.Schema.Types.ObjectId, auto: false },
       name: String,
