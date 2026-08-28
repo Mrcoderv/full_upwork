@@ -31,7 +31,6 @@ const CourseTemplates = () => import('@/views/Admin/CourseTemplates.vue')
 const CourseMatching = () => import('@/views/Admin/CourseMatching.vue')
 const StudentEnrollments = () => import('@/views/Admin/StudentEnrollments.vue')
 const TeacherManagement = () => import('@/views/Admin/TeacherManagement.vue')
-const TEST = () => import('@/views/Admin/TEST.vue')
 const ActivityFeedManager = () => import('@/views/Admin/ActivityFeedManager.vue')
 const CourseContentEditor = () => import('@/views/Admin/CourseContentEditor.vue')
 const CourseStatisticsAdmin = () => import('@/views/Admin/CourseStatisticsAdmin.vue')
@@ -265,12 +264,6 @@ const routes = [
     name: 'TeacherManagement',
     component: TeacherManagement,
     meta: { title: 'Teacher Management', role: 'admin' },
-  },
-  {
-    path: '/test',
-    name: 'TestCourseMatching',
-    component: TEST,
-    meta: { title: 'Testa kursmatchning', role: 'admin' },
   },
   {
     path: '/admin/betygsrapporter',

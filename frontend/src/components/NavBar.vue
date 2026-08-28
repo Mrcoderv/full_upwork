@@ -828,8 +828,7 @@
       // Remove these from main nav bar and add to secret menu
       const secretMenuNames = [
         'Utbildning',
-        'TEST',
-        'Student Inskrivningar',
+              'Student Inskrivningar',
         'Elev+',
         'PDF',
         'Prövningar',
@@ -2240,7 +2239,7 @@
     font-weight: 600;
   }
   .secret-menu-dropdown {
-    background: #fffbe6 !important; /* debug yellow */
+    background: #ffffff;
     border: 1.5px solid #6c63ff;
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
