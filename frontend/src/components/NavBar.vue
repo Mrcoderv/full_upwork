@@ -950,7 +950,6 @@
         isLoggedIn,
         (loggedIn) => {
           if (loggedIn && canSeeNotifications.value) {
-            console.log('👤 User logged in, starting notification polling...')
             startNotificationPolling()
           } else {
             stopNotificationPolling()

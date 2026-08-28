@@ -94,12 +94,9 @@ const store = createStore({
       if (user && !user.role && user.roles && user.roles.length > 0) {
         user.role = user.roles[0];
       }
-      const roleDisplay = user?.role || (user?.roles && user.roles[0]) || 'guest';
-      console.log(`🔹 Vuex: Setting user -> ${roleDisplay}`)
       state.user = user
     },
     LOGOUT(state) {
-      console.log('🔹 Vuex: Logging out user')
       state.user = null
       state.tasks = [] // Clear tasks on logout
       state.requiresPasswordChange = false
