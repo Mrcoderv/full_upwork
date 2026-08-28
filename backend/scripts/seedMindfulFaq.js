@@ -91,7 +91,7 @@ const faqs = [
   {
     cat: "Komvux & Mindful – allmänt",
     q: "Vad är privat utbildning hos Mindful?",
-    a: "Privata studier innebär att studenten själv betalar för utbildningen utan att kommunen är inblandad.\n\nObservera:\n• Privata studier är inte CSN-berättigade.\n• Det finns möjlighet att komplettera med prövning för gymnasiala betyg.",
+    a: "Privata studier innebär att studenten själv betalar för utbildningen utan att kommunen är involverad.\n\nObservera:\n• Privata studier är inte CSN-berättigade.\n• Det finns möjlighet att komplettera med prövning för gymnasiala betyg.",
     kw: ["privat", "utbildning", "betala", "avgift"],
     alt: ["Vad är privata studier?", "Skillnad mellan Komvux och privat utbildning?"],
     order: 1,
@@ -223,7 +223,7 @@ const faqs = [
   {
     cat: "Kurser & studier",
     q: "Hur lång tid tar det att rätta uppgifter?",
-    a: "Lärare rättar uppgifter efter avsnittets deadline.",
+    a: "Lärare rättar uppgifter efter avsnittens deadline.",
     kw: ["rätta", "uppgifter", "deadline", "betyg"],
     alt: ["När får jag betyg på uppgifter?", "När rättas mina uppgifter?"],
     order: 4,
@@ -257,7 +257,7 @@ const faqs = [
   {
     cat: "Betyg & prov",
     q: "Måste jag göra slutprov på plats?",
-    a: "Slutprovet äger rum någon gång under de två sista veckorna av en kurs. Datumet för detta prov delges av ansvarig lärare. Slutprov måste genomföras fysiskt på plats och detta är obligatoriskt för samtliga elever. Detta krav är en grundläggande del av bedömningen och utvärderingen av elevens kunskaper i kursen. Skolan vill understryka att frånvaro från det avslutande provet kommer att leda till att elev erhåller ett F i slutbetyg – oavsett prestation i resterande moment i kurs. Skolans administration vill uppmana samtliga elever till att vara noga med att hålla sig uppdaterade om datum och övrig information relaterat till slutprovet. Om elever har några frågor eller behöver ytterligare information är de välkomna att kontakta lärare eller administrationen på skolan.",
+    a: "Slutprovet äger rum någon gång under de två sista veckorna av en kurs. Datumet för detta prov delges av ansvarig lärare. Slutprov måste genomföras fysiskt på plats och detta är obligatoriskt för samtliga elever. Detta krav är en grundläggande del av bedömningen och utvärderingen av elevens kunskaper i kursen. Skolan vill understryka att frånvaro från det avslutande provet kommer att leda till att elev erhåller ett F i slutbetyg – oavsett prestation i resterande moment i kurs. Skolans administration vill uppmana samtliga elever till att vara noga med att hålla sig uppdaterade om datum och övrig information relaterat till slutprovet.",
     kw: ["slutprov", "plats", "obligatoriskt", "frånvaro"],
     alt: ["Kan jag skriva slutprov på distans?", "Vad händer om jag inte kommer på slutprov?"],
     order: 3,
@@ -291,7 +291,7 @@ const faqs = [
   {
     cat: "CSN & ekonomi",
     q: "Hur ansöker jag om CSN för mina Komvuxstudier?",
-    a: "Du ansöker genom att följa de steg och anvisningar som visas på följande sida hos CSN: https://www.csn.se/bidrag-och-lan/studiestod/studiemedel/sa-ansoker-du-om-studiemedel.html\n\nI varje kursstart som du är antagen till studieförsäkrar skolan dig till din hemkommun, som sedan meddelar CSN om att du är studieförsäkrad för dina aktuella kurser. Studerar du en utbildning studieförsäkras du vid varje tillfälle som nya kurser på skolan startar för dig.\n\nIbland kan det behövas att du som elev behöver skicka kompletterande studieintyg till CSN, detta ansöker du om att få på följande mailadress: utbildning@mindful.se.",
+    a: "Du ansöker genom att följa de steg och anvisningar som visas på CSN:s hemsida (csn.se).\n\nI varje kursstart som du är antagen till studieförsäkrar skolan dig till din hemkommun, som sedan meddelar CSN om att du är studieförsäkrad för dina aktuella kurser. Studerar du en utbildning studieförsäkras du vid varje tillfälle som nya kurser på skolan startar för dig.\n\nIbland kan det behövas att du som elev behöver skicka kompletterande studieintyg till CSN, detta ansöker du om att få på utbildning@mindful.se.",
     kw: ["csn", "ansöka", "studieförsäkring", "komplettering"],
     alt: ["Hur söker jag CSN?", "Vart skickar jag CSN-ansökan?"],
     order: 1,
