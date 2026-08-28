@@ -271,7 +271,7 @@ const submitForm = async () => {
       const previousAplStatus = aplStatus.value;
       const previousStudentId = selectedStudent.value?._id;
 
-      // Reset form
+      // Reset form only after the request has completed successfully
       selectedStudent.value = null;
       selectedCourseInstance.value = null;
       startDate.value = '';

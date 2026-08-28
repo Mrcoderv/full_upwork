@@ -469,6 +469,44 @@ router.post(
 );
 
 
+router.patch(
+    "/students/:studentId/logbook/:kitId",
+    isAuthenticated,
+    hasRole(LOGBOOK_ROLES),
+    validateId("studentId"),
+    asyncHandler(async (req, res) => {
+        const student = await Student.findById(req.params.studentId);
+        if (!student) return res.status(404).send({ message: "Student not found." });
+        const kit = student.logbook?.id(req.params.kitId);
+        if (!kit) return res.status(404).send({ message: "Logbook kit not found." });
+        const { title, description, startDate, endDate } = req.body;
+        if (typeof title !== "string" || !title.trim()) return res.status(400).send({ message: "Titel krävs." });
+        kit.title = title.trim();
+        kit.description = typeof description === "string" ? description.trim() : undefined;
+        if (startDate !== undefined) kit.startDate = startDate || null;
+        if (endDate !== undefined) kit.endDate = endDate || null;
+        await student.save();
+        await recordAudit(req, { entityType: "Student", entityId: student._id, action: "logbook:update", description: `Uppdaterade loggboks-kit för elev ${student.name || req.params.studentId}` });
+        res.send({ success: true, logbook: student.logbook });
+    })
+);
+
+router.delete(
+    "/students/:studentId/logbook/:kitId",
+    isAuthenticated,
+    hasRole(LOGBOOK_ROLES),
+    validateId("studentId"),
+    asyncHandler(async (req, res) => {
+        const student = await Student.findById(req.params.studentId);
+        if (!student) return res.status(404).send({ message: "Student not found." });
+        const originalLength = student.logbook?.length || 0;
+        student.logbook = (student.logbook || []).filter((kit) => String(kit.id) !== req.params.kitId);
+        if (student.logbook.length === originalLength) return res.status(404).send({ message: "Logbook kit not found." });
+        await student.save();
+        await recordAudit(req, { entityType: "Student", entityId: student._id, action: "logbook:delete", description: `Tog bort loggboks-kit för elev ${student.name || req.params.studentId}` });
+        res.send({ success: true, logbook: student.logbook });
+    })
+);
 
 router.get(
     "/student-details/:studentId/logbook",

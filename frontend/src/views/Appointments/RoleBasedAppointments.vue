@@ -180,9 +180,6 @@ export default {
         const { page, limit } = this.pagination;
         const url = `/meetings?bookedBy=${this.activeRole}&sort=start:desc&page=${page}&limit=${limit}`;
         
-        console.log(`🔍 Fetching ${this.activeRole} appointments from:`, url);
-        console.log(`📍 Current route:`, this.$route.path, '| Active role:', this.activeRole);
-        
         // Explicitly filter by bookedBy to ensure separate lists for syv and specped
         const response = await client.get(url);
         

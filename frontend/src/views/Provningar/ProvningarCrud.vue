@@ -76,14 +76,15 @@
             <v-text-field v-model="currentExam.name" label="Namn" required />
             <v-text-field v-model="currentExam.personalNumber" label="Personnummer" required />
             <v-text-field v-model="currentExam.course" label="Kurs" required />
-            <v-text-field v-model="currentExam.requestedMonth" label="Önskad Månad" />
+            <v-select v-model="currentExam.requestedMonth" :items="months" label="Önskad månad" required />
             <v-text-field v-model="currentExam.municipality" label="Kommun" />
             <v-checkbox v-model="currentExam.materialReceived.status" label="Material hämtat" />
+            <v-alert v-if="formError" type="error" density="compact" class="mt-2">{{ formError }}</v-alert>
           </v-card-text>
           <v-card-actions>
             <v-spacer />
             <v-btn text @click="closeForm()">Avbryt</v-btn>
-            <v-btn color="primary" @click="saveExam()">Spara</v-btn>
+            <v-btn color="primary" :loading="saving" :disabled="saving" @click="saveExam()">Spara</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -156,6 +157,8 @@ const importFile = ref(null)
 const isDragging = ref(false)
 const importing = ref(false)
 const importResult = ref(null)
+const formError = ref(null)
+const saving = ref(false)
 
 const headers = [
   { title: 'Namn', key: 'name' },
@@ -211,7 +214,14 @@ const fetchExams = async () => {
 }
 
 const openForm = (exam = {}) => {
-  currentExam.value = { ...exam }
+  formError.value = null
+  currentExam.value = {
+    status: 'intresse',
+    materialReceived: { status: false },
+    accommodations: [],
+    ...exam,
+    materialReceived: { status: false, ...(exam.materialReceived || {}) },
+  }
   showForm.value = true
 }
 
@@ -221,6 +231,16 @@ const closeForm = () => {
 }
 
 const saveExam = async () => {
+  formError.value = null
+  if (!currentExam.value.name?.trim() || !currentExam.value.course?.trim()) {
+    formError.value = 'Namn och kurs måste fyllas i.'
+    return
+  }
+  if (!currentExam.value.requestedMonth) {
+    formError.value = 'Välj önskad månad.'
+    return
+  }
+  saving.value = true
   try {
     if (currentExam.value._id) {
       await client.put(`/exams/${currentExam.value._id}`, currentExam.value)
@@ -229,9 +249,11 @@ const saveExam = async () => {
     }
     toast.success('Prövning sparad!')
     closeForm()
-    fetchExams()
+    await fetchExams()
   } catch (err) {
-    toast.error('Kunde inte spara prövning')
+    formError.value = err.response?.data?.message || 'Kunde inte spara prövning.'
+  } finally {
+    saving.value = false
   }
 }
 

@@ -18,8 +18,20 @@
         </button>
         <div v-if="createdUserPassword" class="alert alert-info mt-3">
           <p><strong>Användare skapad!</strong></p>
-          <p>Lösenord: <code>{{ createdUserPassword }}</code></p>
-          <p class="small">Spara detta lösenord säkert. Användaren kan byta lösenord vid första inloggningen.</p>
+          <label for="temporary-password">Tillfälligt lösenord</label>
+          <div class="temporary-password">
+            <input
+              id="temporary-password"
+              :type="showCreatedPassword ? 'text' : 'password'"
+              :value="createdUserPassword"
+              readonly
+              autocomplete="off"
+            />
+            <button type="button" class="btn btn-secondary" @click="showCreatedPassword = !showCreatedPassword">
+              {{ showCreatedPassword ? 'Dölj' : 'Visa' }}
+            </button>
+          </div>
+          <p class="small">Spara lösenordet säkert. Användaren kan byta lösenord vid första inloggningen.</p>
         </div>
       </div>
     </div>
@@ -78,7 +90,6 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import client from '@/api/client.js';
 import { useToast } from '@/composables/useToast.js';
-import { useRoute } from 'vue-router';
 
 // Permission matrix based on requirements
 const PERMISSION_MATRIX = {
@@ -183,6 +194,7 @@ export default {
     const isSavingPermissions = ref(false);
     const isCreatingUser = ref(false);
     const createdUserPassword = ref(null);
+    const showCreatedPassword = ref(false);
     const features = ref(FEATURES);
     
     // Custom permissions state
@@ -318,8 +330,9 @@ export default {
       hasUser,
       isSavingPermissions,
       isCreatingUser,
-      createdUserPassword,
-      features,
+  createdUserPassword,
+  showCreatedPassword,
+  features,
       hasPermission,
       togglePermission,
       savePermissions,

@@ -99,8 +99,6 @@
             password: password.value,
           })
 
-          console.log('🎯 Login result:', result)
-
           if (result.success) {
             if (result.requiresPasswordChange) {
               router.push('/change-password')
