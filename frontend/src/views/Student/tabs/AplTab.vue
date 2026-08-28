@@ -120,7 +120,7 @@
             </div>
             <div v-if="isCoordinator" class="upload-section">
               <input ref="cvFileInput" type="file" accept=".pdf,.doc,.docx" style="display: none" @change="handleCvUpload" />
-              <v-btn size="small" variant="outlined" :loading="uploadingCv" @click="$refs.cvFileInput.click()">
+              <v-btn size="small" variant="outlined" :loading="uploadingCv" @click="cvFileInput?.click()">
                 <v-icon left size="small">mdi-upload</v-icon>
                 {{ aplRecord.cvDocId ? 'Byt CV' : 'Ladda upp CV' }}
               </v-btn>
@@ -137,7 +137,7 @@
             </div>
             <div v-if="isCoordinator" class="upload-section">
               <input ref="contractFileInput" type="file" accept=".pdf" style="display: none" @change="handleContractUpload" />
-              <v-btn size="small" variant="outlined" :loading="uploadingContract" @click="$refs.contractFileInput.click()">
+              <v-btn size="small" variant="outlined" :loading="uploadingContract" @click="contractFileInput?.click()">
                 <v-icon left size="small">mdi-upload</v-icon>
                 {{ aplRecord.contractDocId ? 'Byt kontrakt' : 'Ladda upp kontrakt' }}
               </v-btn>

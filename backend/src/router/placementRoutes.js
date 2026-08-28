@@ -24,7 +24,7 @@ router.post(
             durationWeeks,
             packageId,
             excludeCourseIds = [],
-            // eslint-disable-next-line no-unused-vars
+             
             pace,
             examMode,
             municipality,

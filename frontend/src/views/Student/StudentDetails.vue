@@ -31,7 +31,7 @@
         <div v-if="canGenerateCertificates" class="certificate-generation-section">
           <div class="card">
             <div class="card-header">
-              <h3>Intyggande & Diploma</h3>
+              <h3>Studieintyg och diplom</h3>
             </div>
             <div class="card-body">
               <div v-if="student.enrollments && student.enrollments.length > 0" class="generation-options">
@@ -39,12 +39,15 @@
                 <div v-for="enrollment in student.enrollments" :key="enrollment._id" class="generation-option">
                   <div v-if="enrollment.status === 'completed'" class="option eligible">
                     <v-icon left>mdi-file-document</v-icon>
-                    <span>Generera studieintyg</span>
-                    <v-tooltip top>
-                      <template #content>
-                        Studieintyg genereras för slutförda kurser
-                      </template>
-                    </v-tooltip>
+                    <span>Studieintyg tillgängligt</span>
+                    <button
+                      type="button"
+                      class="document-action"
+                      :disabled="downloadingDocument === `${enrollment._id}-certificate`"
+                      @click="downloadDocument(enrollment, 'certificate')"
+                    >
+                      {{ downloadingDocument === `${enrollment._id}-certificate` ? 'Förbereder...' : 'Ladda ner' }}
+                    </button>
                   </div>
                   <div v-else class="option disabled">
                     <v-icon left>mdi-file-document-outline</v-icon>
@@ -53,14 +56,19 @@
                 </div>
 
                 <!-- Diploma -->
-                <div v-if="student.coursePackageId && student.aplStatus === 'GREEN'" class="generation-option">
+                  <div v-if="student.coursePackageId && student.aplStatus === 'GREEN'" class="generation-option eligible">
                   <v-icon left>mdi-medal</v-icon>
-                  <span>Generera diplom</span>
-                  <v-tooltip top>
-                    <template #content>
-                      Diplom genereras när alla kurser och APL är godkända efter kursens slutdatum
-                    </template>
-                  </v-tooltip>
+                  <span>Diplom tillgängligt</span>
+                  <button
+                    v-for="enrollment in completedEnrollments"
+                    :key="`diploma-${enrollment._id}`"
+                    type="button"
+                    class="document-action"
+                    :disabled="downloadingDocument === `${enrollment._id}-diploma`"
+                    @click="downloadDocument(enrollment, 'diploma')"
+                  >
+                    {{ downloadingDocument === `${enrollment._id}-diploma` ? 'Förbereder...' : 'Ladda ner' }}
+                  </button>
                 </div>
               </div>
 
@@ -139,6 +147,14 @@ export default {
     const changeHistory = ref([]);
     const activeTab = shallowRef(GeneralTab);
     const manualAplIds = ref(new Set());
+    const downloadingDocument = ref('');
+
+    const completedEnrollments = computed(() =>
+      Array.isArray(student.value?.enrollments)
+        ? student.value.enrollments.filter((enrollment) => enrollment.status === 'completed')
+        : []
+    );
+    const canGenerateCertificates = computed(() => completedEnrollments.value.length > 0);
 
     const isAdmin = computed(() => store.getters.isAdmin);
     const isSystemAdmin = computed(
@@ -286,6 +302,28 @@ export default {
       }
     };
 
+    const downloadDocument = async (enrollment, type) => {
+      if (!enrollment?._id) return;
+      const key = `${enrollment._id}-${type}`;
+      downloadingDocument.value = key;
+      try {
+        const endpoint = type === 'certificate' ? 'study-certificate' : 'diploma';
+        const response = await client.get(`/${endpoint}/${enrollment._id}/pdf`, { responseType: 'blob' });
+        const url = URL.createObjectURL(response.data);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${type === 'certificate' ? 'studieintyg' : 'diplom'}-${enrollment._id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Kunde inte skapa dokumentet.');
+      } finally {
+        downloadingDocument.value = '';
+      }
+    };
+
     const handleStudentUpdate = async (updatedStudent) => {
       // Ensure dropout is explicitly set
       student.value = { 
@@ -361,6 +399,10 @@ export default {
       handleStudentUpdate,
       isSystemAdmin,
       handleDeleteStudent,
+      canGenerateCertificates,
+      completedEnrollments,
+      downloadingDocument,
+      downloadDocument,
     };
   },
 };

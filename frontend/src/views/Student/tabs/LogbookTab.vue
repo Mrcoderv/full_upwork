@@ -30,6 +30,7 @@
                 <th class="text-left">Startdatum</th>
                 <th class="text-left">Slutdatum</th>
                 <th class="text-left">Status</th>
+                <th class="text-left">Åtgärder</th>
               </tr>
             </thead>
             <tbody>
@@ -43,9 +44,13 @@
                     {{ statusLabel(kit.status) }}
                   </v-chip>
                 </td>
+                <td class="text-no-wrap">
+                  <v-btn icon="mdi-pencil" size="small" variant="text" :aria-label="`Redigera ${kit.title}`" @click="openEdit(kit)" />
+                  <v-btn icon="mdi-delete" size="small" variant="text" color="error" :aria-label="`Ta bort ${kit.title}`" @click="openDelete(kit)" />
+                </td>
               </tr>
               <tr v-if="logbook.length === 0">
-                <td colspan="5" class="text-center text-grey">Inga kits i loggboken ännu.</td>
+                <td colspan="6" class="text-center text-grey">Inga kits i loggboken ännu.</td>
               </tr>
             </tbody>
           </v-table>
@@ -99,6 +104,29 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-dialog v-model="editDialog" max-width="560">
+      <v-card>
+        <v-card-title>Redigera kit</v-card-title>
+        <v-card-text>
+          <v-text-field v-model="editForm.title" label="Titel *" :error-messages="editErrors.title" />
+          <v-textarea v-model="editForm.description" label="Beskrivning" auto-grow rows="2" />
+          <v-row>
+            <v-col cols="6"><v-text-field v-model="editForm.startDate" label="Startdatum" type="date" /></v-col>
+            <v-col cols="6"><v-text-field v-model="editForm.endDate" label="Slutdatum" type="date" /></v-col>
+          </v-row>
+        </v-card-text>
+        <v-card-actions><v-spacer /><v-btn variant="text" @click="editDialog = false">Avbryt</v-btn><v-btn color="primary" :loading="updating" @click="updateKit">Spara</v-btn></v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="deleteDialog" max-width="420">
+      <v-card>
+        <v-card-title>Ta bort kit?</v-card-title>
+        <v-card-text>Vill du ta bort “{{ selectedKit?.title }}”? Åtgärden kan inte ångras.</v-card-text>
+        <v-card-actions><v-spacer /><v-btn variant="text" @click="deleteDialog = false">Avbryt</v-btn><v-btn color="error" :loading="deleting" @click="deleteKit">Ta bort</v-btn></v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -124,6 +152,13 @@ export default {
     const loading = ref(true);
     const error = ref(null);
     const saving = ref(false);
+    const updating = ref(false);
+    const deleting = ref(false);
+    const editDialog = ref(false);
+    const deleteDialog = ref(false);
+    const selectedKit = ref(null);
+    const editErrors = ref({});
+    const editForm = ref({ title: '', description: '', startDate: '', endDate: '' });
     const validationErrors = ref({});
 
     const form = ref({
@@ -178,6 +213,63 @@ export default {
       }
     };
 
+    const dateInput = (value) => value ? new Date(value).toISOString().slice(0, 10) : '';
+
+    const openEdit = (kit) => {
+      selectedKit.value = kit;
+      editErrors.value = {};
+      editForm.value = {
+        title: kit.title || '',
+        description: kit.description || '',
+        startDate: dateInput(kit.startDate),
+        endDate: dateInput(kit.endDate),
+      };
+      editDialog.value = true;
+    };
+
+    const openDelete = (kit) => {
+      selectedKit.value = kit;
+      deleteDialog.value = true;
+    };
+
+    const updateKit = async () => {
+      editErrors.value = {};
+      if (!editForm.value.title.trim()) {
+        editErrors.value.title = 'Titel är obligatorisk.';
+        return;
+      }
+      updating.value = true;
+      try {
+        const response = await client.patch(`/students/${props.student._id}/logbook/${selectedKit.value.id}`, {
+          title: editForm.value.title.trim(),
+          description: editForm.value.description || undefined,
+          startDate: editForm.value.startDate || undefined,
+          endDate: editForm.value.endDate || undefined,
+        });
+        logbook.value = response.data.logbook || [];
+        editDialog.value = false;
+        toast.success('Kit uppdaterades.');
+      } catch (err) {
+        toast.error(err.message || 'Ett fel uppstod när kit skulle uppdateras.');
+      } finally {
+        updating.value = false;
+      }
+    };
+
+    const deleteKit = async () => {
+      deleting.value = true;
+      try {
+        const response = await client.delete(`/students/${props.student._id}/logbook/${selectedKit.value.id}`);
+        logbook.value = response.data.logbook || [];
+        deleteDialog.value = false;
+        toast.success('Kit togs bort.');
+      } catch (err) {
+        toast.error(err.message || 'Ett fel uppstod när kit skulle tas bort.');
+      } finally {
+        deleting.value = false;
+      }
+    };
+
     const addKit = async () => {
       validationErrors.value = {};
       if (!form.value.title || !form.value.title.trim()) {
@@ -215,6 +307,13 @@ export default {
       loading,
       error,
       saving,
+      updating,
+      deleting,
+      editDialog,
+      deleteDialog,
+      selectedKit,
+      editErrors,
+      editForm,
       validationErrors,
       form,
       canEdit,

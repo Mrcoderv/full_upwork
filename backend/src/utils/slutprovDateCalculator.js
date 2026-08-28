@@ -124,7 +124,7 @@ export async function calculateSlutprovDate(teacher, courseEndDate) {
     };
 
     // Helper function to get the day before
-    // eslint-disable-next-line no-unused-vars
+     
     const getDayBefore = (date) => {
         const d = new Date(date);
         d.setDate(d.getDate() - 1);

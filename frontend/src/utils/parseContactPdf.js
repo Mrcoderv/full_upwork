@@ -48,33 +48,22 @@ function parseContactPdf(text) {
     } else if (line.startsWith('Sökta kurser')) {
       result['kurser'] = []
       i++
-      console.log("---- DETECTED 'Sökta kurser' ----")
-
       while (i < lines.length) {
-        console.log('IM IN THE LOOP!', lines[i])
-
         // Match course name and points
 
         let courseMatch = lines[i].match(/^[0-9]+\.\s(.+),\s([0-9]+)\spoäng/)
-        console.log('MATCH!', courseMatch)
         if (courseMatch) {
           let courseName = courseMatch[1]
-          console.log('CourseName:', courseName)
           let coursePoints = courseMatch[2]
-          console.log('CoursePoints:', coursePoints)
 
           // Ensure next line contains course details
           let nextLine = lines[i + 1]?.trim()
-          console.log('DetailsLine:', nextLine)
-          console.log('nextLine.Match:', nextLine.match(/^[0-9]+\./))
 
           if (nextLine && nextLine.match(/^[0-9]+\./)) {
-            console.log('I MATCH DETAIL!')
             let details = nextLine.split(',').map((d) => d.trim())
             let Dates = details[0].slice(2).split(' ')
             let startDate = Dates[0]
             let endDate = Dates[2]
-            console.log('Details:', details.length, details)
             if (details.length >= 5) {
               let courseObj = {
                 namn: courseName,
@@ -87,12 +76,9 @@ function parseContactPdf(text) {
                 kod: details[4] || '',
               }
               tot += Number(coursePoints)
-              console.log(tot)
-              console.log('Adding course:', courseObj)
               result['kurser'].push(courseObj)
               i++ // Move past course details
             } else {
-              console.log('Skipping due to missing details:', details)
             }
           }
         }

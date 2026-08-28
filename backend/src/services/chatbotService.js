@@ -72,7 +72,7 @@ export function generateSessionId(prefix = "") {
  * @param {*} val - Value to check
  * @returns {boolean} True if valid date
  */
-// eslint-disable-next-line no-unused-vars
+ 
 function isValidDate(val) {
   return val && !isNaN(new Date(val).getTime()) && new Date(val).getFullYear() > 1970;
 }
