@@ -166,8 +166,7 @@
       const response = await client.get('/coursepackages')
       packages.value = response.data
     } catch (err) {
-      console.error('Error fetching course packages:', err)
-      error.value = 'Kunde inte hämta kursförpackningar.'
+      error.value = err.response?.data?.message || 'Kunde inte hämta kursförpackningar.'
     } finally {
       loading.value = false
     }
