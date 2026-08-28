@@ -88,7 +88,13 @@
         </template>
 
         <template #item.save="{ item }">
-          <v-btn color="success" size="small" @click="saveGrade(item.student._id, item.course)">
+          <v-btn
+            color="success"
+            size="small"
+            :loading="savingId === item.id"
+            :disabled="savingId !== null || item.course.locked"
+            @click="saveGrade(item.student._id, item.course, item.id)"
+          >
             Spara
           </v-btn>
         </template>
@@ -118,6 +124,7 @@
   const store = useStore()
   const isAdmin = computed(() => store.getters.isAdmin)
   const studentsToGrade = ref([])
+  const savingId = ref(null)
   const grades = ['A', 'B', 'C', 'D', 'E', 'F']
 
   const baseHeaders = [
@@ -328,13 +335,16 @@
     return 'Ej tilldelad'
   }
 
-  const saveGrade = async (studentId, course) => {
-    // Validate grade justification is provided
+  const saveGrade = async (studentId, course, rowId) => {
+    if (!course.grade) {
+      toast.error('Välj ett betyg innan du sparar.')
+      return
+    }
     if (!course.reason || course.reason.trim() === '') {
       toast.error('Betygsättning måste ha en motivering.')
       return
     }
-    
+    savingId.value = rowId
     try {
       // Check if this is a new enrollment-based course (has enrollmentId)
       if (course.enrollmentId && course.source === 'enrollment') {
@@ -372,6 +382,8 @@
       }
     } catch (err) {
       toast.error('Kunde inte spara betyg: ' + (err.message || 'Okänt fel'))
+    } finally {
+      savingId.value = null
     }
   }
 
