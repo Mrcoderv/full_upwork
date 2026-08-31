@@ -43,6 +43,7 @@
   import EventModal from '../Modals/EventModal.vue'
   import AddMeetingModal from '../Modals/AddMeetingModal.vue'
   import MeetingModal from '../Modals/MeetingModal.vue'
+  import client from '@/api/client.js'
 
   export default {
     components: { FullCalendar, EventModal, AddMeetingModal, MeetingModal },
@@ -201,12 +202,11 @@
         calendarApi.changeView(view)
       },
       async fetchEvents() {
-        const { api } = await import('@/store/store.js')
         try {
           const [savedEvents, syncedEvents, meetings] = await Promise.all([
-            api.get('/calendar-events'),
-            api.get('/calendar-events/syncable'),
-            api.get('/meetings'),
+            client.get('/calendar-events'),
+            client.get('/calendar-events/syncable'),
+            client.get('/meetings'),
           ])
 
           const allEvents = [
@@ -370,7 +370,6 @@
           const courseInstanceIds = info.event.extendedProps?.courseInstanceIds || []
 
           if (!teacherId || !fromDate || !toDate) {
-            console.warn('🟠 Synced event missing required data:', { teacherId, fromDate, toDate })
             info.revert()
             return
           }
@@ -387,18 +386,13 @@
                 }
               )
               .then(() => {
-                console.log('✅ Synced event moved successfully!')
-                // Don't refresh immediately - the event is already in the correct visual position
+                    // Don't refresh immediately - the event is already in the correct visual position
                 // The backend has been updated, so the data is correct
                 // Refreshing immediately can cause the event to reset to its old position
                 // if the database query happens before the update is fully committed
                 // The event will be in the correct position on the next natural refresh
               })
               .catch((err) => {
-                console.error(
-                  '❌ Kunde inte flytta synced event:',
-                  err.response?.data || err.message
-                )
                 info.revert()
               })
           })
@@ -417,19 +411,13 @@
           client
             .put(endpoint, updatedEvent)
             .then(() => {
-              console.log(isMeeting ? '✅ Möte uppdaterat!' : '✅ Event uppdaterat!')
             })
             .catch((err) => {
-              console.error(
-                isMeeting ? '❌ Kunde inte uppdatera möte:' : '❌ Kunde inte uppdatera event:',
-                err.response?.data || err.message
-              )
               info.revert()
             })
         })
       },
       async handleExamUpdate() {
-        console.log('🔄 handleExamUpdate called - refreshing calendar data...')
         await this.fetchEvents()
         this.selectedEvent = null
       },
@@ -452,50 +440,50 @@
     overflow: hidden;
   }
   .main-calendar :deep(.fc) {
-    height: 100% !important;
+    height: 100%;
     flex: 1;
     overflow: hidden;
   }
   .main-calendar :deep(.fc-view-harness) {
-    height: 100% !important;
+    height: 100%;
   }
   .main-calendar :deep(.fc-daygrid) {
-    height: 100% !important;
+    height: 100%;
   }
   .main-calendar :deep(.fc-scroller) {
-    overflow: visible !important;
-    height: 100% !important;
+    overflow: visible;
+    height: 100%;
   }
   .main-calendar :deep(.fc-scroller-liquid-absolute) {
-    position: relative !important;
-    height: 100% !important;
+    position: relative;
+    height: 100%;
   }
 
   /* Force calendar to fit viewport - override FullCalendar defaults */
   .main-calendar :deep(.fc-daygrid-body) {
-    height: auto !important;
+    height: auto;
   }
 
   .main-calendar :deep(.fc-daygrid-table) {
-    height: auto !important;
+    height: auto;
   }
 
   /* Make sure empty cells have zero height */
   .main-calendar :deep(.fc-daygrid-day:not(:has(.fc-daygrid-event)) .fc-daygrid-day-frame) {
-    height: auto !important;
-    min-height: 0 !important;
+    height: auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
 
   /* Remove any default min-height from FullCalendar */
   .main-calendar :deep(.fc-daygrid-day) {
-    min-height: 0 !important;
+    min-height: 0;
   }
 
   /* Override any aspect ratio or height calculations */
   .main-calendar :deep(.fc-daygrid-body > table) {
-    table-layout: auto !important;
+    table-layout: auto;
   }
 
   /* Make calendar more compact */
@@ -515,61 +503,61 @@
 
   /* Remove ALL padding from day cells - be very aggressive */
   .main-calendar :deep(.fc-daygrid-day) {
-    padding: 0 !important;
+    padding: 0;
     border: 1px solid #ddd;
-    height: auto !important;
+    height: auto;
   }
 
   .main-calendar :deep(.fc-daygrid-day-frame) {
-    min-height: 0 !important;
-    max-height: none !important;
-    height: auto !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    padding: 0;
+    margin: 0;
   }
 
   .main-calendar :deep(.fc-daygrid-day-number) {
-    padding: 1px 2px !important;
+    padding: 1px 2px;
     font-size: 0.8em;
     line-height: 1;
-    margin: 0 !important;
+    margin: 0;
   }
 
   /* Make empty days single line - only show day number */
   .main-calendar :deep(.fc-daygrid-day-top) {
-    padding: 0 !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    height: auto !important;
+    padding: 0;
+    min-height: 0;
+    margin: 0;
+    height: auto;
     line-height: 1.2;
   }
 
   /* Remove extra spacing in day cells */
   .main-calendar :deep(.fc-daygrid-day-events) {
-    margin: 0 !important;
-    padding: 0 !important;
-    min-height: 0 !important;
+    margin: 0;
+    padding: 0;
+    min-height: 0;
   }
 
   /* Ensure day body has no padding when empty */
   .main-calendar :deep(.fc-daygrid-day-bg) {
-    padding: 0 !important;
-    margin: 0 !important;
+    padding: 0;
+    margin: 0;
   }
 
   .main-calendar :deep(.fc-daygrid-day > *) {
-    padding: 0 !important;
-    margin: 0 !important;
+    padding: 0;
+    margin: 0;
   }
 
   /* Force table cells to have no height when empty */
   .main-calendar :deep(.fc-daygrid-body tr) {
-    height: auto !important;
+    height: auto;
   }
 
   .main-calendar :deep(.fc-daygrid-body td) {
-    padding: 0 !important;
-    height: auto !important;
+    padding: 0;
+    height: auto;
     vertical-align: top;
     line-height: 1;
   }
@@ -577,40 +565,40 @@
   /* Remove any default cell height */
   .main-calendar :deep(.fc-daygrid-day:empty),
   .main-calendar :deep(.fc-daygrid-day:not(:has(.fc-daygrid-event))) {
-    height: auto !important;
-    min-height: 0 !important;
+    height: auto;
+    min-height: 0;
   }
 
   /* Make events very compact */
   .main-calendar :deep(.fc-daygrid-event) {
-    margin: 0 1px !important;
-    padding: 0 2px !important;
+    margin: 0 1px;
+    padding: 0 2px;
     font-size: 0.7em;
     line-height: 1.1;
     min-height: 0;
   }
 
   .main-calendar :deep(.fc-event-title) {
-    padding: 0 1px !important;
+    padding: 0 1px;
     font-size: 0.7em;
     line-height: 1.1;
   }
 
   /* Remove row spacing completely */
   .main-calendar :deep(.fc-daygrid-body) {
-    border-spacing: 0 !important;
+    border-spacing: 0;
     border-collapse: collapse;
   }
 
   .main-calendar :deep(.fc-daygrid-body tr) {
-    height: auto !important;
-    min-height: 0 !important;
+    height: auto;
+    min-height: 0;
   }
 
   .main-calendar :deep(.fc-daygrid-body td) {
-    padding: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
+    padding: 0;
+    height: auto;
+    min-height: 0;
     vertical-align: top;
     line-height: 1;
   }
@@ -628,7 +616,7 @@
   }
 
   .main-calendar :deep(.fc-col-header-cell) {
-    padding: 2px 0 !important;
+    padding: 2px 0;
   }
 
   .main-calendar :deep(.fc-col-header-cell-cushion) {

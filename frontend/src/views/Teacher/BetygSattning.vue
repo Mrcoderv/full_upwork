@@ -5,9 +5,20 @@
         <v-icon size="48">mdi-account-off</v-icon>
         <div class="mt-2">Inga elever att betygsätta just nu.</div>
       </div>
+      <v-text-field
+        v-else
+        v-model="searchQuery"
+        label="Sök elev eller kurs"
+        prepend-inner-icon="mdi-magnify"
+        variant="outlined"
+        density="compact"
+        clearable
+        class="mb-4"
+        hide-details
+      />
       <v-data-table
         :headers="headers"
-        :items="formattedRows"
+        :items="filteredRows"
         class="elevation-1 grade-table"
         item-value="id"
         disable-sort
@@ -124,6 +135,7 @@
   const store = useStore()
   const isAdmin = computed(() => store.getters.isAdmin)
   const studentsToGrade = ref([])
+  const searchQuery = ref('')
   const savingId = ref(null)
   const grades = ['A', 'B', 'C', 'D', 'E', 'F']
 
@@ -147,11 +159,20 @@
         student,
         course,
         id: `${student._id}-${course.refId}`,
-        // Include student's teacherId for fallback teacher name
-        studentTeacherId: student.teacherId
+        studentTeacherId: student.teacherId,
       }))
     )
   )
+
+  const filteredRows = computed(() => {
+    const query = searchQuery.value.trim().toLowerCase()
+    if (!query) return formattedRows.value
+    return formattedRows.value.filter(({ student, course }) =>
+      [student.name, student.email, course.courseCode, course.courseName]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query))
+    )
+  })
 
   const loadStudents = async () => {
     try {
@@ -522,49 +543,49 @@
   }
 
   :deep(.grade-table .v-data-table__thead) {
-    background-color: #f5f5f5 !important;
-    display: table-header-group !important;
-    visibility: visible !important;
+    background-color: #f5f5f5;
+    display: table-header-group;
+    visibility: visible;
   }
 
   :deep(.grade-table .v-data-table__thead tr) {
-    display: table-row !important;
+    display: table-row;
   }
 
   :deep(.grade-table .v-data-table__thead th) {
-    color: #000000 !important;
-    font-weight: 600 !important;
-    font-size: 14px !important;
-    background-color: #f5f5f5 !important;
-    border-bottom: 2px solid #dee2e6 !important;
-    padding: 12px 16px !important;
-    display: table-cell !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    color: #000000;
+    font-weight: 600;
+    font-size: 14px;
+    background-color: #f5f5f5;
+    border-bottom: 2px solid #dee2e6;
+    padding: 12px 16px;
+    display: table-cell;
+    visibility: visible;
+    opacity: 1;
   }
 
   :deep(.grade-table .v-data-table-header__content) {
-    color: #000000 !important;
-    font-weight: 600 !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    color: #000000;
+    font-weight: 600;
+    visibility: visible;
+    opacity: 1;
   }
 
   :deep(.grade-table .v-data-table-header__title) {
-    color: #000000 !important;
-    font-weight: 600 !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    color: #000000;
+    font-weight: 600;
+    visibility: visible;
+    opacity: 1;
   }
 
   /* Fallback for any th elements */
   :deep(.grade-table th) {
-    color: #000000 !important;
-    font-weight: 600 !important;
-    display: table-cell !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background-color: #f5f5f5 !important;
+    color: #000000;
+    font-weight: 600;
+    display: table-cell;
+    visibility: visible;
+    opacity: 1;
+    background-color: #f5f5f5;
   }
 
   .student-link,

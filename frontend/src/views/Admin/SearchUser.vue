@@ -47,7 +47,15 @@
     </div>
 
     <!-- Results Table -->
-    <div v-if="users.length > 0" class="results-container">
+    <v-alert v-if="errorMessage" type="error" variant="tonal" class="mb-4">
+      {{ errorMessage }}
+    </v-alert>
+
+    <div v-if="loading" class="py-6">
+      <v-progress-linear indeterminate color="primary" aria-label="Söker efter användare" />
+    </div>
+
+    <div v-else-if="users.length > 0" class="results-container">
       <table class="table table-striped">
         <thead>
           <tr>
@@ -86,13 +94,16 @@
 <script>
 import { ref, reactive } from 'vue'
 import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
 
 export default {
   name: 'SearchUser',
   setup() {
+    const toast = useToast()
     const users = ref([])
     const loading = ref(false)
     const searched = ref(false)
+    const errorMessage = ref('')
     const page = ref(1)
     const totalPages = ref(1)
     
@@ -106,6 +117,7 @@ export default {
     const searchUsers = async (pageNum = 1) => {
       loading.value = true
       searched.value = true
+      errorMessage.value = ''
       page.value = pageNum
       
       try {
@@ -123,9 +135,10 @@ export default {
         const total = parseInt(response.headers['x-total-pages']) || 1
         totalPages.value = total
       } catch (error) {
-        console.error('Error searching users:', error)
         users.value = []
         totalPages.value = 1
+        errorMessage.value = error.response?.data?.message || 'Kunde inte söka efter användare.'
+        toast.error(errorMessage.value)
       } finally {
         loading.value = false
       }
@@ -148,6 +161,7 @@ export default {
       users,
       loading,
       searched,
+      errorMessage,
       filters,
       page,
       totalPages,
