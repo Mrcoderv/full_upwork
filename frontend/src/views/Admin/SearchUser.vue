@@ -35,6 +35,14 @@
               <option value="student">Elev</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="status">Status</label>
+            <select id="status" v-model="filters.status" class="form-select">
+              <option value="">Alla statusar</option>
+              <option value="active">Aktiva</option>
+              <option value="inactive">Inaktiva</option>
+            </select>
+          </div>
         </div>
         
         <div class="mt-3">
@@ -85,9 +93,12 @@
       </div>
     </div>
 
-    <div v-else-if="searched && !loading" class="no-results">
-      Inga användare hittades
-    </div>
+    <EmptyState
+      v-else-if="searched && !loading"
+      title="Inga användare hittades"
+      message="Prova att ändra sökningen eller rensa filtren."
+      icon="mdi-account-search-outline"
+    />
   </div>
 </template>
 
@@ -95,9 +106,11 @@
 import { ref, reactive } from 'vue'
 import client from '@/api/client.js'
 import { useToast } from '@/composables/useToast.js'
+import EmptyState from '@/components/base/EmptyState.vue'
 
 export default {
   name: 'SearchUser',
+  components: { EmptyState },
   setup() {
     const toast = useToast()
     const users = ref([])
@@ -112,6 +125,7 @@ export default {
       email: '',
       username: '',
       role: '',
+      status: '',
     })
 
     const searchUsers = async (pageNum = 1) => {
@@ -129,6 +143,7 @@ export default {
         if (filters.email) params.email = filters.email
         if (filters.username) params.username = filters.username
         if (filters.role) params.role = filters.role
+        if (filters.status) params.status = filters.status
         
         const response = await client.get('/users', { params })
         users.value = response.data.users || []
@@ -151,6 +166,7 @@ export default {
       filters.email = ''
       filters.username = ''
       filters.role = ''
+      filters.status = ''
       users.value = []
       searched.value = false
       page.value = 1

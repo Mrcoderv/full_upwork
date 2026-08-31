@@ -401,7 +401,7 @@
 
         // Guard: do not allow dragging of other synced events without a real DB id
         if (!isMeeting && !isSavedCalendarEvent) {
-          console.warn('🟠 Dragging is only allowed for sparade kalender-händelser och möten.')
+          toast.error('Den här kalenderhändelsen kan inte flyttas.')
           info.revert()
           return
         }
