@@ -798,7 +798,7 @@
             `/student/${studentId}/education/${courseId}/grade`,
             { grade }
           )
-          console.log('✅ Grade updated:', response.data)
+          console.log('�� Grade updated:', response.data)
         } catch (error) {
           console.error('❌ Error updating grade:', error)
         }
@@ -1333,8 +1333,8 @@
 
   /* Fix dialog clipping */
   .v-overlay__content {
-    z-index: 3000 !important;
-    position: fixed !important;
+    z-index: 3000;
+    position: fixed;
   }
 
   .betyg-btn {
@@ -1342,8 +1342,8 @@
   }
 
   .betyg-btn:hover {
-    background-color: #0056b3 !important;
-    color: white !important;
+    background-color: #0056b3;
+    color: white;
   }
 
   .comment-display {
@@ -1497,7 +1497,7 @@
   /* Do not wrap inside the Övrigt column */
   td.ovrigt-cell,
   td.ovrigt-cell * {
-    white-space: nowrap !important;
+    white-space: nowrap;
   }
 
   .course-list ul,

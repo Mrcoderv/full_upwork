@@ -518,7 +518,7 @@ export default {
 }
 
 .permission-toggle-header {
-  text-align: center !important;
+  text-align: center;
   width: 100px;
 }
 

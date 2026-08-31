@@ -1,6 +1,9 @@
 <template>
   <div class="scrollable-view apl-view">
-    <h1>APL Status Board</h1>
+    <h1>APL-status</h1>
+    <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
+      {{ loadError }}
+    </v-alert>
     <v-tabs v-model="activeTab" grow>
       <v-tab value="ongoing">Pågående</v-tab>
       <v-tab value="completed">Avslutad</v-tab>
@@ -30,13 +33,15 @@ import AplCompletedTab from './Admin/AplCompletedTab.vue';
 
 const activeTab = ref('ongoing');
 const students = ref([]);
+const loadError = ref('');
 
 const fetchStudents = async () => {
+  loadError.value = '';
   try {
     const res = await client.get('/students');
-    students.value = res.data;
+    students.value = Array.isArray(res.data) ? res.data : [];
   } catch (err) {
-    console.error('Failed to fetch students in APLView:', err);
+    loadError.value = 'Kunde inte hämta APL-elever. Försök igen.';
   }
 };
 

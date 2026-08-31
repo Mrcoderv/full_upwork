@@ -464,7 +464,7 @@
   }
 
   .file-input-hidden {
-    display: none !important;
+    display: none;
   }
 
   .file-select-btn {

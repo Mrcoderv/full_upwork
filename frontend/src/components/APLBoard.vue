@@ -1064,7 +1064,7 @@ const isBehindSchedule = (student) => {
   }
 
   .btn .no-margin-title {
-    margin-bottom: 0 !important;
+    margin-bottom: 0;
     display: inline-block;
   }
 
