@@ -159,7 +159,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast.js'
-import axios from 'axios'
+import client from '@/api/client.js'
 import PageHeader from '@/components/base/PageHeader.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import EmptyState from '@/components/base/EmptyState.vue'
@@ -198,7 +198,7 @@ async function loadInactiveStudents() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await axios.get('/api/students/dropouts')
+    const response = await client.get('/students/dropouts')
     students.value = response.data || []
   } catch (error) {
     errorMessage.value = error.response?.data?.error || 'Kunde inte hämta inaktiva elever'
@@ -232,7 +232,7 @@ async function reactivateStudent() {
   reactivating.value = true
   try {
     const id = dialogStudent.value._id
-    await axios.post(`/api/student-details/${id}/reactivate`, {
+    await client.post(`/student-details/${id}/reactivate`, {
       reEnrollCourseIds: selectedReEnrollCourseIds.value,
     })
     const count = selectedReEnrollCourseIds.value.length

@@ -189,7 +189,6 @@ export default {
   emits: ['user-created'],
   setup(props, { emit }) {
     const store = useStore();
-    const route = useRoute();
     const toast = useToast();
     const isSavingPermissions = ref(false);
     const isCreatingUser = ref(false);

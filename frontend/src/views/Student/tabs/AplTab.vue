@@ -172,9 +172,7 @@
           <v-col v-for="s in statusOptions" :key="s.value" cols="6" sm="4" md="2">
             <v-card
               class="status-summary-card"
-              :class="s.value.toLowerCase()"
-              :style="activeFilter === s.value ? 'outline: 2px solid #1976d2' : ''"
-              style="cursor: pointer"
+              :class="[s.value.toLowerCase(), { 'is-active': activeFilter === s.value }]"
               @click="toggleFilter(s.value)"
             >
               <v-card-title>{{ s.label }}</v-card-title>
