@@ -35,6 +35,14 @@
               <option value="student">Elev</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="status">Status</label>
+            <select id="status" v-model="filters.status" class="form-select">
+              <option value="">Alla statusar</option>
+              <option value="active">Aktiva</option>
+              <option value="inactive">Inaktiva</option>
+            </select>
+          </div>
         </div>
         
         <div class="mt-3">
@@ -47,7 +55,15 @@
     </div>
 
     <!-- Results Table -->
-    <div v-if="users.length > 0" class="results-container">
+    <v-alert v-if="errorMessage" type="error" variant="tonal" class="mb-4">
+      {{ errorMessage }}
+    </v-alert>
+
+    <div v-if="loading" class="py-6">
+      <v-progress-linear indeterminate color="primary" aria-label="Söker efter användare" />
+    </div>
+
+    <div v-else-if="users.length > 0" class="results-container">
       <table class="table table-striped">
         <thead>
           <tr>
@@ -77,22 +93,30 @@
       </div>
     </div>
 
-    <div v-else-if="searched && !loading" class="no-results">
-      Inga användare hittades
-    </div>
+    <EmptyState
+      v-else-if="searched && !loading"
+      title="Inga användare hittades"
+      message="Prova att ändra sökningen eller rensa filtren."
+      icon="mdi-account-search-outline"
+    />
   </div>
 </template>
 
 <script>
 import { ref, reactive } from 'vue'
 import client from '@/api/client.js'
+import { useToast } from '@/composables/useToast.js'
+import EmptyState from '@/components/base/EmptyState.vue'
 
 export default {
   name: 'SearchUser',
+  components: { EmptyState },
   setup() {
+    const toast = useToast()
     const users = ref([])
     const loading = ref(false)
     const searched = ref(false)
+    const errorMessage = ref('')
     const page = ref(1)
     const totalPages = ref(1)
     
@@ -101,11 +125,13 @@ export default {
       email: '',
       username: '',
       role: '',
+      status: '',
     })
 
     const searchUsers = async (pageNum = 1) => {
       loading.value = true
       searched.value = true
+      errorMessage.value = ''
       page.value = pageNum
       
       try {
@@ -117,15 +143,17 @@ export default {
         if (filters.email) params.email = filters.email
         if (filters.username) params.username = filters.username
         if (filters.role) params.role = filters.role
+        if (filters.status) params.status = filters.status
         
         const response = await client.get('/users', { params })
         users.value = response.data.users || []
         const total = parseInt(response.headers['x-total-pages']) || 1
         totalPages.value = total
       } catch (error) {
-        console.error('Error searching users:', error)
         users.value = []
         totalPages.value = 1
+        errorMessage.value = error.response?.data?.message || 'Kunde inte söka efter användare.'
+        toast.error(errorMessage.value)
       } finally {
         loading.value = false
       }
@@ -138,6 +166,7 @@ export default {
       filters.email = ''
       filters.username = ''
       filters.role = ''
+      filters.status = ''
       users.value = []
       searched.value = false
       page.value = 1
@@ -148,6 +177,7 @@ export default {
       users,
       loading,
       searched,
+      errorMessage,
       filters,
       page,
       totalPages,

@@ -131,9 +131,12 @@ Ta bort
               />
             </template>
 
-            <div v-else class="text-center text-muted py-8">
-              Inga vanliga frågor hittades. Skapa den första frågan för att komma igång.
-            </div>
+            <EmptyState
+              v-else
+              title="Inga vanliga frågor hittades"
+              message="Skapa eller justera filtren för att visa verifierade frågor."
+              icon="mdi-frequently-asked-questions"
+            />
           </v-window-item>
 
           <!-- ─── Categories tab (create: all staff, edit/delete: admin) ─── -->
@@ -347,9 +350,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import client from '@/api/client.js'
 import { useToast } from '@/composables/useToast.js'
+import EmptyState from '@/components/base/EmptyState.vue'
 
 const store = useStore()
 const toast = useToast()
+
 
 const isAdmin = computed(() => store.getters.isAdmin)
 const currentUserId = computed(() => store.getters.userId)

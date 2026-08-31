@@ -1,6 +1,15 @@
 <template>
   <div class="scrollable-view">
     <div class="student-details-container">
+      <ConfirmDialog
+        v-model="showDeleteDialog"
+        title="Radera elev"
+        message="Är du säker på att du vill radera eleven? Detta går inte att ångra."
+        confirm-label="Radera elev"
+        :loading="deletingStudent"
+        danger
+        @confirm="confirmDeleteStudent"
+      />
       <div class="header-section">
         <h1 class="page-title">{{ student ? student.name : 'Elevdetaljer' }}</h1>
         <button
@@ -72,7 +81,7 @@
                 </div>
               </div>
 
-              <div v-if="student.enrollments.length === 0" class="no-enrollments">
+              <div v-if="!Array.isArray(student.enrollments) || student.enrollments.length === 0" class="no-enrollments">
                 Inga kurser inlagda ännu
               </div>
             </div>
@@ -115,6 +124,7 @@ import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
 import client from '@/api/client.js'
 import { useToast } from '@/composables/useToast.js'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 
 import GeneralTab from './tabs/GeneralTab.vue';
 import StudyPlanTab from './tabs/StudyPlanTab.vue';
@@ -136,6 +146,7 @@ export default {
     AplTab,
     LogbookTab,
     ActionPlanTab,
+    ConfirmDialog,
   },
   setup() {
     const route = useRoute();
@@ -148,6 +159,8 @@ export default {
     const activeTab = shallowRef(GeneralTab);
     const manualAplIds = ref(new Set());
     const downloadingDocument = ref('');
+    const showDeleteDialog = ref(false);
+    const deletingStudent = ref(false);
 
     const completedEnrollments = computed(() =>
       Array.isArray(student.value?.enrollments)
@@ -353,19 +366,22 @@ export default {
       }
     });
 
-    const handleDeleteStudent = async () => {
-      if (!student.value?._id) return;
-      const confirmed = window.confirm(
-        'Är du säker på att du vill radera eleven? Detta går inte att ångra.'
-      );
-      if (!confirmed) return;
+    const handleDeleteStudent = () => {
+      if (student.value?._id) showDeleteDialog.value = true;
+    };
 
+    const confirmDeleteStudent = async () => {
+      if (!student.value?._id) return;
+      deletingStudent.value = true;
       try {
         await client.delete(`/student/${student.value._id}`);
+        showDeleteDialog.value = false;
         window.history.back();
       } catch (err) {
         console.error('Error deleting student:', err);
         toast.error('Kunde inte radera elev.');
+      } finally {
+        deletingStudent.value = false;
       }
     };
 
@@ -399,6 +415,9 @@ export default {
       handleStudentUpdate,
       isSystemAdmin,
       handleDeleteStudent,
+      confirmDeleteStudent,
+      showDeleteDialog,
+      deletingStudent,
       canGenerateCertificates,
       completedEnrollments,
       downloadingDocument,

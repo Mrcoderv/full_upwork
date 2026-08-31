@@ -160,10 +160,21 @@ const loadPlans = async () => {
   }
 }
 
-const viewPlan = (plan) => {
+const viewPlan = async (plan) => {
   if (!plan.studentId) return
-  const url = `/api/actionplan/${plan.studentId}/pdf`
-  window.open(url, '_blank')
+  try {
+    const { data } = await client.get(`/actionplan/${plan.studentId}/pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `handlingsplan-${plan.studentId}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch {
+    toast.error('Kunde inte ladda ner handlingsplanen.')
+  }
 }
 
 const loadFormQuestions = async () => {

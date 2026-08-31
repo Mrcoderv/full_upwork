@@ -68,6 +68,16 @@
         </template>
       </v-data-table>
 
+      <ConfirmDialog
+        v-model="showDeleteDialog"
+        title="Ta bort prövning"
+        message="Är du säker på att du vill ta bort denna prövning? Åtgärden går inte att ångra."
+        confirm-label="Ta bort"
+        danger
+        :loading="deleting"
+        @confirm="confirmDelete"
+      />
+
       <!-- Inline Edit Form -->
       <v-dialog v-model="showForm" max-width="600px" persistent>
         <v-card>
@@ -143,6 +153,7 @@
 import { ref, computed, onMounted } from 'vue'
 import client from '@/api/client.js'
 import { useToast } from '@/composables/useToast.js'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 
 const toast = useToast()
 
@@ -159,6 +170,9 @@ const importing = ref(false)
 const importResult = ref(null)
 const formError = ref(null)
 const saving = ref(false)
+const showDeleteDialog = ref(false)
+const deleting = ref(false)
+const deleteTargetId = ref(null)
 
 const headers = [
   { title: 'Namn', key: 'name' },
@@ -257,15 +271,24 @@ const saveExam = async () => {
   }
 }
 
-const deleteExam = async (id) => {
-  if (confirm('Är du säker?')) {
-    try {
-      await client.delete(`/exams/${id}`)
-      toast.success('Prövning borttagen')
-      fetchExams()
-    } catch (err) {
-      toast.error('Kunde inte ta bort prövning')
-    }
+const deleteExam = (id) => {
+  deleteTargetId.value = id
+  showDeleteDialog.value = true
+}
+
+const confirmDelete = async () => {
+  if (!deleteTargetId.value) return
+  deleting.value = true
+  try {
+    await client.delete(`/exams/${deleteTargetId.value}`)
+    toast.success('Prövning borttagen.')
+    showDeleteDialog.value = false
+    deleteTargetId.value = null
+    await fetchExams()
+  } catch {
+    toast.error('Kunde inte ta bort prövningen.')
+  } finally {
+    deleting.value = false
   }
 }
 

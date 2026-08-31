@@ -194,7 +194,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import client from '@/api/client.js'
 import { useToast } from '@/composables/useToast.js'
 
 const toast = useToast()
@@ -238,7 +238,7 @@ async function loadReport() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await axios.get('/api/inactivity/report')
+    const response = await client.get('/inactivity/report')
     students.value = response.data.students || []
     summary.value = response.data.summary || summary.value
     thresholds.value = response.data.thresholds || thresholds.value
@@ -251,7 +251,7 @@ async function loadReport() {
 
 async function loadScanStatus() {
   try {
-    const response = await axios.get('/api/inactivity/scan-status')
+    const response = await client.get('/inactivity/scan-status')
     scanStatus.value = response.data?.lastScan || null
   } catch {
     scanStatus.value = null
@@ -262,7 +262,7 @@ async function runScan() {
   scanning.value = true
   errorMessage.value = ''
   try {
-    await axios.post('/api/inactivity/scan')
+    await client.post('/inactivity/scan')
     toast.success('Skanning klar')
     await loadReport()
     await loadScanStatus()
@@ -299,7 +299,7 @@ function discussStudent(student) {
 async function sendWarningEmail(student) {
   sendingWarningFor.value = student.studentId
   try {
-    const response = await axios.post(`/api/inactivity/${student.studentId}/warning-email`)
+    const response = await client.post(`/inactivity/${student.studentId}/warning-email`)
     toast.success(`Varningsmail skickat till ${student.name}`)
     await loadReport()
     if (response.data.conversationId) {
@@ -325,7 +325,7 @@ async function confirmWithdraw() {
   if (!withdrawStudent.value) return
   withdrawing.value = true
   try {
-    const response = await axios.post(`/api/student-details/${withdrawStudent.value.studentId}/dropout`)
+    const response = await client.post(`/student-details/${withdrawStudent.value.studentId}/dropout`)
     toast.success(`${withdrawStudent.value.name} avslutades`)
     await loadReport()
     closeWithdrawDialog()

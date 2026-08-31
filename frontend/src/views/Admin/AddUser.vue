@@ -15,7 +15,7 @@
           href="#"
           :class="formType === 'student' ? 'active-link' : ''"
           class="nav-link"
-          style="color: black !important; border: none !important"
+         
           @click="toggleForm('student')"
         >
           Elev
@@ -25,7 +25,7 @@
         href="#"
         :class="formType === 'teacher' ? 'active-link' : ''"
         class="nav-link"
-        style="color: black !important"
+       
         @click="toggleForm('teacher')"
       >
         Lärare

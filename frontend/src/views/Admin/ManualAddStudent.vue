@@ -1272,12 +1272,12 @@
   }
 
   .bg-primary {
-    background-color: #007dc3 !important;
+    background-color: #007dc3;
     color: white;
   }
 
   .bg-secondary {
-    background-color: #6c757d !important;
+    background-color: #6c757d;
     color: white;
   }
 
@@ -1286,7 +1286,7 @@
   }
 
   .text-danger {
-    color: #dc3545 !important;
+    color: #dc3545;
   }
 
   .btn-success {

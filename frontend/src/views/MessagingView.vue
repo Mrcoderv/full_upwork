@@ -182,7 +182,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import store from '@/store/store.js'
 import { messagingApi } from '@/api/messaging'
@@ -222,6 +222,33 @@ export default {
       () => store.state.user?.userId || store.state.user?._id
     )
     const route = useRoute()
+    let refreshTimer = null
+
+    const refreshOpenThread = async () => {
+      if (document.hidden || !selectedConversation.value || loadingMessages.value) return
+      try {
+        const { data } = await messagingApi.getMessages(selectedConversation.value._id, { limit: 50 })
+        const incoming = Array.isArray(data.messages) ? data.messages : []
+        const byId = new Map(selectedConversation.value.messages.map((message) => [String(message._id), message]))
+        incoming.forEach((message) => byId.set(String(message._id), message))
+        selectedConversation.value.messages = Array.from(byId.values()).sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        )
+        hasMoreMessages.value = !!data.hasMore
+        nextBefore.value = data.nextBefore || null
+      } catch (error) {
+        if (error.response?.status !== 429) errorMessage.value = 'Kunde inte uppdatera meddelanden.'
+      }
+    }
+
+    const refreshMessaging = async () => {
+      await loadConversations()
+      await refreshOpenThread()
+    }
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshMessaging()
+    }
 
     onMounted(async () => {
       await loadConversations()
@@ -232,6 +259,13 @@ export default {
           conversations.value.find((conv) => conv._id?.toString() === requestedId)
         if (target) await selectConversation(target)
       }
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      refreshTimer = window.setInterval(refreshMessaging, 30000)
+    })
+
+    onBeforeUnmount(() => {
+      if (refreshTimer) window.clearInterval(refreshTimer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     })
 
     const loadConversations = async () => {
@@ -437,6 +471,9 @@ export default {
       newBody,
       messageFeed,
       filteredConversations,
+      hasMoreMessages,
+      loadingOlderMessages,
+      loadOlderMessages,
       loadConversations,
       selectConversation,
       onMessageSent,

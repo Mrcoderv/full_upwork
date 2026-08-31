@@ -6,7 +6,11 @@
       Laddar...
     </v-alert>
 
-    <v-alert v-else-if="courses.length === 0" type="info" outlined>
+    <v-alert v-else-if="loadError" type="error" variant="tonal">
+      {{ loadError }}
+    </v-alert>
+
+    <v-alert v-else-if="courses.length === 0" type="info" variant="tonal">
       Du har inga aktiva kurser med frågebank.
     </v-alert>
 
@@ -136,12 +140,15 @@
 <script>
 import { ref } from "vue";
 import client from "@/api/client.js";
+import { useToast } from "@/composables/useToast.js";
 
 export default {
   name: "StudentQuestionBank",
   setup() {
+    const toast = useToast();
     const loading = ref(true);
     const courses = ref([]);
+    const loadError = ref('');
     const activeTab = ref(null);
 
     const availableTypes = [
@@ -181,13 +188,16 @@ export default {
     };
 
     const loadCourses = async () => {
+      loadError.value = '';
       try {
         const { data } = await client.get("/question-bank/student/courses");
-        courses.value = data.courses || [];
+        courses.value = Array.isArray(data.courses) ? data.courses : [];
         if (courses.value.length > 0) {
           activeTab.value = 0;
         }
       } catch (error) {
+        loadError.value = 'Kunde inte hämta frågebanken.';
+        toast.error(loadError.value);
       } finally {
         loading.value = false;
       }
@@ -208,6 +218,7 @@ export default {
         link.remove();
         window.URL.revokeObjectURL(url);
       } catch (error) {
+        toast.error('Kunde inte ladda ner PDF-filen.');
       }
     };
 
@@ -215,6 +226,7 @@ export default {
 
     return {
       loading,
+      loadError,
       courses,
       activeTab,
       typeColor,

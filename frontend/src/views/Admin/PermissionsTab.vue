@@ -172,9 +172,9 @@ export default {
 .matrix-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .matrix-table th, .matrix-table td { padding: 8px 12px; text-align: center; border: 1px solid #e0e0e0; }
 .matrix-table th { background: #f5f5f5; font-weight: 600; position: sticky; top: 0; }
-.feature-col { text-align: left !important; min-width: 200px; }
+.feature-col { text-align: left; min-width: 200px; }
 .role-col { min-width: 90px; }
-.feature-label { text-align: left !important; font-weight: 500; }
+.feature-label { text-align: left; font-weight: 500; }
 .status-cell.granted { background: #e8f5e9; color: #2e7d32; font-weight: 500; }
 .status-cell.denied { background: #fafafa; color: #999; }
 </style>

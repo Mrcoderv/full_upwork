@@ -542,11 +542,24 @@ export default {
       }
     };
 
-    const downloadPdf = (type) => {
-      window.open(
-        `/api/question-bank/pdfs/${type}/download?course=${pdfCourse.value}`,
-        "_blank"
-      );
+    const downloadPdf = async (type) => {
+      if (!pdfCourse.value) return;
+      try {
+        const { data } = await client.get(`/question-bank/pdfs/${type}/download`, {
+          params: { course: pdfCourse.value },
+          responseType: 'blob',
+        });
+        const url = URL.createObjectURL(data);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${type}-${pdfCourse.value}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast.error('Kunde inte ladda ner PDF-filen.');
+      }
     };
 
     const deletePdf = async (type) => {
@@ -585,11 +598,24 @@ export default {
       }
     };
 
-    const downloadCoursePdf = (courseId, type) => {
-      window.open(
-        `/api/question-bank/pdfs/${type}/download?course=${courseId}`,
-        "_blank"
-      );
+    const downloadCoursePdf = async (courseId, type) => {
+      if (!courseId) return;
+      try {
+        const { data } = await client.get(`/question-bank/pdfs/${type}/download`, {
+          params: { course: courseId },
+          responseType: 'blob',
+        });
+        const url = URL.createObjectURL(data);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${type}-${courseId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast.error('Kunde inte ladda ner PDF-filen.');
+      }
     };
 
     const openCreateModal = () => {

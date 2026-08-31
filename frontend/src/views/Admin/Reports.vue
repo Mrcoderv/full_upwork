@@ -58,7 +58,7 @@
         </v-alert>
       </div>
 
-      <div v-else class="Reports-content">
+      <div v-else-if="hasReport" class="Reports-content">
         <v-card>
           <v-card-title>
             <v-icon left>mdi-chart-line</v-icon>
@@ -156,6 +156,9 @@
           </v-card-actions>
         </v-card>
       </div>
+      <v-alert v-else type="info" variant="tonal" class="mt-4">
+        Välj kursinstans och elev och ladda sedan rapporten.
+      </v-alert>
     </div>
   </div>
 </template>
@@ -180,6 +183,7 @@ export default {
     const completedModules = ref(0)
     const completionRate = ref(0)
     const tableData = ref([])
+    const hasReport = ref(false)
 
     const loadCourseInstances = async () => {
       loading.value = true
@@ -213,6 +217,7 @@ export default {
     const loadReport = async () => {
       loading.value = true
       reportError.value = null
+      hasReport.value = false
 
       if (!selectedInstance.value || !selectedStudent.value) {
         reportError.value = 'Välj både kursinstans och elev'
@@ -226,6 +231,7 @@ export default {
         )
         const data = response.data
         if (data.success) {
+          hasReport.value = true
           totalModules.value = data.totalModules || 0
           completedModules.value = data.completedModules || 0
           completionRate.value = parseFloat(data.completionRate) || 0
@@ -266,6 +272,7 @@ export default {
       selectedStudent.value = ''
       searchQuery.value = ''
       tableData.value = []
+      hasReport.value = false
       totalModules.value = 0
       completedModules.value = 0
       completionRate.value = 0
@@ -291,6 +298,7 @@ export default {
       completedModules,
       completionRate,
       tableData,
+      hasReport,
       loadCourseInstances,
       loadReport,
       downloadReport,

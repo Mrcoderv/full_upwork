@@ -2,6 +2,12 @@
   <div class="scrollable-view">
     <v-container class="my-5">
       <h2 class="mb-4">Anmälan till prövning</h2>
+      <v-alert v-if="isLoading" type="info" variant="tonal" class="mb-4">
+        Hämtar elever och lärare…
+      </v-alert>
+      <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
+        {{ loadError }}
+      </v-alert>
       <v-form class="pa-4" elevation="1" @submit.prevent="submitForm">
         <v-row dense>
           <!-- Elev -->
@@ -106,6 +112,7 @@
   const searchQuery = ref('')
   const selectedCourse = ref(null)
   const fetchState = ref(false)
+  const loadError = ref('')
 
   const form = ref({
     name: '',
@@ -159,11 +166,19 @@
     fetchState.value = true
     isLoading.value = true
 
+    loadError.value = ''
     try {
-      const studentsResponse = await client.get('/students')
-      students.value = studentsResponse.data
+      const [studentsResponse, teachersResponse] = await Promise.all([
+        client.get('/students'),
+        client.get('/teachers'),
+      ])
+      students.value = Array.isArray(studentsResponse.data) ? studentsResponse.data : []
+      teachers.value = Array.isArray(teachersResponse.data)
+        ? teachersResponse.data.filter((teacher) => teacher.userId?.username)
+        : []
     } catch {
-      toast.error('Kunde inte hämta elever')
+      loadError.value = 'Kunde inte hämta elever och lärare. Försök igen.'
+      toast.error(loadError.value)
     } finally {
       isLoading.value = false
     }

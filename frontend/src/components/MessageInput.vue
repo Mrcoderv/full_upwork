@@ -12,8 +12,6 @@
 </template>
 
 <script>
-import { useStore } from 'vuex'
-
 export default {
   name: 'MessageInput',
   props: {
@@ -38,8 +36,8 @@ export default {
       this.$emit('send-message', {
         _id: 'm' + Date.now(),
         body: text,
-        senderId: this.currentUser._id || this.currentUser.id || 'currentUser',
-        senderRole: this.currentUser.role || 'user',
+        senderId: this.currentUser._id || this.currentUser.id || null,
+        senderRole: this.currentUser.role || null,
         createdAt: new Date(),
         readBy: [],
       })

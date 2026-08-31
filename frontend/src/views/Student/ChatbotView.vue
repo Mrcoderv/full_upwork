@@ -127,10 +127,27 @@ const ask = async (text) => {
   sending.value = true
   await scrollToLatest()
   try {
-    const { data } = await client.post('/chatbot/ask', { question: value })
-    messages.value.push({ id: `assistant-${Date.now()}`, role: 'assistant', text: data.data?.answer || 'Jag kunde inte hitta ett svar just nu.', sources: data.data?.sources || [] })
+    const normalized = value.toLowerCase()
+    const match = faqQuestions.value.find((faq) => {
+      const questionText = String(faq.question || '').toLowerCase()
+      return questionText === normalized || questionText.includes(normalized) || normalized.includes(questionText)
+    })
+    if (match?.answer) {
+      messages.value.push({
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: match.answer,
+        sources: [`Vanliga frågor${selectedCategory.value ? ` · ${selectedCategory.value.name}` : ''}`],
+      })
+    } else {
+      messages.value.push({
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: 'Jag hittar inget verifierat svar på den frågan i den valda FAQ-kategorin. Välj en fråga bland vanliga frågor eller kontakta din lärare.',
+      })
+    }
   } catch (requestError) {
-    error.value = requestError.message || 'Kunde inte hämta ett svar. Försök igen.'
+    error.value = requestError.message || 'Kunde inte söka i vanliga frågor.'
   } finally {
     sending.value = false
     await scrollToLatest()

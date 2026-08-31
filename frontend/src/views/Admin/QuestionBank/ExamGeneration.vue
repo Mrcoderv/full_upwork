@@ -335,15 +335,7 @@ export default {
       if (!generatedExam.value) {
         return;
       }
-      // Simple print - just alert the exam content
-      const examContent = `
-Genererat exam: ${generatedExam.value.title}
-Kurs: ${generatedExam.value.courseId}
-Frågor: ${generatedExam.value.selectedCount} av ${generatedExam.value.totalAvailable}
-
-${generatedExam.value.questionTexts.map((text, i) => `${i + 1}. ${text} (${generatedExam.value.questionTypes[i]})`).join("\n")}
-      `;
-      alert(examContent);
+      window.print();
     };
 
     // Initial load
